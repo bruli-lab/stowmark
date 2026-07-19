@@ -1,0 +1,2 @@
+# stonekeep
+Immutable snapshot repository
