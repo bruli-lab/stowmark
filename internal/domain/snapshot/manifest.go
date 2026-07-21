@@ -1,6 +1,8 @@
 package snapshot
 
-import "time"
+import (
+	"time"
+)
 
 type Manifest struct {
 	id        string

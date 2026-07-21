@@ -11,8 +11,9 @@ import (
 
 func newSnapshotCommand() *cobra.Command {
 	var repositoryPath string
-	sourceExplorer := disk.NewSourceExplorer()
-	create := snapshot.NewCreate(sourceExplorer)
+	sourceRepo := disk.NewSourceRepository()
+	manifestRepo := disk.NewManifestRepository()
+	create := snapshot.NewCreate(sourceRepo, manifestRepo)
 
 	cmd := &cobra.Command{
 		Use:   "snapshot <source>",
@@ -28,6 +29,7 @@ func newSnapshotCommand() *cobra.Command {
 			result, err := create.Do(
 				cmd.Context(),
 				sourcePath,
+				repositoryPath,
 			)
 			if err != nil {
 				return err

@@ -99,6 +99,6 @@ func (s SourceExplorer) readFiles(root string) ([]snapshot.File, error) {
 	return files, nil
 }
 
-func NewSourceExplorer() *SourceExplorer {
+func NewSourceRepository() *SourceExplorer {
 	return &SourceExplorer{}
 }
