@@ -1,12 +1,10 @@
 package cli
 
 import (
-	"context"
-
 	"github.com/spf13/cobra"
 )
 
-func Execute(ctx context.Context) error {
+func Execute() error {
 	rootCmd := &cobra.Command{
 		Use:           "stonekeep",
 		Short:         "Immutable snapshot backup tool",
@@ -14,7 +12,8 @@ func Execute(ctx context.Context) error {
 		SilenceErrors: true,
 	}
 
-	rootCmd.AddCommand(newInitCommand(ctx))
+	rootCmd.AddCommand(newInitCommand())
+	rootCmd.AddCommand(newSnapshotCommand())
 
 	return rootCmd.Execute()
 }

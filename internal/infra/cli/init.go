@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"fmt"
 	"time"
 
@@ -11,7 +10,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newInitCommand(ctx context.Context) *cobra.Command {
+func newInitCommand() *cobra.Command {
 	repo := disk.NewFolderRepositoryRepository()
 	svc := repository.NewInit(repo)
 	return &cobra.Command{
@@ -24,7 +23,7 @@ func newInitCommand(ctx context.Context) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := svc.Do(ctx, re); err != nil {
+			if err := svc.Do(cmd.Context(), re); err != nil {
 				return err
 			}
 			fmt.Println(fmt.Sprintf("Initialized Stonekeep repository at %q", args[0]))
