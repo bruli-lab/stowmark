@@ -8,5 +8,9 @@ type SourceRepository interface {
 }
 
 type ManifestRepository interface {
-	Save(ctx context.Context, repositoryPath string, m *Manifest) error
+	Save(ctx context.Context, m *Manifest) error
+}
+
+type ObjectRepository interface {
+	Save(ctx context.Context, obj *File) error
 }

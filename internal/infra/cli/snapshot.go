@@ -12,8 +12,6 @@ import (
 func newSnapshotCommand() *cobra.Command {
 	var repositoryPath string
 	sourceRepo := disk.NewSourceRepository()
-	manifestRepo := disk.NewManifestRepository()
-	create := snapshot.NewCreate(sourceRepo, manifestRepo)
 
 	cmd := &cobra.Command{
 		Use:   "snapshot <source>",
@@ -26,10 +24,13 @@ func newSnapshotCommand() *cobra.Command {
 				return errors.New("--repo is required")
 			}
 
+			manifestRepo := disk.NewManifestRepository(repositoryPath)
+			objRepo := disk.NewObjectRepository(repositoryPath)
+			create := snapshot.NewCreate(sourceRepo, manifestRepo, objRepo)
+
 			result, err := create.Do(
 				cmd.Context(),
 				sourcePath,
-				repositoryPath,
 			)
 			if err != nil {
 				return err

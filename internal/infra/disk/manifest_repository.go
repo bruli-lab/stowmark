@@ -24,9 +24,11 @@ type manifest struct {
 	Source    string    `json:"source"`
 }
 
-type ManifestRepository struct{}
+type ManifestRepository struct {
+	repositoryPath string
+}
 
-func (m2 ManifestRepository) Save(ctx context.Context, repositoryPath string, m *snapshot.Manifest) error {
+func (r ManifestRepository) Save(ctx context.Context, m *snapshot.Manifest) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -51,9 +53,9 @@ func (m2 ManifestRepository) Save(ctx context.Context, repositoryPath string, m 
 		return fmt.Errorf("failed to marshal manifest: %w", err)
 	}
 	manFile := fmt.Sprintf("%s.json", m.Id())
-	return os.WriteFile(filepath.Join(fmt.Sprintf("%s/snapshots", repositoryPath), manFile), data, 0o644)
+	return os.WriteFile(filepath.Join(fmt.Sprintf("%s/snapshots", r.repositoryPath), manFile), data, 0o644)
 }
 
-func NewManifestRepository() *ManifestRepository {
-	return &ManifestRepository{}
+func NewManifestRepository(repositoryPath string) *ManifestRepository {
+	return &ManifestRepository{repositoryPath: repositoryPath}
 }
