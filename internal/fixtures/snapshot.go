@@ -2,7 +2,7 @@ package fixtures
 
 import (
 	"github.com/bruli-lab/go-core/fixtures"
-	"github.com/bruli-lab/stonekeep.git/internal/domain/snapshot"
+	"github.com/bruli-lab/stowmark.git/internal/domain/snapshot"
 )
 
 type SourceBuilder struct {

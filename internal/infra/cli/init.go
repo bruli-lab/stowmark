@@ -3,8 +3,8 @@ package cli
 import (
 	"fmt"
 
-	"github.com/bruli-lab/stonekeep.git/internal/domain/repository"
-	"github.com/bruli-lab/stonekeep.git/internal/infra/disk"
+	"github.com/bruli-lab/stowmark.git/internal/domain/repository"
+	"github.com/bruli-lab/stowmark.git/internal/infra/disk"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )

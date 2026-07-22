@@ -4,9 +4,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/bruli-lab/stonekeep.git/internal/domain/repository"
-	"github.com/bruli-lab/stonekeep.git/internal/domain/snapshot"
-	"github.com/bruli-lab/stonekeep.git/internal/infra/disk"
+	"github.com/bruli-lab/stowmark.git/internal/domain/repository"
+	"github.com/bruli-lab/stowmark.git/internal/domain/snapshot"
+	"github.com/bruli-lab/stowmark.git/internal/infra/disk"
 	"github.com/spf13/cobra"
 )
 

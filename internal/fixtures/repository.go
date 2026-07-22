@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/bruli-lab/go-core/fixtures"
-	"github.com/bruli-lab/stonekeep.git/internal/domain/repository"
+	"github.com/bruli-lab/stowmark.git/internal/domain/repository"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )

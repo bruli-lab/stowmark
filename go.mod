@@ -1,4 +1,4 @@
-module github.com/bruli-lab/stonekeep.git
+module github.com/bruli-lab/stowmark.git
 
 go 1.26.5
 

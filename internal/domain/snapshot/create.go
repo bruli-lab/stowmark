@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/bruli-lab/stonekeep.git/internal/domain/repository"
+	"github.com/bruli-lab/stowmark.git/internal/domain/repository"
 )
 
 type Create struct {

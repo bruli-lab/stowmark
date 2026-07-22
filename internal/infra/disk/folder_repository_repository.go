@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/bruli-lab/stonekeep.git/internal/domain/repository"
+	"github.com/bruli-lab/stowmark.git/internal/domain/repository"
 	"github.com/google/uuid"
 )
 

@@ -5,9 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/bruli-lab/stonekeep.git/internal/domain/repository"
-	"github.com/bruli-lab/stonekeep.git/internal/domain/snapshot"
-	"github.com/bruli-lab/stonekeep.git/internal/fixtures"
+	"github.com/bruli-lab/stowmark.git/internal/domain/repository"
+	"github.com/bruli-lab/stowmark.git/internal/domain/snapshot"
+	"github.com/bruli-lab/stowmark.git/internal/fixtures"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )

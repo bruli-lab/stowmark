@@ -10,7 +10,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/bruli-lab/stonekeep.git/internal/domain/snapshot"
+	"github.com/bruli-lab/stowmark.git/internal/domain/snapshot"
 )
 
 type SourceExplorer struct{}
