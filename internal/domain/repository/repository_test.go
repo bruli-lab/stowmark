@@ -2,7 +2,6 @@ package repository_test
 
 import (
 	"testing"
-	"time"
 
 	"github.com/bruli-lab/stonekeep.git/internal/domain/repository"
 	"github.com/google/uuid"
@@ -37,7 +36,7 @@ func TestNewRepository(t *testing.T) {
 			name: "with valid data, then it returns a valid repository struct",
 			args: args{
 				name:   "name",
-				config: repository.NewConfig(uuid.New(), time.Now()),
+				config: repository.NewConfig(uuid.New(), repository.NoneCompression()),
 			},
 		},
 	}

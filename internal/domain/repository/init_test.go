@@ -84,12 +84,12 @@ func TestInit_Do(t *testing.T) {
 			}
 			repo.CreateFolderFunc = func(_ context.Context, _ string) error {
 				call := len(repo.CreateFolderCalls())
-				switch {
-				case call == 1:
+				switch call {
+				case 1:
 					return tt.createRepoErr
-				case call == 2:
+				case 2:
 					return tt.createObjectErr
-				case call == 3:
+				case 3:
 					return tt.createSnapshotErr
 				}
 				return nil

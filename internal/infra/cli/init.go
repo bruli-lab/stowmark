@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/bruli-lab/stonekeep.git/internal/domain/repository"
 	"github.com/bruli-lab/stonekeep.git/internal/infra/disk"
@@ -19,15 +18,15 @@ func newInitCommand() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			id := uuid.New()
-			re, err := repository.NewRepository(args[0], repository.NewConfig(id, time.Now()))
+			re, err := repository.NewRepository(args[0], repository.NewConfig(id, repository.NoneCompression()))
 			if err != nil {
 				return err
 			}
 			if err := svc.Do(cmd.Context(), re); err != nil {
 				return err
 			}
-			fmt.Println(fmt.Sprintf("Initialized Stonekeep repository at %q", args[0]))
-			fmt.Println(fmt.Sprintf("Repository ID: %q", id.String()))
+			fmt.Printf("Initialized Stonekeep repository at %q\n", args[0])
+			fmt.Printf("Repository ID: %q", id.String())
 			return nil
 		},
 	}

@@ -27,6 +27,9 @@ var _ FolderRepository = &FolderRepositoryMock{}
 //			ExistsFunc: func(ctx context.Context, name string) (bool, error) {
 //				panic("mock out the Exists method")
 //			},
+//			GetConfigFunc: func(ctx context.Context, path string) (*Config, error) {
+//				panic("mock out the GetConfig method")
+//			},
 //		}
 //
 //		// use mockedFolderRepository in code that requires FolderRepository
@@ -42,6 +45,9 @@ type FolderRepositoryMock struct {
 
 	// ExistsFunc mocks the Exists method.
 	ExistsFunc func(ctx context.Context, name string) (bool, error)
+
+	// GetConfigFunc mocks the GetConfig method.
+	GetConfigFunc func(ctx context.Context, path string) (*Config, error)
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -68,10 +74,18 @@ type FolderRepositoryMock struct {
 			// Name is the name argument value.
 			Name string
 		}
+		// GetConfig holds details about calls to the GetConfig method.
+		GetConfig []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Path is the path argument value.
+			Path string
+		}
 	}
 	lockCreateConfig sync.RWMutex
 	lockCreateFolder sync.RWMutex
 	lockExists       sync.RWMutex
+	lockGetConfig    sync.RWMutex
 }
 
 // CreateConfig calls CreateConfigFunc.
@@ -183,5 +197,41 @@ func (mock *FolderRepositoryMock) ExistsCalls() []struct {
 	mock.lockExists.RLock()
 	calls = mock.calls.Exists
 	mock.lockExists.RUnlock()
+	return calls
+}
+
+// GetConfig calls GetConfigFunc.
+func (mock *FolderRepositoryMock) GetConfig(ctx context.Context, path string) (*Config, error) {
+	if mock.GetConfigFunc == nil {
+		panic("FolderRepositoryMock.GetConfigFunc: method is nil but FolderRepository.GetConfig was just called")
+	}
+	callInfo := struct {
+		Ctx  context.Context
+		Path string
+	}{
+		Ctx:  ctx,
+		Path: path,
+	}
+	mock.lockGetConfig.Lock()
+	mock.calls.GetConfig = append(mock.calls.GetConfig, callInfo)
+	mock.lockGetConfig.Unlock()
+	return mock.GetConfigFunc(ctx, path)
+}
+
+// GetConfigCalls gets all the calls that were made to GetConfig.
+// Check the length with:
+//
+//	len(mockedFolderRepository.GetConfigCalls())
+func (mock *FolderRepositoryMock) GetConfigCalls() []struct {
+	Ctx  context.Context
+	Path string
+} {
+	var calls []struct {
+		Ctx  context.Context
+		Path string
+	}
+	mock.lockGetConfig.RLock()
+	calls = mock.calls.GetConfig
+	mock.lockGetConfig.RUnlock()
 	return calls
 }

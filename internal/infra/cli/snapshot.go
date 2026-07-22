@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/bruli-lab/stonekeep.git/internal/domain/repository"
 	"github.com/bruli-lab/stonekeep.git/internal/domain/snapshot"
 	"github.com/bruli-lab/stonekeep.git/internal/infra/disk"
 	"github.com/spf13/cobra"
@@ -26,10 +27,12 @@ func newSnapshotCommand() *cobra.Command {
 
 			manifestRepo := disk.NewManifestRepository(repositoryPath)
 			objRepo := disk.NewObjectRepository(repositoryPath)
-			create := snapshot.NewCreate(sourceRepo, manifestRepo, objRepo)
+			folderRepositoryRepo := disk.NewFolderRepositoryRepository()
+			create := snapshot.NewCreate(sourceRepo, manifestRepo, objRepo, repository.NewGetConfig(folderRepositoryRepo))
 
 			result, err := create.Do(
 				cmd.Context(),
+				repositoryPath,
 				sourcePath,
 			)
 			if err != nil {

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/bruli-lab/stonekeep.git/internal/domain/repository"
 	"github.com/bruli-lab/stonekeep.git/internal/domain/snapshot"
 )
 
@@ -53,7 +54,7 @@ func (r ManifestRepository) Save(ctx context.Context, m *snapshot.Manifest) erro
 		return fmt.Errorf("failed to marshal manifest: %w", err)
 	}
 	manFile := fmt.Sprintf("%s.json", m.Id())
-	return os.WriteFile(filepath.Join(fmt.Sprintf("%s/snapshots", r.repositoryPath), manFile), data, 0o644)
+	return os.WriteFile(filepath.Join(fmt.Sprintf("%s/%s", r.repositoryPath, repository.SnapshotsFolder), manFile), data, 0o644)
 }
 
 func NewManifestRepository(repositoryPath string) *ManifestRepository {

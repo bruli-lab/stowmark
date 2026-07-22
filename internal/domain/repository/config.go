@@ -12,6 +12,11 @@ type Config struct {
 	id            uuid.UUID
 	formatVersion int
 	createdAt     time.Time
+	compression   *Compression
+}
+
+func (c Config) Compression() *Compression {
+	return c.compression
 }
 
 func (c Config) Id() uuid.UUID {
@@ -26,6 +31,6 @@ func (c Config) CreatedAt() time.Time {
 	return c.createdAt
 }
 
-func NewConfig(id uuid.UUID, createdAt time.Time) *Config {
-	return &Config{id: id, formatVersion: DefaultFormatVersion, createdAt: createdAt}
+func NewConfig(id uuid.UUID, comp *Compression) *Config {
+	return &Config{id: id, formatVersion: DefaultFormatVersion, createdAt: time.Now().UTC(), compression: comp}
 }

@@ -2,7 +2,6 @@ package fixtures
 
 import (
 	"testing"
-	"time"
 
 	"github.com/bruli-lab/go-core/fixtures"
 	"github.com/bruli-lab/stonekeep.git/internal/domain/repository"
@@ -24,13 +23,11 @@ func (b RepositoryBuilder) Build(t *testing.T) repository.Repository {
 }
 
 type ConfigBuilder struct {
-	ID        *uuid.UUID
-	createdAt *time.Time
+	ID *uuid.UUID
 }
 
 func (c ConfigBuilder) Build() repository.Config {
 	id := fixtures.SetData(uuid.New(), c.ID)
-	createdAt := fixtures.SetData(time.Now(), c.createdAt)
-	co := repository.NewConfig(id, createdAt)
+	co := repository.NewConfig(id, repository.NoneCompression())
 	return *co
 }

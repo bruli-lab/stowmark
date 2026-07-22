@@ -10,17 +10,58 @@ import (
 	"time"
 
 	"github.com/bruli-lab/stonekeep.git/internal/domain/repository"
+	"github.com/google/uuid"
 )
 
 const configFile = "config.json"
 
+type compression struct {
+	Type  string `json:"type"`
+	Level *int   `json:"level,omitempty"`
+}
 type config struct {
-	ID            string `json:"id"`
-	FormatVersion int    `json:"format_version"`
-	CreatedAt     string `json:"created_at"`
+	ID            string      `json:"id"`
+	FormatVersion int         `json:"format_version"`
+	CreatedAt     string      `json:"created_at"`
+	Compression   compression `json:"compression"`
 }
 
 type FolderRepositoryRepository struct{}
+
+func (f FolderRepositoryRepository) GetConfig(ctx context.Context, path string) (*repository.Config, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+	absolutePath, err := filepath.Abs(path)
+	if err != nil {
+		return nil, fmt.Errorf("resolve absolute path: %w", err)
+	}
+	configPath := filepath.Join(absolutePath, configFile)
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		switch {
+		case errors.Is(err, os.ErrNotExist):
+			return nil, repository.NewNotFoundError("config file not found")
+		default:
+			return nil, fmt.Errorf("failed to read config: %w", err)
+		}
+	}
+	var conf config
+	if err := json.Unmarshal(data, &conf); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
+	}
+	id, err := uuid.Parse(conf.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse config id: %w", err)
+	}
+	compType, err := repository.ParseCompressionType(conf.Compression.Type)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse compression type: %w", err)
+	}
+	return repository.NewConfig(id, repository.NewCompression(*compType, conf.Compression.Level)), nil
+}
 
 func (f FolderRepositoryRepository) Exists(ctx context.Context, name string) (bool, error) {
 	select {
@@ -57,6 +98,10 @@ func (f FolderRepositoryRepository) CreateConfig(ctx context.Context, path strin
 		ID:            c.Id().String(),
 		FormatVersion: c.FormatVersion(),
 		CreatedAt:     c.CreatedAt().Format(time.RFC3339),
+		Compression: compression{
+			Type:  c.Compression().CompType().String(),
+			Level: c.Compression().Level(),
+		},
 	}
 	data, err := json.Marshal(co)
 	if err != nil {

@@ -11,19 +11,19 @@ type Manifest struct {
 	source    string
 }
 
-func (m Manifest) Id() string {
+func (m *Manifest) Id() string {
 	return m.id
 }
 
-func (m Manifest) Files() []File {
+func (m *Manifest) Files() []File {
 	return m.files
 }
 
-func (m Manifest) CreatedAt() time.Time {
+func (m *Manifest) CreatedAt() time.Time {
 	return m.createdAt
 }
 
-func (m Manifest) Source() string {
+func (m *Manifest) Source() string {
 	return m.source
 }
 

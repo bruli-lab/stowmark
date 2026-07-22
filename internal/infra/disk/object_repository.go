@@ -8,11 +8,30 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/bruli-lab/stonekeep.git/internal/domain/repository"
 	"github.com/bruli-lab/stonekeep.git/internal/domain/snapshot"
 )
 
 type ObjectRepository struct {
 	repositoryPath string
+}
+
+func (o ObjectRepository) AlreadyExists(ctx context.Context, obj *snapshot.File) (bool, error) {
+	select {
+	case <-ctx.Done():
+		return false, ctx.Err()
+	default:
+	}
+	hash := obj.Hash()
+	destinationPath := filepath.Join(o.repositoryPath, repository.ObjectsFolder, hash[:2], hash[2:])
+	_, err := os.Stat(destinationPath)
+	switch {
+	case err == nil:
+		return true, nil
+	case !errors.Is(err, os.ErrNotExist):
+		return false, fmt.Errorf("check destination file %q: %w", destinationPath, err)
+	}
+	return false, nil
 }
 
 func (o ObjectRepository) Save(ctx context.Context, obj *snapshot.File) error {
@@ -22,14 +41,7 @@ func (o ObjectRepository) Save(ctx context.Context, obj *snapshot.File) error {
 	default:
 	}
 	hash := obj.Hash()
-	destinationPath := filepath.Join(o.repositoryPath, "objects", hash[:2], hash[2:])
-	_, err := os.Stat(destinationPath)
-	switch {
-	case err == nil:
-		return nil
-	case !errors.Is(err, os.ErrNotExist):
-		return fmt.Errorf("check destination file %q: %w", destinationPath, err)
-	}
+	destinationPath := filepath.Join(o.repositoryPath, repository.ObjectsFolder, hash[:2], hash[2:])
 	if err := os.MkdirAll(filepath.Dir(destinationPath), 0o755); err != nil {
 		return fmt.Errorf(
 			"create object directory %q: %w",
