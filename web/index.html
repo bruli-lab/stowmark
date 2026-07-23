@@ -1,0 +1,147 @@
+ <!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Stowmark is a simple open-source snapshot and backup tool.">
+  <meta name="theme-color" content="#00061a">
+
+  <meta property="og:title" content="Stowmark">
+  <meta property="og:description" content="Immutable snapshots. Simple restores.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://stowmark.dev">
+  <meta property="og:image" content="https://stowmark.dev/assets/brand-image.png">
+
+  <title>Stowmark — Snapshot & backup tool</title>
+
+  <link rel="icon" href="assets/favicon.png" type="image/png">
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="/" aria-label="Stowmark home">
+      <img src="assets/favicon.png" alt="" width="42" height="42">
+      <span>stowmark</span>
+    </a>
+
+    <nav aria-label="Main navigation">
+      <a href="#features">Features</a>
+      <a href="#install">Install</a>
+      <a href="https://github.com/bruli-lab/stowmark" rel="noreferrer">GitHub</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">OPEN SOURCE BACKUP TOOL</p>
+        <h1>Immutable snapshots.<br><span>Simple restores.</span></h1>
+        <p class="lead">
+          Stowmark creates content-addressed snapshots of your files without
+          duplicating unchanged data.
+        </p>
+
+        <div class="hero-actions">
+          <a class="button button-primary" href="#downloads">Download</a>
+          <a class="button button-secondary"
+             href="https://github.com/bruli-lab/stowmark"
+             rel="noreferrer">
+            View on GitHub
+          </a>
+        </div>
+
+        <p class="release-line">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span id="release-summary">Loading latest release…</span>
+        </p>
+      </div>
+      <div class="hero-visual">
+        <figure class="brand-image-card">
+          <img
+            src="assets/brand-image.png"
+            alt="Stowmark open source backup tool: snapshots, immutable storage, trusted and durable"
+            width="1280"
+            height="1280"
+          >
+        </figure>
+      </div>
+    </section>
+
+    <section class="section" id="features">
+      <div class="section-heading">
+        <p class="eyebrow">WHY STOWMARK</p>
+        <h2>Backups without unnecessary copies</h2>
+      </div>
+
+      <div class="feature-grid">
+        <article class="feature-card">
+          <div class="feature-icon">01</div>
+          <h3>Content addressed</h3>
+          <p>Files are stored by their content hash, so unchanged data is reused.</p>
+        </article>
+
+        <article class="feature-card">
+          <div class="feature-icon">02</div>
+          <h3>Immutable snapshots</h3>
+          <p>Each snapshot represents a stable point in time that can be restored later.</p>
+        </article>
+
+        <article class="feature-card">
+          <div class="feature-icon">03</div>
+          <h3>Simple CLI</h3>
+          <p>A small command-line tool designed to be understandable and scriptable.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section install-section" id="install">
+      <div class="section-heading">
+        <p class="eyebrow">INSTALL</p>
+        <h2>Choose your package</h2>
+        <p id="downloads" class="section-description">
+          Files are loaded automatically from the latest GitHub release.
+        </p>
+      </div>
+
+      <div id="download-grid" class="download-grid" aria-live="polite">
+        <div class="download-placeholder">Loading release assets…</div>
+      </div>
+
+      <div id="release-error" class="release-error" hidden>
+        Could not load the latest release automatically.
+        <a href="https://github.com/bruli-lab/stowmark/releases/latest">Open GitHub Releases</a>.
+      </div>
+    </section>
+
+    <section class="section quick-start">
+      <div>
+        <p class="eyebrow">QUICK START</p>
+        <h2>Create your first snapshot</h2>
+      </div>
+
+      <div class="code-block">
+        <button type="button" class="copy-button" data-copy-target="quick-start-code">
+          Copy
+        </button>
+        <pre><code id="quick-start-code">stowmark repository create --source ./documents --repo ~/backups/documents
+stowmark snapshot source --repo ~/backups/documents
+stowmark snapshot list --repo ~/backups/documents</code></pre>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="footer-brand">
+      <img src="assets/favicon.png" alt="" width="32" height="32">
+      <span>stowmark</span>
+    </div>
+    <p>Open source software.</p>
+    <div class="footer-links">
+      <a href="https://github.com/bruli-lab/stowmark">GitHub</a>
+      <a href="https://github.com/bruli-lab/stowmark/releases">Releases</a>
+      <a href="https://github.com/bruli-lab/stowmark/issues">Issues</a>
+    </div>
+  </footer>
+</body>
+</html>

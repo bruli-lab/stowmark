@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title">
+  <title id="title">Stowmark logo</title>
+  <defs>
+    <linearGradient id="g" x1="16" y1="16" x2="112" y2="112" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7af7d5"/>
+      <stop offset=".48" stop-color="#32d6ae"/>
+      <stop offset="1" stop-color="#0c8b6d"/>
+    </linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <path
+    d="M64 10 108 35v26L89 72l19 11v10L64 118 20 93V67l19-11-19-11V35L64 10Zm0 13L34 40l30 17 30-17-30-17Zm-32 34v29l32 18 32-18-17-10-15 9-31-18 16-9-17-10v9Zm32 12 15-9-15-9-15 9 15 9Z"
+    fill="url(#g)"
+    filter="url(#glow)"/>
+</svg>
