@@ -140,6 +140,9 @@ var _ ManifestRepository = &ManifestRepositoryMock{}
 //
 //		// make and configure a mocked ManifestRepository
 //		mockedManifestRepository := &ManifestRepositoryMock{
+//			ListFunc: func(ctx context.Context) ([]Manifest, error) {
+//				panic("mock out the List method")
+//			},
 //			SaveFunc: func(ctx context.Context, m *Manifest) error {
 //				panic("mock out the Save method")
 //			},
@@ -150,11 +153,19 @@ var _ ManifestRepository = &ManifestRepositoryMock{}
 //
 //	}
 type ManifestRepositoryMock struct {
+	// ListFunc mocks the List method.
+	ListFunc func(ctx context.Context) ([]Manifest, error)
+
 	// SaveFunc mocks the Save method.
 	SaveFunc func(ctx context.Context, m *Manifest) error
 
 	// calls tracks calls to the methods.
 	calls struct {
+		// List holds details about calls to the List method.
+		List []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+		}
 		// Save holds details about calls to the Save method.
 		Save []struct {
 			// Ctx is the ctx argument value.
@@ -163,7 +174,40 @@ type ManifestRepositoryMock struct {
 			M *Manifest
 		}
 	}
+	lockList sync.RWMutex
 	lockSave sync.RWMutex
+}
+
+// List calls ListFunc.
+func (mock *ManifestRepositoryMock) List(ctx context.Context) ([]Manifest, error) {
+	if mock.ListFunc == nil {
+		panic("ManifestRepositoryMock.ListFunc: method is nil but ManifestRepository.List was just called")
+	}
+	callInfo := struct {
+		Ctx context.Context
+	}{
+		Ctx: ctx,
+	}
+	mock.lockList.Lock()
+	mock.calls.List = append(mock.calls.List, callInfo)
+	mock.lockList.Unlock()
+	return mock.ListFunc(ctx)
+}
+
+// ListCalls gets all the calls that were made to List.
+// Check the length with:
+//
+//	len(mockedManifestRepository.ListCalls())
+func (mock *ManifestRepositoryMock) ListCalls() []struct {
+	Ctx context.Context
+} {
+	var calls []struct {
+		Ctx context.Context
+	}
+	mock.lockList.RLock()
+	calls = mock.calls.List
+	mock.lockList.RUnlock()
+	return calls
 }
 
 // Save calls SaveFunc.

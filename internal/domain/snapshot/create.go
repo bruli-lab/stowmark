@@ -37,7 +37,7 @@ func (c Create) Do(ctx context.Context, repoPath, sourcePath string) (*Result, e
 		}
 		source.Files()[i] = file
 	}
-	man := NewManifest(source.Files(), time.Now().UTC(), source.AbsolutePath())
+	man := NewManifest(newID(), source.Files(), time.Now().UTC(), source.AbsolutePath())
 	if err := c.manifestRepo.Save(ctx, man); err != nil {
 		return nil, err
 	}

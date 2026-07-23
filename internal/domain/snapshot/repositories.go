@@ -10,6 +10,7 @@ type SourceRepository interface {
 
 type ManifestRepository interface {
 	Save(ctx context.Context, m *Manifest) error
+	List(ctx context.Context) ([]Manifest, error)
 }
 
 type ObjectRepository interface {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/bruli-lab/stowmark.git/internal/domain/repository"
@@ -27,6 +28,73 @@ type manifest struct {
 
 type ManifestRepository struct {
 	repositoryPath string
+}
+
+func (r ManifestRepository) List(ctx context.Context) ([]snapshot.Manifest, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+	snapshotsPath := filepath.Join(
+		r.repositoryPath,
+		repository.SnapshotsFolder,
+	)
+	entries, err := os.ReadDir(snapshotsPath)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed to read snapshots folder: %w",
+			err,
+		)
+	}
+	manifests := make([]snapshot.Manifest, len(entries))
+	for i, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		manifestPath := filepath.Join(
+			snapshotsPath,
+			entry.Name(),
+		)
+		data, err := os.ReadFile(manifestPath)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"failed to read manifest %q: %w",
+				manifestPath,
+				err,
+			)
+		}
+		var model manifest
+		if err := json.Unmarshal(data, &model); err != nil {
+			return nil, fmt.Errorf(
+				"failed to unmarshal manifest %q: %w",
+				manifestPath,
+				err,
+			)
+		}
+		snapshotFiles := make(
+			[]snapshot.File,
+			len(model.Files),
+		)
+		for i, modelFile := range model.Files {
+			file := snapshot.NewFile(
+				modelFile.Path,
+				modelFile.Size,
+			)
+			snapshotFiles[i] = *file
+		}
+		man := snapshot.NewManifest(
+			model.ID,
+			snapshotFiles,
+			model.CreatedAt,
+			model.Source,
+		)
+		manifests[i] = *man
+	}
+	slices.SortFunc(manifests, func(a, b snapshot.Manifest) int {
+		return b.CreatedAt().Compare(a.CreatedAt())
+	})
+	return manifests, nil
 }
 
 func (r ManifestRepository) Save(ctx context.Context, m *snapshot.Manifest) error {
