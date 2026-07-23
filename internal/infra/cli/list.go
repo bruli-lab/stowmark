@@ -23,7 +23,10 @@ func newSnapshotListCommand() *cobra.Command {
 				return errors.New("--repo is required")
 			}
 
-			manifestRepo := disk.NewManifestRepository(repositoryPath)
+			manifestRepo, err := disk.NewManifestRepository(repositoryPath)
+			if err != nil {
+				return err
+			}
 
 			list := snapshot.NewListing(manifestRepo)
 
