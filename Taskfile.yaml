@@ -1,0 +1,71 @@
+version: '3'
+
+vars:
+  GOLANGCI_LINT_VERSION: 'v2.12.2'
+
+silent: false
+
+tasks:
+  default:
+    desc: Mostra l'ajuda
+    cmds:
+      - task --list
+
+  fmt:
+    desc: Format Go amb gofumpt
+    cmds:
+      - |
+        set -euo pipefail
+        echo "👉 Formatting code with gofumpt..."
+        go tool gofumpt -w .
+
+  fix:
+    desc: fixing code
+    cmds:
+      - |
+        set -euo pipefail
+        echo "👉 Running go fix..."
+        go fix -v ./...
+
+  security:
+    desc: Revisar vulnerabilitats amb govulncheck
+    cmds:
+      - |
+        set -euo pipefail
+        echo "👉 Check security"
+        go tool govulncheck ./...
+
+  install-lint:
+    desc: Instal·lar golangci-lint
+    cmds:
+      - |
+        set -euo pipefail
+        echo "🔧 Installing golangci-lint {{.GOLANGCI_LINT_VERSION}}..."
+        go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@{{.GOLANGCI_LINT_VERSION}}
+
+  lint:
+    desc: Executing golangci-lint
+    deps:
+      - install-lint
+    cmds:
+      - |
+        set -euo pipefail
+        echo "🚀 Executing golangci-lint..."
+        golangci-lint run ./...
+
+  test:
+    desc: Executing tests amb race, coverage i tparse
+    cmds:
+      - |
+        set -euo pipefail
+        echo "🧪 Running unit tests (race, JSON → tparse)..."
+        go test -race ./... -json -cover -coverprofile=coverage.out | go tool tparse -all
+
+  check:
+    desc: Executing fmt, security, lint i test
+    deps:
+      - fmt
+      - fix
+      - security
+      - lint
+      - test
