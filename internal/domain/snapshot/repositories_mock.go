@@ -140,6 +140,9 @@ var _ ManifestRepository = &ManifestRepositoryMock{}
 //
 //		// make and configure a mocked ManifestRepository
 //		mockedManifestRepository := &ManifestRepositoryMock{
+//			GetFunc: func(ctx context.Context, snapshotID string) (*Manifest, error) {
+//				panic("mock out the Get method")
+//			},
 //			ListFunc: func(ctx context.Context) ([]Manifest, error) {
 //				panic("mock out the List method")
 //			},
@@ -153,6 +156,9 @@ var _ ManifestRepository = &ManifestRepositoryMock{}
 //
 //	}
 type ManifestRepositoryMock struct {
+	// GetFunc mocks the Get method.
+	GetFunc func(ctx context.Context, snapshotID string) (*Manifest, error)
+
 	// ListFunc mocks the List method.
 	ListFunc func(ctx context.Context) ([]Manifest, error)
 
@@ -161,6 +167,13 @@ type ManifestRepositoryMock struct {
 
 	// calls tracks calls to the methods.
 	calls struct {
+		// Get holds details about calls to the Get method.
+		Get []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// SnapshotID is the snapshotID argument value.
+			SnapshotID string
+		}
 		// List holds details about calls to the List method.
 		List []struct {
 			// Ctx is the ctx argument value.
@@ -174,8 +187,45 @@ type ManifestRepositoryMock struct {
 			M *Manifest
 		}
 	}
+	lockGet  sync.RWMutex
 	lockList sync.RWMutex
 	lockSave sync.RWMutex
+}
+
+// Get calls GetFunc.
+func (mock *ManifestRepositoryMock) Get(ctx context.Context, snapshotID string) (*Manifest, error) {
+	if mock.GetFunc == nil {
+		panic("ManifestRepositoryMock.GetFunc: method is nil but ManifestRepository.Get was just called")
+	}
+	callInfo := struct {
+		Ctx        context.Context
+		SnapshotID string
+	}{
+		Ctx:        ctx,
+		SnapshotID: snapshotID,
+	}
+	mock.lockGet.Lock()
+	mock.calls.Get = append(mock.calls.Get, callInfo)
+	mock.lockGet.Unlock()
+	return mock.GetFunc(ctx, snapshotID)
+}
+
+// GetCalls gets all the calls that were made to Get.
+// Check the length with:
+//
+//	len(mockedManifestRepository.GetCalls())
+func (mock *ManifestRepositoryMock) GetCalls() []struct {
+	Ctx        context.Context
+	SnapshotID string
+} {
+	var calls []struct {
+		Ctx        context.Context
+		SnapshotID string
+	}
+	mock.lockGet.RLock()
+	calls = mock.calls.Get
+	mock.lockGet.RUnlock()
+	return calls
 }
 
 // List calls ListFunc.

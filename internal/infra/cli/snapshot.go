@@ -13,6 +13,7 @@ func newSnapshotCommand() *cobra.Command {
 	cmd.AddCommand(
 		newSnapshotCreateCommand(),
 		newSnapshotListCommand(),
+		newSnapshotGetCommand(),
 	)
 
 	return cmd

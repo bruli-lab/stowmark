@@ -11,6 +11,7 @@ type SourceRepository interface {
 type ManifestRepository interface {
 	Save(ctx context.Context, m *Manifest) error
 	List(ctx context.Context) ([]Manifest, error)
+	Get(ctx context.Context, snapshotID string) (*Manifest, error)
 }
 
 type ObjectRepository interface {
