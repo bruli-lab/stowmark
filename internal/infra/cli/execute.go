@@ -6,7 +6,7 @@ import (
 
 func Execute() error {
 	rootCmd := &cobra.Command{
-		Use:           "stonekeep",
+		Use:           "stowmark",
 		Short:         "Immutable snapshot backup tool",
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -14,6 +14,7 @@ func Execute() error {
 
 	rootCmd.AddCommand(newInitCommand())
 	rootCmd.AddCommand(newSnapshotCommand())
+	rootCmd.AddCommand(newSnapshotListCommand())
 
 	return rootCmd.Execute()
 }

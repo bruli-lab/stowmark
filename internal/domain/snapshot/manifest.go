@@ -27,6 +27,6 @@ func (m *Manifest) Source() string {
 	return m.source
 }
 
-func NewManifest(files []File, createdAt time.Time, source string) *Manifest {
-	return &Manifest{id: newID(), files: files, createdAt: createdAt, source: source}
+func NewManifest(id string, files []File, createdAt time.Time, source string) *Manifest {
+	return &Manifest{id: id, files: files, createdAt: createdAt, source: source}
 }
