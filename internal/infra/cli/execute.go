@@ -14,7 +14,6 @@ func Execute() error {
 
 	rootCmd.AddCommand(newInitCommand())
 	rootCmd.AddCommand(newSnapshotCommand())
-	rootCmd.AddCommand(newSnapshotListCommand())
 
 	return rootCmd.Execute()
 }
