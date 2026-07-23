@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"text/tabwriter"
+	"time"
 
 	"github.com/bruli-lab/stowmark.git/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark.git/internal/infra/disk"
@@ -57,12 +58,18 @@ func newSnapshotListCommand() *cobra.Command {
 				return err
 			}
 
+			location, err := time.LoadLocation("Europe/Madrid")
+			if err != nil {
+				return err
+			}
+
 			for _, item := range snapshots {
+				created := item.CreatedAt().In(location)
 				_, err = fmt.Fprintf(
 					writer,
 					"%s\t%s\t%d\t%s\t%s\n",
 					item.Id(),
-					item.CreatedAt().Format("2006-01-02 15:04:05"),
+					created.Format("2006-01-02 15:04:05"),
 					item.Files(),
 					formatBytes(item.Size()),
 					item.Source(),
