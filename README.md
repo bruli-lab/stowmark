@@ -1,2 +1,249 @@
-# stonekeep
-Immutable snapshot repository
+# Stowmark
+
+**Immutable, content-addressed snapshot backups from the command line.**
+
+[![CI](https://github.com/bruli-lab/stowmark/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/bruli-lab/stowmark/actions/workflows/release.yml)
+[![Coverage](https://codecov.io/gh/bruli-lab/stowmark/branch/main/graph/badge.svg)](https://codecov.io/gh/bruli-lab/stowmark)
+[![Go Report Card](https://goreportcard.com/badge/github.com/bruli-lab/stowmark)](https://goreportcard.com/report/github.com/bruli-lab/stowmark)
+[![Latest release](https://img.shields.io/github/v/release/bruli-lab/stowmark?display_name=tag)](https://github.com/bruli-lab/stowmark/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/bruli-lab/stowmark/total)](https://github.com/bruli-lab/stowmark/releases)
+[![License](https://img.shields.io/github/license/bruli-lab/stowmark)](https://github.com/bruli-lab/stowmark/blob/main/LICENSE)
+[![Go version](https://img.shields.io/github/go-mod/go-version/bruli-lab/stowmark)](https://github.com/bruli-lab/stowmark/blob/main/go.mod)
+
+[Website](https://stowmark.pages.dev/) ·
+[Releases](https://github.com/bruli-lab/stowmark/releases) ·
+[Issues](https://github.com/bruli-lab/stowmark/issues)
+
+---
+
+Stowmark is a lightweight backup tool that stores directory snapshots in a local,
+immutable-style repository.
+
+Files are identified by their SHA-256 hash and stored only once. Each snapshot is
+represented by a manifest containing the source path, creation time and references
+to its files.
+
+> **Note**
+>
+> Stowmark is under active development. The repository format and command-line
+> interface may change before the first stable release.
+
+## Features
+
+- Content-addressed object storage using SHA-256.
+- Deduplication of unchanged files between snapshots.
+- Separate JSON manifest for every snapshot.
+- Snapshot listing ordered from newest to oldest.
+- Inspection of a snapshot and all its files.
+- Integrity verification using file hashes and sizes.
+- Local repositories with no external service required.
+- Linux builds for `amd64` and `arm64`.
+- Debian packages generated with GoReleaser.
+
+## Installation
+
+### Debian package
+
+Download the package for your architecture from the
+[latest GitHub release](https://github.com/bruli-lab/stowmark/releases/latest)
+and install it with:
+
+```bash
+sudo dpkg -i stowmark_*.deb
+```
+
+### Build from source
+
+Requirements:
+
+- Go 1.26 or newer.
+- Git.
+
+```bash
+git clone https://github.com/bruli-lab/stowmark.git
+cd stowmark
+
+go build -o stowmark ./cmd/cli
+sudo install -m 0755 stowmark /usr/local/bin/stowmark
+```
+
+Check the installation:
+
+```bash
+stowmark --help
+```
+
+## Quick start
+
+Create a new Stowmark repository:
+
+```bash
+stowmark init /srv/backups/stowmark
+```
+
+Create a snapshot of a directory:
+
+```bash
+stowmark snapshot create ~/documents \
+  --repo /srv/backups/stowmark
+```
+
+List the available snapshots:
+
+```bash
+stowmark snapshot list \
+  --repo /srv/backups/stowmark
+```
+
+Inspect a snapshot manifest:
+
+```bash
+stowmark snapshot get \
+  --id <snapshot-id> \
+  --repo /srv/backups/stowmark
+```
+
+Verify that every object referenced by a snapshot is present and unmodified:
+
+```bash
+stowmark snapshot verify \
+  --id <snapshot-id> \
+  --repo /srv/backups/stowmark
+```
+
+## Commands
+
+| Command | Description |
+| --- | --- |
+| `stowmark init <repository>` | Initialize a new repository. |
+| `stowmark snapshot create <source> --repo <repository>` | Create a snapshot of a directory. |
+| `stowmark snapshot list --repo <repository>` | List snapshots from newest to oldest. |
+| `stowmark snapshot get --id <id> --repo <repository>` | Display a snapshot manifest. |
+| `stowmark snapshot verify --id <id> --repo <repository>` | Verify snapshot integrity. |
+
+Run the built-in help for the complete set of options:
+
+```bash
+stowmark --help
+stowmark snapshot --help
+stowmark snapshot create --help
+```
+
+## Repository format
+
+A repository currently has the following structure:
+
+```text
+repository/
+├── config.json
+├── objects/
+│   ├── 00/
+│   ├── 01/
+│   └── ...
+└── snapshots/
+    ├── <snapshot-id>.json
+    └── ...
+```
+
+### Objects
+
+Objects are stored using their SHA-256 hash. The first two characters are used as
+the directory name and the remaining characters as the file name:
+
+```text
+objects/<first-two-hash-characters>/<remaining-hash-characters>
+```
+
+When two snapshots contain the same file content, they both reference the same
+stored object.
+
+### Snapshot manifests
+
+Each snapshot is stored as a JSON manifest containing:
+
+- A unique snapshot ID.
+- The snapshot creation time.
+- The original source path.
+- The path, SHA-256 hash and size of every file.
+
+The manifest references objects but does not duplicate their contents.
+
+## Integrity verification
+
+The `snapshot verify` command reads each object referenced by the manifest and
+checks:
+
+1. The object exists.
+2. Its calculated SHA-256 hash matches the manifest.
+3. Its size matches the manifest.
+
+The command exits with an error when any referenced file fails verification,
+making it suitable for scripts and scheduled checks.
+
+## Development
+
+Install [Task](https://taskfile.dev/) and run:
+
+```bash
+task check
+```
+
+Available development tasks include:
+
+```bash
+task fmt
+task fix
+task lint
+task security
+task test
+```
+
+The test task enables the race detector and generates `coverage.out`:
+
+```bash
+task test
+go tool cover -func=coverage.out
+go tool cover -html=coverage.out
+```
+
+## Releases
+
+Releases are created from `main` using Semantic Release and GoReleaser.
+
+A successful release produces:
+
+- Linux binaries for `amd64` and `arm64`.
+- Debian packages.
+- SHA-256 checksums.
+- A GitHub release with the generated assets.
+
+See all published versions on the
+[GitHub Releases page](https://github.com/bruli-lab/stowmark/releases).
+
+## Roadmap
+
+Planned areas of development include:
+
+- Snapshot restoration.
+- Additional compression formats.
+- Remote storage drivers.
+- Repository maintenance and garbage collection.
+- More installation formats and platforms.
+
+## Contributing
+
+Issues and pull requests are welcome.
+
+Before opening a pull request, run:
+
+```bash
+task check
+```
+
+Use [GitHub Issues](https://github.com/bruli-lab/stowmark/issues) for bug reports,
+feature requests and design discussions.
+
+## License
+
+Stowmark is licensed under the
+[Apache License 2.0](https://github.com/bruli-lab/stowmark/blob/main/LICENSE).
