@@ -27,30 +27,22 @@ func (v Verifier) Verify(ctx context.Context, snapshotID string) (*VerifyResult,
 				return nil, err
 			}
 		}
+		var failed bool
 		if obj.Hash() != f.Hash() {
 			result.AddFailed(*NewFailedCheck(f.Path(), "hash mismatch"))
+			failed = true
 		}
 		if obj.Size() != f.Size() {
 			result.AddFailed(*NewFailedCheck(f.Path(), "size mismatch"))
-			continue
+			failed = true
 		}
-		result.AddSuccess()
+		if !failed {
+			result.AddSuccess()
+		}
 	}
 	return result, nil
 }
 
 func NewVerifier(objectRepo ObjectRepository, manifestRepo ManifestRepository) *Verifier {
 	return &Verifier{objectRepo: objectRepo, manifestRepo: manifestRepo}
-}
-
-type VerifierError struct {
-	msg string
-}
-
-func (v VerifierError) Error() string {
-	return v.msg
-}
-
-func NewVerifierError(msg string) *VerifierError {
-	return &VerifierError{msg: msg}
 }
