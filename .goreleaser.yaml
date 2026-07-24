@@ -1,0 +1,50 @@
+version: 2
+
+project_name: stowmark
+
+builds:
+  - id: stowmark_cli
+    main: ./cmd/cli
+    binary: stowmark
+
+    env:
+      - CGO_ENABLED=0
+
+    goos:
+      - linux
+
+    goarch:
+      - amd64
+      - arm64
+
+nfpms:
+  - id: stowmark_deb
+    package_name: stowmark
+
+    ids:
+      - stowmark_cli
+
+    vendor: bruli-lab
+    homepage: https://stowmark.dev
+    maintainer: Pablo Braulio <brulics@gmail.com>
+    description: Immutable snapshot backup tool
+    license: MIT
+
+    formats:
+      - deb
+
+    bindir: /usr/bin
+    section: utils
+    priority: optional
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-devel"
+
+changelog:
+  disable: true
+
+release:
+  mode: keep-existing
