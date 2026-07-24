@@ -44,7 +44,7 @@ func (s SourceExplorer) Explore(ctx context.Context, sourcePath string) (*snapsh
 		return nil, ctx.Err()
 	default:
 	}
-	absolutePath, err := filepath.Abs(sourcePath)
+	absolutePath, err := absolutePath(sourcePath)
 	if err != nil {
 		return nil, fmt.Errorf("resolve absolute path: %w", err)
 	}

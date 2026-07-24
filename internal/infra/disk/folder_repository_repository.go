@@ -34,7 +34,7 @@ func (f FolderRepositoryRepository) GetConfig(ctx context.Context, path string) 
 		return nil, ctx.Err()
 	default:
 	}
-	absolutePath, err := filepath.Abs(path)
+	absolutePath, err := absolutePath(path)
 	if err != nil {
 		return nil, fmt.Errorf("resolve absolute path: %w", err)
 	}
