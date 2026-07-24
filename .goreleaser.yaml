@@ -28,7 +28,7 @@ nfpms:
     homepage: https://stowmark.dev
     maintainer: Pablo Braulio <brulics@gmail.com>
     description: Immutable snapshot backup tool
-    license: MIT
+    license: Apache-2.0
 
     formats:
       - deb
