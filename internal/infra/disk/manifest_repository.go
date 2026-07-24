@@ -126,12 +126,9 @@ func (r ManifestRepository) buildManifest(data []byte, manifestPath string) (*sn
 		len(model.Files),
 	)
 	for i, modelFile := range model.Files {
-		file := snapshot.NewFile(
-			modelFile.Path,
-			modelFile.Size,
-		)
-		file.AddHash(modelFile.Hash)
-		snapshotFiles[i] = *file
+		file := snapshot.File{}
+		file.Hydrate(modelFile.Path, modelFile.Hash, modelFile.Size)
+		snapshotFiles[i] = file
 	}
 	man := snapshot.NewManifest(
 		model.ID,

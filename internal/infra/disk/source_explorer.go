@@ -21,17 +21,17 @@ func (s SourceExplorer) CalculateHash(ctx context.Context, filePath string) (str
 		return "", ctx.Err()
 	default:
 	}
-	file, err := os.Open(filePath)
+	fi, err := os.Open(filePath)
 	if err != nil {
 		return "", fmt.Errorf("open file %q: %w", filePath, err)
 	}
 	defer func() {
-		_ = file.Close()
+		_ = fi.Close()
 	}()
 
 	hasher := sha256.New()
 
-	if _, err := io.Copy(hasher, file); err != nil {
+	if _, err := io.Copy(hasher, fi); err != nil {
 		return "", fmt.Errorf("calculate hash for %q: %w", filePath, err)
 	}
 

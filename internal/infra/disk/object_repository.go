@@ -2,6 +2,8 @@ package disk
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -14,6 +16,61 @@ import (
 
 type ObjectRepository struct {
 	repositoryPath string
+}
+
+func (o ObjectRepository) ReadObject(ctx context.Context, originalPath, hash string) (*snapshot.File, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	objectPath := filepath.Join(
+		o.repositoryPath,
+		repository.ObjectsFolder,
+		hash[:2],
+		hash[2:],
+	)
+
+	objectFile, err := os.Open(objectPath)
+	if err != nil {
+		switch {
+		case errors.Is(err, os.ErrNotExist):
+			return nil, snapshot.NewNotFoundError(originalPath)
+		default:
+			return nil, fmt.Errorf(
+				"open object %q: %w",
+				objectPath,
+				err,
+			)
+		}
+	}
+	defer func() {
+		_ = objectFile.Close()
+	}()
+
+	hasher := sha256.New()
+
+	size, err := io.Copy(
+		hasher,
+		contextReader{
+			ctx:    ctx,
+			reader: objectFile,
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"read object %q: %w",
+			objectPath,
+			err,
+		)
+	}
+
+	calculatedHash := hex.EncodeToString(
+		hasher.Sum(nil),
+	)
+	result := snapshot.File{}
+	result.Hydrate(originalPath, calculatedHash, size)
+
+	return &result, nil
 }
 
 func (o ObjectRepository) AlreadyExists(ctx context.Context, obj *snapshot.File) (bool, error) {
@@ -105,4 +162,18 @@ func NewObjectRepository(repositoryPath string) (*ObjectRepository, error) {
 		return nil, err
 	}
 	return &ObjectRepository{repositoryPath: absPath}, nil
+}
+
+type contextReader struct {
+	ctx    context.Context
+	reader io.Reader
+}
+
+func (r contextReader) Read(buffer []byte) (int, error) {
+	select {
+	case <-r.ctx.Done():
+		return 0, r.ctx.Err()
+	default:
+		return r.reader.Read(buffer)
+	}
 }

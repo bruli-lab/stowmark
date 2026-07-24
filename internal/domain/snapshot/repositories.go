@@ -17,4 +17,5 @@ type ManifestRepository interface {
 type ObjectRepository interface {
 	Save(ctx context.Context, obj *File) error
 	AlreadyExists(ctx context.Context, obj *File) (bool, error)
+	ReadObject(ctx context.Context, originalPath, hash string) (*File, error)
 }
