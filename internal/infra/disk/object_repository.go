@@ -99,6 +99,10 @@ func (o ObjectRepository) Save(ctx context.Context, obj *snapshot.File) error {
 	return nil
 }
 
-func NewObjectRepository(repositoryPath string) *ObjectRepository {
-	return &ObjectRepository{repositoryPath: repositoryPath}
+func NewObjectRepository(repositoryPath string) (*ObjectRepository, error) {
+	absPath, err := absolutePath(repositoryPath)
+	if err != nil {
+		return nil, err
+	}
+	return &ObjectRepository{repositoryPath: absPath}, nil
 }

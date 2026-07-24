@@ -29,7 +29,10 @@ func newSnapshotCreateCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			objRepo := disk.NewObjectRepository(repositoryPath)
+			objRepo, err := disk.NewObjectRepository(repositoryPath)
+			if err != nil {
+				return err
+			}
 			folderRepositoryRepo := disk.NewFolderRepositoryRepository()
 			create := snapshot.NewCreate(sourceRepo, manifestRepo, objRepo, repository.NewGetConfig(folderRepositoryRepo))
 

@@ -171,9 +171,17 @@ func (r ManifestRepository) Save(ctx context.Context, m *snapshot.Manifest) erro
 }
 
 func NewManifestRepository(repositoryPath string) (*ManifestRepository, error) {
+	absPath, err := absolutePath(repositoryPath)
+	if err != nil {
+		return nil, err
+	}
+	return &ManifestRepository{repositoryPath: absPath}, nil
+}
+
+func absolutePath(repositoryPath string) (string, error) {
 	absolutePath, err := filepath.Abs(repositoryPath)
 	if err != nil {
-		return nil, fmt.Errorf("resolve absolute path: %w", err)
+		return "", fmt.Errorf("resolve absolute path: %w", err)
 	}
-	return &ManifestRepository{repositoryPath: absolutePath}, nil
+	return absolutePath, nil
 }
