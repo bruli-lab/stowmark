@@ -149,13 +149,27 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Setup Go and Task
+        uses: ./.github/actions/setup-go-task
+
       - name: Setup Node
         uses: actions/setup-node@v7
         with:
           node-version: 24
 
+      - name: Install GoReleaser
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          install-only: true
+
       - name: Semantic Release
         id: semantic
         uses: cycjimmy/semantic-release-action@v6.0.0
+        with:
+          semantic_version: 25.0.8
+          extra_plugins: |
+            @semantic-release/exec
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
