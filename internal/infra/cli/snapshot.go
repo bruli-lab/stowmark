@@ -14,6 +14,7 @@ func newSnapshotCommand() *cobra.Command {
 		newSnapshotCreateCommand(),
 		newSnapshotListCommand(),
 		newSnapshotGetCommand(),
+		newSnapshotVerifyCommand(),
 	)
 
 	return cmd

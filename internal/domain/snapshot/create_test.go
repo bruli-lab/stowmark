@@ -14,9 +14,6 @@ import (
 
 func TestCreate_Do(t *testing.T) {
 	errTest := errors.New("test error")
-	source := fixtures.SourceBuilder{Files: []snapshot.File{
-		fixtures.FileBuilder{}.Build(),
-	}}.Build()
 	type args struct {
 		repoPath   string
 		sourcePath string
@@ -46,34 +43,44 @@ func TestCreate_Do(t *testing.T) {
 			name:             "and calculate hash returns error, then it returns same error",
 			calculateHashErr: errTest,
 			expectedErr:      errTest,
-			source:           &source,
+			source: new(fixtures.SourceBuilder{Files: []snapshot.File{
+				fixtures.FileBuilder{}.Build(),
+			}}.Build()),
 		},
 		{
 			name:             "and already exists returns error, then it returns same error",
 			alreadyExistsErr: errTest,
 			expectedErr:      errTest,
-			source:           &source,
-			hash:             uuid.NewString(),
+			source: new(fixtures.SourceBuilder{Files: []snapshot.File{
+				fixtures.FileBuilder{}.Build(),
+			}}.Build()),
+			hash: uuid.NewString(),
 		},
 		{
 			name:        "and save object returns error, then it returns same error",
 			saveObjErr:  errTest,
 			expectedErr: errTest,
-			source:      &source,
-			hash:        uuid.NewString(),
-			exists:      false,
+			source: new(fixtures.SourceBuilder{Files: []snapshot.File{
+				fixtures.FileBuilder{}.Build(),
+			}}.Build()),
+			hash:   uuid.NewString(),
+			exists: false,
 		},
 		{
 			name:            "and save manifest returns error, then it returns same error",
 			saveManifestErr: errTest,
 			expectedErr:     errTest,
-			source:          &source,
-			hash:            uuid.NewString(),
-			exists:          false,
+			source: new(fixtures.SourceBuilder{Files: []snapshot.File{
+				fixtures.FileBuilder{}.Build(),
+			}}.Build()),
+			hash:   uuid.NewString(),
+			exists: false,
 		},
 		{
-			name:   "with valid data, then it returns a valid result",
-			source: &source,
+			name: "with valid data, then it returns a valid result",
+			source: new(fixtures.SourceBuilder{Files: []snapshot.File{
+				fixtures.FileBuilder{}.Build(),
+			}}.Build()),
 			hash:   uuid.NewString(),
 			exists: false,
 		},
