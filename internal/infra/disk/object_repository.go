@@ -18,6 +18,68 @@ type ObjectRepository struct {
 	repositoryPath string
 }
 
+func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Compression, obj *snapshot.File) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	hash := obj.Hash()
+	if len(hash) < 3 {
+		return fmt.Errorf("invalid object hash %q", hash)
+	}
+
+	sourcePath := filepath.Join(
+		o.repositoryPath,
+		repository.ObjectsFolder,
+		hash[:2],
+		hash[2:],
+	)
+
+	source, err := os.Open(sourcePath)
+	if err != nil {
+		return fmt.Errorf("open object %q: %w", sourcePath, err)
+	}
+	defer func() {
+		_ = source.Close()
+	}()
+
+	switch comp.CompType() {
+	case repository.NoneCompressionType:
+	default:
+		return fmt.Errorf("unsupported compression type %q", comp.CompType())
+	}
+
+	destinationPath := obj.Path()
+
+	if err := os.MkdirAll(filepath.Dir(destinationPath), 0o755); err != nil {
+		return fmt.Errorf(
+			"create destination directory for %q: %w",
+			destinationPath,
+			err,
+		)
+	}
+
+	destination, err := os.OpenFile(
+		destinationPath,
+		os.O_WRONLY|os.O_CREATE|os.O_TRUNC,
+		0o644,
+	)
+	if err != nil {
+		return fmt.Errorf("create restored file %q: %w", destinationPath, err)
+	}
+
+	if _, err := io.Copy(destination, source); err != nil {
+		_ = destination.Close()
+		return fmt.Errorf("restore file %q: %w", destinationPath, err)
+	}
+
+	if err := destination.Close(); err != nil {
+		return fmt.Errorf("close restored file %q: %w", destinationPath, err)
+	}
+
+	return nil
+}
+
 func (o ObjectRepository) ReadObject(ctx context.Context, originalPath, hash string) (*snapshot.File, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
