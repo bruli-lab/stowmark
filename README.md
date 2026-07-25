@@ -16,12 +16,10 @@
 
 ---
 
-Stowmark is a lightweight backup tool that stores directory snapshots in a local,
-immutable-style repository.
+Stowmark is a lightweight backup tool that stores directory snapshots in a local, immutable-style repository.
 
-Files are identified by their SHA-256 hash and stored only once. Each snapshot is
-represented by a manifest containing the source path, creation time and references
-to its files.
+Files are identified by their SHA-256 hash and stored only once. Each snapshot is represented by a manifest containing
+the source path, creation time and references to its files.
 
 > **Note**
 >
@@ -111,15 +109,24 @@ stowmark snapshot verify \
   --repo /srv/backups/stowmark
 ```
 
+Restore a snapshot:
+
+```bash
+stowmark snapshot restore \
+  --id <snapshot-id> \
+  --repo /srv/backups/stowmark
+```
+
 ## Commands
 
-| Command | Description |
-| --- | --- |
-| `stowmark init <repository>` | Initialize a new repository. |
-| `stowmark snapshot create <source> --repo <repository>` | Create a snapshot of a directory. |
-| `stowmark snapshot list --repo <repository>` | List snapshots from newest to oldest. |
-| `stowmark snapshot get --id <id> --repo <repository>` | Display a snapshot manifest. |
-| `stowmark snapshot verify --id <id> --repo <repository>` | Verify snapshot integrity. |
+| Command                                                   | Description                           |
+|-----------------------------------------------------------|---------------------------------------|
+| `stowmark init <repository>`                              | Initialize a new repository.          |
+| `stowmark snapshot create <source> --repo <repository>`   | Create a snapshot of a directory.     |
+| `stowmark snapshot list --repo <repository>`              | List snapshots from newest to oldest. |
+| `stowmark snapshot get --id <id> --repo <repository>`     | Display a snapshot manifest.          |
+| `stowmark snapshot verify --id <id> --repo <repository>`  | Verify snapshot integrity.            |
+| `stowmark snapshot restore --id <id> --repo <repository>` | Restore snapshot.                     |
 
 Run the built-in help for the complete set of options:
 
@@ -147,15 +154,14 @@ repository/
 
 ### Objects
 
-Objects are stored using their SHA-256 hash. The first two characters are used as
-the directory name and the remaining characters as the file name:
+Objects are stored using their SHA-256 hash. The first two characters are used as the directory name and the remaining
+characters as the file name:
 
 ```text
 objects/<first-two-hash-characters>/<remaining-hash-characters>
 ```
 
-When two snapshots contain the same file content, they both reference the same
-stored object.
+When two snapshots contain the same file content, they both reference the same stored object.
 
 ### Snapshot manifests
 
@@ -170,15 +176,14 @@ The manifest references objects but does not duplicate their contents.
 
 ## Integrity verification
 
-The `snapshot verify` command reads each object referenced by the manifest and
-checks:
+The `snapshot verify` command reads each object referenced by the manifest and checks:
 
 1. The object exists.
 2. Its calculated SHA-256 hash matches the manifest.
 3. Its size matches the manifest.
 
-The command exits with an error when any referenced file fails verification,
-making it suitable for scripts and scheduled checks.
+The command exits with an error when any referenced file fails verification, making it suitable for scripts and
+scheduled checks.
 
 ## Development
 
@@ -240,8 +245,8 @@ Before opening a pull request, run:
 task check
 ```
 
-Use [GitHub Issues](https://github.com/bruli-lab/stowmark/issues) for bug reports,
-feature requests and design discussions.
+Use [GitHub Issues](https://github.com/bruli-lab/stowmark/issues) for bug reports, feature requests and design
+discussions.
 
 ## License
 
