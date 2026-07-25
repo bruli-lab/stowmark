@@ -10,18 +10,18 @@ type Verifier struct {
 	manifestRepo ManifestRepository
 }
 
-func (v Verifier) Verify(ctx context.Context, snapshotID string) (*VerifyResult, error) {
+func (v Verifier) Verify(ctx context.Context, snapshotID string) (*Result, error) {
 	manifest, err := v.manifestRepo.Get(ctx, snapshotID)
 	if err != nil {
 		return nil, err
 	}
-	result := NewVerifyResult(snapshotID)
+	result := NewResult(snapshotID)
 	for _, f := range manifest.Files() {
 		obj, err := v.objectRepo.ReadObject(ctx, f.Path(), f.Hash())
 		if err != nil {
 			switch {
 			case errors.As(err, &NotFoundError{}):
-				result.AddFailed(*NewFailedCheck(f.Path(), err.Error()))
+				result.AddFailed(*NewFailedResult(f.Path(), err.Error()))
 				continue
 			default:
 				return nil, err
@@ -29,11 +29,11 @@ func (v Verifier) Verify(ctx context.Context, snapshotID string) (*VerifyResult,
 		}
 		var failed bool
 		if obj.Hash() != f.Hash() {
-			result.AddFailed(*NewFailedCheck(f.Path(), "hash mismatch"))
+			result.AddFailed(*NewFailedResult(f.Path(), "hash mismatch"))
 			failed = true
 		}
 		if obj.Size() != f.Size() {
-			result.AddFailed(*NewFailedCheck(f.Path(), "size mismatch"))
+			result.AddFailed(*NewFailedResult(f.Path(), "size mismatch"))
 			failed = true
 		}
 		if !failed {

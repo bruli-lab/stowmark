@@ -14,7 +14,7 @@ type Create struct {
 	getConfigSvc *repository.GetConfig
 }
 
-func (c Create) Do(ctx context.Context, repoPath, sourcePath string) (*Result, error) {
+func (c Create) Do(ctx context.Context, repoPath, sourcePath string) (*CreateResult, error) {
 	_, err := c.getConfigSvc.Get(ctx, repoPath)
 	if err != nil {
 		return nil, err
@@ -41,7 +41,7 @@ func (c Create) Do(ctx context.Context, repoPath, sourcePath string) (*Result, e
 	if err := c.manifestRepo.Save(ctx, man); err != nil {
 		return nil, err
 	}
-	return NewResult(man.Id(), len(man.Files()), size), nil
+	return NewCreateResult(man.Id(), len(man.Files()), size), nil
 }
 
 func (c Create) saveObject(ctx context.Context, file File) error {

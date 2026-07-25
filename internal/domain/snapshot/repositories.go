@@ -1,6 +1,10 @@
 package snapshot
 
-import "context"
+import (
+	"context"
+
+	"github.com/bruli-lab/stowmark.git/internal/domain/repository"
+)
 
 //go:generate go tool moq -out repositories_mock.go . SourceRepository ManifestRepository ObjectRepository
 type SourceRepository interface {
@@ -18,4 +22,5 @@ type ObjectRepository interface {
 	Save(ctx context.Context, obj *File) error
 	AlreadyExists(ctx context.Context, obj *File) (bool, error)
 	ReadObject(ctx context.Context, originalPath, hash string) (*File, error)
+	RestoreObject(ctx context.Context, comp *repository.Compression, obj *File) error
 }

@@ -6,20 +6,21 @@ import (
 	"io"
 	"text/tabwriter"
 
+	"github.com/bruli-lab/stowmark.git/internal/domain/repository"
 	"github.com/bruli-lab/stowmark.git/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark.git/internal/infra/disk"
 	"github.com/spf13/cobra"
 )
 
-func newSnapshotVerifyCommand() *cobra.Command {
+func newSnapshotRestoreCommand() *cobra.Command {
 	var (
 		repositoryPath string
 		snapshotID     string
 	)
 
 	cmd := &cobra.Command{
-		Use:   "verify",
-		Short: "Verify snapshot integrity",
+		Use:   "restore",
+		Short: "Restore snapshot",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if repositoryPath == "" {
@@ -44,20 +45,24 @@ func newSnapshotVerifyCommand() *cobra.Command {
 				return err
 			}
 
-			verifier := snapshot.NewVerifier(
-				objectRepo,
+			confSvc := repository.NewGetConfig(disk.NewFolderRepositoryRepository())
+
+			svc := snapshot.NewRestore(
 				manifestRepo,
+				confSvc,
+				objectRepo,
 			)
 
-			result, err := verifier.Verify(
+			result, err := svc.Restore(
 				cmd.Context(),
+				repositoryPath,
 				snapshotID,
 			)
 			if err != nil {
 				return err
 			}
 
-			if err := printVerifyResult(
+			if err := printRestoreResult(
 				cmd.OutOrStdout(),
 				result,
 			); err != nil {
@@ -66,7 +71,7 @@ func newSnapshotVerifyCommand() *cobra.Command {
 
 			if !result.IsSuccess() {
 				return fmt.Errorf(
-					"snapshot %q failed verification",
+					"snapshot %q failed restoration",
 					snapshotID,
 				)
 			}
@@ -92,7 +97,7 @@ func newSnapshotVerifyCommand() *cobra.Command {
 	return cmd
 }
 
-func printVerifyResult(
+func printRestoreResult(
 	output io.Writer,
 	result *snapshot.Result,
 ) error {
@@ -117,7 +122,7 @@ func printVerifyResult(
 		writer,
 		"SNAPSHOT:\t%s\n"+
 			"STATUS:\t%s\n"+
-			"CHECKED:\t%d\n"+
+			"RESTORED:\t%d\n"+
 			"VALID:\t%d\n"+
 			"INVALID:\t%d\n",
 		result.SnapshotID(),

@@ -5,6 +5,7 @@ package snapshot
 
 import (
 	"context"
+	"github.com/bruli-lab/stowmark.git/internal/domain/repository"
 	"sync"
 )
 
@@ -312,6 +313,9 @@ var _ ObjectRepository = &ObjectRepositoryMock{}
 //			ReadObjectFunc: func(ctx context.Context, originalPath string, hash string) (*File, error) {
 //				panic("mock out the ReadObject method")
 //			},
+//			RestoreObjectFunc: func(ctx context.Context, comp *repository.Compression, obj *File) error {
+//				panic("mock out the RestoreObject method")
+//			},
 //			SaveFunc: func(ctx context.Context, obj *File) error {
 //				panic("mock out the Save method")
 //			},
@@ -327,6 +331,9 @@ type ObjectRepositoryMock struct {
 
 	// ReadObjectFunc mocks the ReadObject method.
 	ReadObjectFunc func(ctx context.Context, originalPath string, hash string) (*File, error)
+
+	// RestoreObjectFunc mocks the RestoreObject method.
+	RestoreObjectFunc func(ctx context.Context, comp *repository.Compression, obj *File) error
 
 	// SaveFunc mocks the Save method.
 	SaveFunc func(ctx context.Context, obj *File) error
@@ -349,6 +356,15 @@ type ObjectRepositoryMock struct {
 			// Hash is the hash argument value.
 			Hash string
 		}
+		// RestoreObject holds details about calls to the RestoreObject method.
+		RestoreObject []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Comp is the comp argument value.
+			Comp *repository.Compression
+			// Obj is the obj argument value.
+			Obj *File
+		}
 		// Save holds details about calls to the Save method.
 		Save []struct {
 			// Ctx is the ctx argument value.
@@ -359,6 +375,7 @@ type ObjectRepositoryMock struct {
 	}
 	lockAlreadyExists sync.RWMutex
 	lockReadObject    sync.RWMutex
+	lockRestoreObject sync.RWMutex
 	lockSave          sync.RWMutex
 }
 
@@ -435,6 +452,46 @@ func (mock *ObjectRepositoryMock) ReadObjectCalls() []struct {
 	mock.lockReadObject.RLock()
 	calls = mock.calls.ReadObject
 	mock.lockReadObject.RUnlock()
+	return calls
+}
+
+// RestoreObject calls RestoreObjectFunc.
+func (mock *ObjectRepositoryMock) RestoreObject(ctx context.Context, comp *repository.Compression, obj *File) error {
+	if mock.RestoreObjectFunc == nil {
+		panic("ObjectRepositoryMock.RestoreObjectFunc: method is nil but ObjectRepository.RestoreObject was just called")
+	}
+	callInfo := struct {
+		Ctx  context.Context
+		Comp *repository.Compression
+		Obj  *File
+	}{
+		Ctx:  ctx,
+		Comp: comp,
+		Obj:  obj,
+	}
+	mock.lockRestoreObject.Lock()
+	mock.calls.RestoreObject = append(mock.calls.RestoreObject, callInfo)
+	mock.lockRestoreObject.Unlock()
+	return mock.RestoreObjectFunc(ctx, comp, obj)
+}
+
+// RestoreObjectCalls gets all the calls that were made to RestoreObject.
+// Check the length with:
+//
+//	len(mockedObjectRepository.RestoreObjectCalls())
+func (mock *ObjectRepositoryMock) RestoreObjectCalls() []struct {
+	Ctx  context.Context
+	Comp *repository.Compression
+	Obj  *File
+} {
+	var calls []struct {
+		Ctx  context.Context
+		Comp *repository.Compression
+		Obj  *File
+	}
+	mock.lockRestoreObject.RLock()
+	calls = mock.calls.RestoreObject
+	mock.lockRestoreObject.RUnlock()
 	return calls
 }
 
