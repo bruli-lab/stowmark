@@ -1,9 +1,21 @@
 const GITHUB_OWNER = "bruli-lab";
-const GITHUB_REPOSITORY = "stowmark";
 
 const releaseSummary = document.querySelector("#release-summary");
-const downloadGrid = document.querySelector("#download-grid");
-const releaseError = document.querySelector("#release-error");
+
+const projects = [
+  {
+    repository: "stowmark",
+    summary: document.querySelector("#stowmark-release-summary"),
+    grid: document.querySelector("#stowmark-download-grid"),
+    error: document.querySelector("#stowmark-release-error")
+  },
+  {
+    repository: "stowmark-console",
+    summary: document.querySelector("#console-release-summary"),
+    grid: document.querySelector("#console-download-grid"),
+    error: document.querySelector("#console-release-error")
+  }
+];
 
 function formatBytes(bytes) {
   if (!Number.isFinite(bytes) || bytes <= 0) return "";
@@ -60,9 +72,9 @@ function createDownloadCard(asset) {
   return article;
 }
 
-async function loadLatestRelease() {
+async function loadLatestRelease(project) {
   const endpoint =
-    `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPOSITORY}/releases/latest`;
+    `https://api.github.com/repos/${GITHUB_OWNER}/${project.repository}/releases/latest`;
 
   try {
     const response = await fetch(endpoint, {
@@ -84,11 +96,15 @@ async function loadLatestRelease() {
         }).format(new Date(release.published_at))
       : null;
 
-    releaseSummary.textContent = publishedDate
+    project.summary.textContent = publishedDate
       ? `Latest release ${release.tag_name} · ${publishedDate}`
       : `Latest release ${release.tag_name}`;
 
-    downloadGrid.replaceChildren();
+    if (project.repository === "stowmark") {
+      releaseSummary.textContent = project.summary.textContent;
+    }
+
+    project.grid.replaceChildren();
 
     if (assets.length === 0) {
       const empty = document.createElement("div");
@@ -96,7 +112,7 @@ async function loadLatestRelease() {
       empty.innerHTML =
         `No downloadable files are attached to this release. ` +
         `<a href="${release.html_url}">Open the release on GitHub</a>.`;
-      downloadGrid.append(empty);
+      project.grid.append(empty);
       return;
     }
 
@@ -105,13 +121,17 @@ async function loadLatestRelease() {
       .sort((a, b) => a.name.localeCompare(b.name));
 
     visibleAssets.forEach((asset) => {
-      downloadGrid.append(createDownloadCard(asset));
+      project.grid.append(createDownloadCard(asset));
     });
   } catch (error) {
     console.error(error);
-    releaseSummary.textContent = "Latest release available on GitHub";
-    downloadGrid.hidden = true;
-    releaseError.hidden = false;
+    project.summary.textContent = "Latest release available on GitHub";
+    project.grid.hidden = true;
+    project.error.hidden = false;
+
+    if (project.repository === "stowmark") {
+      releaseSummary.textContent = "Latest release available on GitHub";
+    }
   }
 }
 
@@ -133,4 +153,4 @@ document.querySelectorAll("[data-copy-target]").forEach((button) => {
   });
 });
 
-loadLatestRelease();
+projects.forEach(loadLatestRelease);
