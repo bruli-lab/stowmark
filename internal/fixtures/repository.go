@@ -10,14 +10,14 @@ import (
 )
 
 type RepositoryBuilder struct {
-	Name   *string
+	Path   *string
 	Config *repository.Config
 }
 
 func (b RepositoryBuilder) Build(t *testing.T) repository.Repository {
-	name := fixtures.SetData("name", b.Name)
+	path := fixtures.SetData("name", b.Path)
 	config := fixtures.SetData(ConfigBuilder{}.Build(), b.Config)
-	repo, err := repository.NewRepository(name, &config)
+	repo, err := repository.NewRepository(path, &config)
 	require.NoError(t, err)
 	return *repo
 }
@@ -28,6 +28,6 @@ type ConfigBuilder struct {
 
 func (c ConfigBuilder) Build() repository.Config {
 	id := fixtures.SetData(uuid.New(), c.ID)
-	co := repository.NewConfig(id, repository.NoneCompression())
+	co := repository.NewConfig(id, repository.NoneCompression(repository.NoneCompressionType, nil))
 	return *co
 }

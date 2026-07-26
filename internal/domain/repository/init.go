@@ -10,17 +10,17 @@ type Init struct {
 }
 
 func (i Init) Do(ctx context.Context, r *Repository) error {
-	ex, err := i.repo.Exists(ctx, r.Name())
+	ex, err := i.repo.Exists(ctx, r.Path())
 	if err != nil {
 		return err
 	}
 	if ex {
 		return NewInitError("repository already exists")
 	}
-	if err := i.repo.CreateFolder(ctx, r.Name()); err != nil {
+	if err := i.repo.CreateFolder(ctx, r.Path()); err != nil {
 		return err
 	}
-	if err := i.repo.CreateConfig(ctx, r.Name(), r.Config()); err != nil {
+	if err := i.repo.CreateConfig(ctx, r.Path(), r.Config()); err != nil {
 		return err
 	}
 	if err := i.repo.CreateFolder(ctx, r.ObjectsFolder()); err != nil {

@@ -36,7 +36,7 @@ func TestNewRepository(t *testing.T) {
 			name: "with valid data, then it returns a valid repository struct",
 			args: args{
 				name:   "name",
-				config: repository.NewConfig(uuid.New(), repository.NoneCompression()),
+				config: repository.NewConfig(uuid.New(), repository.NoneCompression(repository.NoneCompressionType, nil)),
 			},
 		},
 	}
@@ -52,7 +52,7 @@ func TestNewRepository(t *testing.T) {
 			if tt.expectedErr != nil {
 				require.Error(t, err)
 			}
-			require.Equal(t, got.Name(), tt.args.name)
+			require.Equal(t, got.Path(), tt.args.name)
 		})
 	}
 }

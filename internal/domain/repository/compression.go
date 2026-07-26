@@ -43,6 +43,6 @@ func NewCompression(compType CompressionType, level *int) *Compression {
 	return &Compression{compType: compType, level: level}
 }
 
-func NoneCompression() *Compression {
-	return NewCompression(NoneCompressionType, nil)
+func NoneCompression(compType CompressionType, level *int) *Compression {
+	return NewCompression(compType, level)
 }

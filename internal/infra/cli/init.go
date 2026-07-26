@@ -18,7 +18,7 @@ func newInitCommand() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			id := uuid.New()
-			re, err := repository.NewRepository(args[0], repository.NewConfig(id, repository.NoneCompression()))
+			re, err := repository.NewRepository(args[0], repository.NewConfig(id, repository.NoneCompression(repository.NoneCompressionType, nil)))
 			if err != nil {
 				return err
 			}
