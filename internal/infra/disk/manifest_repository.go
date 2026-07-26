@@ -10,8 +10,8 @@ import (
 	"slices"
 	"time"
 
-	"github.com/bruli-lab/stowmark.git/internal/domain/repository"
-	"github.com/bruli-lab/stowmark.git/internal/domain/snapshot"
+	"github.com/bruli-lab/stowmark/internal/domain/repository"
+	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 )
 
 type file struct {

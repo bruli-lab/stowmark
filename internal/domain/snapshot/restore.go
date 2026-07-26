@@ -3,7 +3,7 @@ package snapshot
 import (
 	"context"
 
-	"github.com/bruli-lab/stowmark.git/internal/domain/repository"
+	"github.com/bruli-lab/stowmark/internal/domain/repository"
 )
 
 type Restore struct {

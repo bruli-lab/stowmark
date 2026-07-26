@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/bruli-lab/stowmark.git/internal/infra/cli"
+	"github.com/bruli-lab/stowmark/internal/infra/cli"
 )
 
 func main() {

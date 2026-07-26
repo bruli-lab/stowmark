@@ -3,8 +3,8 @@ package stowmark
 import (
 	"context"
 
-	"github.com/bruli-lab/stowmark.git/internal/domain/repository"
-	"github.com/bruli-lab/stowmark.git/internal/domain/snapshot"
+	"github.com/bruli-lab/stowmark/internal/domain/repository"
+	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 )
 
 func (h *Handler) RestoreSnapshot(ctx context.Context, id string) (*Result, error) {
