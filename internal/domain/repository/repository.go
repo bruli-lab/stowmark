@@ -16,12 +16,12 @@ var (
 )
 
 type Repository struct {
-	name   string
+	path   string
 	config *Config
 }
 
-func (r Repository) Name() string {
-	return r.name
+func (r Repository) Path() string {
+	return r.path
 }
 
 func (r Repository) Config() *Config {
@@ -29,16 +29,16 @@ func (r Repository) Config() *Config {
 }
 
 func (r Repository) SnapshotsFolder() string {
-	return fmt.Sprintf("%s/%s", r.name, SnapshotsFolder)
+	return fmt.Sprintf("%s/%s", r.path, SnapshotsFolder)
 }
 
 func (r Repository) ObjectsFolder() string {
-	return fmt.Sprintf("%s/%s", r.name, ObjectsFolder)
+	return fmt.Sprintf("%s/%s", r.path, ObjectsFolder)
 }
 
 func (r Repository) validate() error {
 	switch {
-	case r.name == "":
+	case r.path == "":
 		return ErrInvalidRepositoryName
 	case r.config == nil:
 		return ErrMissingCRepositoryConfig
@@ -47,8 +47,8 @@ func (r Repository) validate() error {
 	return nil
 }
 
-func NewRepository(name string, config *Config) (*Repository, error) {
-	r := Repository{name: name, config: config}
+func NewRepository(path string, config *Config) (*Repository, error) {
+	r := Repository{path: path, config: config}
 	if err := r.validate(); err != nil {
 		return nil, err
 	}

@@ -63,13 +63,13 @@ func (f FolderRepositoryRepository) GetConfig(ctx context.Context, path string) 
 	return repository.NewConfig(id, repository.NewCompression(*compType, conf.Compression.Level)), nil
 }
 
-func (f FolderRepositoryRepository) Exists(ctx context.Context, name string) (bool, error) {
+func (f FolderRepositoryRepository) Exists(ctx context.Context, path string) (bool, error) {
 	select {
 	case <-ctx.Done():
 		return false, ctx.Err()
 	default:
 	}
-	info, err := os.Stat(name)
+	info, err := os.Stat(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return false, nil
 	}
@@ -79,13 +79,13 @@ func (f FolderRepositoryRepository) Exists(ctx context.Context, name string) (bo
 	return info.IsDir(), nil
 }
 
-func (f FolderRepositoryRepository) CreateFolder(ctx context.Context, name string) error {
+func (f FolderRepositoryRepository) CreateFolder(ctx context.Context, path string) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
 	default:
 	}
-	return os.MkdirAll(name, 0o755)
+	return os.MkdirAll(path, 0o755)
 }
 
 func (f FolderRepositoryRepository) CreateConfig(ctx context.Context, path string, c *repository.Config) error {
