@@ -3,23 +3,17 @@ package stowmark
 import (
 	"context"
 
+	"github.com/bruli-lab/stowmark.git/internal/domain/repository"
 	"github.com/bruli-lab/stowmark.git/internal/domain/snapshot"
 )
 
-type FailedResult struct {
-	Path, Reason string
-}
-
-type Result struct {
-	SnapshotID string
-	TotalFiles int
-	Failed     []FailedResult
-	IsSuccess  bool
-}
-
-func (h *Handler) VerifySnapshot(ctx context.Context, id string) (*Result, error) {
-	svc := snapshot.NewVerifier(h.objectRepository, h.manifestRepository)
-	result, err := svc.Verify(ctx, id)
+func (h *Handler) RestoreSnapshot(ctx context.Context, id string) (*Result, error) {
+	svc := snapshot.NewRestore(
+		h.manifestRepository,
+		repository.NewGetConfig(h.folderRepository),
+		h.objectRepository,
+	)
+	result, err := svc.Restore(ctx, h.repositoryPath, id)
 	if err != nil {
 		return nil, err
 	}
@@ -30,7 +24,6 @@ func (h *Handler) VerifySnapshot(ctx context.Context, id string) (*Result, error
 			Reason: f.Reason(),
 		}
 	}
-
 	return &Result{
 		SnapshotID: result.SnapshotID(),
 		TotalFiles: result.TotalFiles(),

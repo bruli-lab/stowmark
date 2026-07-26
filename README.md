@@ -10,7 +10,7 @@
 [![License](https://img.shields.io/github/license/bruli-lab/stowmark)](https://github.com/bruli-lab/stowmark/blob/main/LICENSE)
 [![Go version](https://img.shields.io/github/go-mod/go-version/bruli-lab/stowmark)](https://github.com/bruli-lab/stowmark/blob/main/go.mod)
 
-[Website](https://stowmark.pages.dev/) ·
+[Website](https://stowmark.dev) ·
 [Releases](https://github.com/bruli-lab/stowmark/releases) ·
 [Issues](https://github.com/bruli-lab/stowmark/issues)
 
