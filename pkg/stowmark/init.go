@@ -3,7 +3,7 @@ package stowmark
 import (
 	"context"
 
-	"github.com/bruli-lab/stowmark.git/internal/domain/repository"
+	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/google/uuid"
 )
 

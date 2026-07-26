@@ -1,4 +1,4 @@
-module github.com/bruli-lab/stowmark.git
+module github.com/bruli-lab/stowmark
 
 go 1.26.5
 

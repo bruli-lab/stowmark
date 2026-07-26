@@ -58,7 +58,7 @@ Requirements:
 - Git.
 
 ```bash
-git clone https://github.com/bruli-lab/stowmark.git
+git clone https://github.com/bruli-lab/stowmark
 cd stowmark
 
 go build -o stowmark ./cmd/cli
