@@ -15,7 +15,7 @@ type Create struct {
 }
 
 func (c Create) Do(ctx context.Context, repoPath, sourcePath string) (*CreateResult, error) {
-	_, err := c.getConfigSvc.Get(ctx, repoPath)
+	conf, err := c.getConfigSvc.Get(ctx, repoPath)
 	if err != nil {
 		return nil, err
 	}
@@ -32,7 +32,7 @@ func (c Create) Do(ctx context.Context, repoPath, sourcePath string) (*CreateRes
 			return nil, err
 		}
 		file.AddHash(hash)
-		if err := c.saveObject(ctx, file); err != nil {
+		if err := c.saveObject(ctx, file, conf.Compression()); err != nil {
 			return nil, err
 		}
 		source.Files()[i] = file
@@ -44,13 +44,13 @@ func (c Create) Do(ctx context.Context, repoPath, sourcePath string) (*CreateRes
 	return NewCreateResult(man.Id(), len(man.Files()), size), nil
 }
 
-func (c Create) saveObject(ctx context.Context, file File) error {
+func (c Create) saveObject(ctx context.Context, file File, comp *repository.Compression) error {
 	exist, err := c.objectRepo.AlreadyExists(ctx, &file)
 	if err != nil {
 		return err
 	}
 	if !exist {
-		if err := c.objectRepo.Save(ctx, &file); err != nil {
+		if err := c.objectRepo.Save(ctx, &file, comp); err != nil {
 			return err
 		}
 	}

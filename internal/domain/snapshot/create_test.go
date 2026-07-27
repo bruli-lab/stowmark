@@ -14,6 +14,7 @@ import (
 
 func TestCreate_Do(t *testing.T) {
 	errTest := errors.New("test error")
+	config := fixtures.ConfigBuilder{}.Build(t)
 	type args struct {
 		repoPath   string
 		sourcePath string
@@ -28,6 +29,7 @@ func TestCreate_Do(t *testing.T) {
 		source *snapshot.Source
 		hash   string
 		exists bool
+		config *repository.Config
 	}{
 		{
 			name:         "and get config returns error, then it returns same error",
@@ -38,6 +40,7 @@ func TestCreate_Do(t *testing.T) {
 			name:        "and explore returns error, then it returns same error",
 			exploreErr:  errTest,
 			expectedErr: errTest,
+			config:      &config,
 		},
 		{
 			name:             "and calculate hash returns error, then it returns same error",
@@ -46,6 +49,7 @@ func TestCreate_Do(t *testing.T) {
 			source: new(fixtures.SourceBuilder{Files: []snapshot.File{
 				fixtures.FileBuilder{}.Build(),
 			}}.Build()),
+			config: &config,
 		},
 		{
 			name:             "and already exists returns error, then it returns same error",
@@ -54,7 +58,8 @@ func TestCreate_Do(t *testing.T) {
 			source: new(fixtures.SourceBuilder{Files: []snapshot.File{
 				fixtures.FileBuilder{}.Build(),
 			}}.Build()),
-			hash: uuid.NewString(),
+			hash:   uuid.NewString(),
+			config: &config,
 		},
 		{
 			name:        "and save object returns error, then it returns same error",
@@ -65,6 +70,7 @@ func TestCreate_Do(t *testing.T) {
 			}}.Build()),
 			hash:   uuid.NewString(),
 			exists: false,
+			config: &config,
 		},
 		{
 			name:            "and save manifest returns error, then it returns same error",
@@ -75,6 +81,7 @@ func TestCreate_Do(t *testing.T) {
 			}}.Build()),
 			hash:   uuid.NewString(),
 			exists: false,
+			config: &config,
 		},
 		{
 			name: "with valid data, then it returns a valid result",
@@ -83,6 +90,7 @@ func TestCreate_Do(t *testing.T) {
 			}}.Build()),
 			hash:   uuid.NewString(),
 			exists: false,
+			config: &config,
 		},
 	}
 	for _, tt := range tests {
@@ -101,7 +109,7 @@ func TestCreate_Do(t *testing.T) {
 				return tt.saveManifestErr
 			}
 			objRepo := &snapshot.ObjectRepositoryMock{}
-			objRepo.SaveFunc = func(_ context.Context, _ *snapshot.File) error {
+			objRepo.SaveFunc = func(_ context.Context, _ *snapshot.File, _ *repository.Compression) error {
 				return tt.saveObjErr
 			}
 			objRepo.AlreadyExistsFunc = func(_ context.Context, _ *snapshot.File) (bool, error) {
@@ -109,7 +117,7 @@ func TestCreate_Do(t *testing.T) {
 			}
 			folderRepositoryRep := &repository.FolderRepositoryMock{}
 			folderRepositoryRep.GetConfigFunc = func(_ context.Context, _ string) (*repository.Config, error) {
-				return nil, tt.getConfigErr
+				return tt.config, tt.getConfigErr
 			}
 			svc := snapshot.NewCreate(sourceRepo, manifestRepo, objRepo, repository.NewGetConfig(folderRepositoryRep))
 			result, err := svc.Do(t.Context(), tt.args.repoPath, tt.args.sourcePath)

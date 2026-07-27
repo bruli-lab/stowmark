@@ -5,6 +5,7 @@ go 1.26.5
 require (
 	github.com/bruli-lab/go-core v1.7.0
 	github.com/google/uuid v1.6.0
+	github.com/klauspost/compress v1.19.1
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
 )
@@ -18,7 +19,6 @@ require (
 	github.com/charmbracelet/x/term v0.2.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
-	github.com/klauspost/compress v1.19.1 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/matryer/moq v0.7.1 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect

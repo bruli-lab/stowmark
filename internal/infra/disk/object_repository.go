@@ -151,12 +151,19 @@ func (o ObjectRepository) AlreadyExists(ctx context.Context, obj *snapshot.File)
 	return false, nil
 }
 
-func (o ObjectRepository) Save(ctx context.Context, obj *snapshot.File) error {
+func (o ObjectRepository) Save(ctx context.Context, obj *snapshot.File, comp *repository.Compression) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+
 	hash := obj.Hash()
-	destinationPath := filepath.Join(o.repositoryPath, repository.ObjectsFolder, hash[:2], hash[2:])
+	destinationPath := filepath.Join(
+		o.repositoryPath,
+		repository.ObjectsFolder,
+		hash[:2],
+		hash[2:],
+	)
+
 	if err := os.MkdirAll(filepath.Dir(destinationPath), 0o755); err != nil {
 		return fmt.Errorf(
 			"create object directory %q: %w",
@@ -164,6 +171,7 @@ func (o ObjectRepository) Save(ctx context.Context, obj *snapshot.File) error {
 			err,
 		)
 	}
+
 	source, err := os.Open(obj.Path())
 	if err != nil {
 		return fmt.Errorf("open source file %q: %w", obj.Path(), err)
@@ -171,6 +179,7 @@ func (o ObjectRepository) Save(ctx context.Context, obj *snapshot.File) error {
 	defer func() {
 		_ = source.Close()
 	}()
+
 	destination, err := os.OpenFile(
 		destinationPath,
 		os.O_WRONLY|os.O_CREATE|os.O_EXCL,
@@ -187,22 +196,25 @@ func (o ObjectRepository) Save(ctx context.Context, obj *snapshot.File) error {
 			err,
 		)
 	}
-	copyCompleted := false
+
+	writeCompleted := false
 	defer func() {
 		_ = destination.Close()
 
-		if !copyCompleted {
+		if !writeCompleted {
 			_ = os.Remove(destinationPath)
 		}
 	}()
-	if _, err := io.Copy(destination, source); err != nil {
+
+	if err := writeObject(destination, source, comp); err != nil {
 		return fmt.Errorf(
-			"copy %q to %q: %w",
+			"write object %q to %q: %w",
 			obj.Path(),
 			destinationPath,
 			err,
 		)
 	}
+
 	if err := destination.Close(); err != nil {
 		return fmt.Errorf(
 			"close destination file %q: %w",
@@ -210,7 +222,8 @@ func (o ObjectRepository) Save(ctx context.Context, obj *snapshot.File) error {
 			err,
 		)
 	}
-	copyCompleted = true
+
+	writeCompleted = true
 	return nil
 }
 
@@ -232,4 +245,31 @@ func (r contextReader) Read(buffer []byte) (int, error) {
 		return 0, err
 	}
 	return r.reader.Read(buffer)
+}
+
+func writeObject(
+	destination io.Writer,
+	source io.Reader,
+	comp *repository.Compression,
+) error {
+	switch comp.CompType() {
+	case repository.NoneCompressionType:
+		if _, err := io.Copy(destination, source); err != nil {
+			return fmt.Errorf("copy uncompressed object: %w", err)
+		}
+
+	case repository.ZstdCompressionType:
+		err := zstdCompression(destination, source, comp)
+		if err != nil {
+			return err
+		}
+
+	default:
+		return fmt.Errorf(
+			"unsupported compression type %q",
+			comp.CompType(),
+		)
+	}
+
+	return nil
 }

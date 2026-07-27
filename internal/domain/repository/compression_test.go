@@ -33,30 +33,30 @@ func TestNewCompression(t *testing.T) {
 				compType: repository.ZstdCompressionType,
 			},
 			expectedCompType: repository.ZstdCompressionType,
-			expectedLevel: new(repository.DefaultZstdLevel),
+			expectedLevel:    new(repository.DefaultZstdLevel),
 		},
 		{
 			name: "with a zstd compression type and invalid level, then it returns a invalid zstd level error",
 			args: args{
 				compType: repository.ZstdCompressionType,
-				level: new(200),
+				level:    new(200),
 			},
 			expectedCompType: repository.ZstdCompressionType,
-			expectedErr: repository.ErrInvalidZstdLevel,
+			expectedErr:      repository.ErrInvalidZstdLevel,
 		},
 		{
 			name: "with a zstd compression type and valid level, then it returns a valid struct",
 			args: args{
 				compType: repository.ZstdCompressionType,
-				level: new(2),
+				level:    new(2),
 			},
 			expectedCompType: repository.ZstdCompressionType,
-			expectedLevel: new(2),
+			expectedLevel:    new(2),
 		},
 	}
 	for _, tt := range tests {
 		t.Run(`Given a Compression struct,
-		when the constructor is called `+ tt.name, func(t *testing.T) {
+		when the constructor is called `+tt.name, func(t *testing.T) {
 			t.Parallel()
 			got, err := repository.NewCompression(tt.args.compType, tt.args.level)
 			if err != nil {
@@ -74,25 +74,25 @@ func TestParseCompressionType(t *testing.T) {
 		s string
 	}
 	tests := []struct {
-		name    string
-		args    args
-		expectedErr error
+		name             string
+		args             args
+		expectedErr      error
 		expectedCompType *repository.CompressionType
 	}{
 		{
-			name: "with an invalid compression type, then it returns an invalid compression type error",
-			args: args{s: "invalid"},
+			name:        "with an invalid compression type, then it returns an invalid compression type error",
+			args:        args{s: "invalid"},
 			expectedErr: repository.ErrInvalidCompressionType,
 		},
 		{
-			name: "with a valid compression type, then it returns a valid compression type",
-			args: args{s: repository.ZstdCompressionType.String()},
+			name:             "with a valid compression type, then it returns a valid compression type",
+			args:             args{s: repository.ZstdCompressionType.String()},
 			expectedCompType: new(repository.ZstdCompressionType),
 		},
 	}
 	for _, tt := range tests {
 		t.Run(`Given a ParseCompressionType function,
-		when is called `+ tt.name, func(t *testing.T) {
+		when is called `+tt.name, func(t *testing.T) {
 			t.Parallel()
 			got, err := repository.ParseCompressionType(tt.args.s)
 			if err != nil {

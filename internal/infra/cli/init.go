@@ -23,7 +23,7 @@ func newInitCommand() *cobra.Command {
 		Use:   "init",
 		Short: "Initialize a new Stowmark repository",
 		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			compType, err := repository.ParseCompressionType(compressionType)
 			if err != nil {
 				return fmt.Errorf("invalid compression type: %w", err)
