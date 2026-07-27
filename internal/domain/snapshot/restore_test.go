@@ -16,7 +16,7 @@ func TestRestore_Restore(t *testing.T) {
 	manifest := fixtures.ManifestBuilder{Files: []snapshot.File{
 		fixtures.FileBuilder{}.Build(),
 	}}.Build()
-	config := fixtures.ConfigBuilder{}.Build()
+	config := fixtures.ConfigBuilder{}.Build(t)
 	type args struct {
 		repoPath   string
 		snapshotID string

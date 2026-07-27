@@ -10,24 +10,82 @@ import (
 )
 
 func newInitCommand() *cobra.Command {
+	var (
+		repositoryPath  string
+		compressionType string
+		level           int
+	)
+
 	repo := disk.NewFolderRepositoryRepository()
 	svc := repository.NewInit(repo)
-	return &cobra.Command{
-		Use:   "init <repository>",
-		Short: "Initialize a new Stonekeep repository",
-		Args:  cobra.ExactArgs(1),
+
+	cmd := &cobra.Command{
+		Use:   "init",
+		Short: "Initialize a new Stowmark repository",
+		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			id := uuid.New()
-			re, err := repository.NewRepository(args[0], repository.NewConfig(id, repository.NoneCompression(repository.NoneCompressionType, nil)))
+			compType, err := repository.ParseCompressionType(compressionType)
 			if err != nil {
-				return err
+				return fmt.Errorf("invalid compression type: %w", err)
 			}
+
+			comp, err := repository.NewCompression(*compType, &level)
+			if err != nil {
+				return fmt.Errorf("create compression configuration: %w", err)
+			}
+
+			id := uuid.New()
+
+			re, err := repository.NewRepository(
+				repositoryPath,
+				repository.NewConfig(id, comp),
+			)
+			if err != nil {
+				return fmt.Errorf("create repository: %w", err)
+			}
+
 			if err := svc.Do(cmd.Context(), re); err != nil {
-				return err
+				return fmt.Errorf("initialize repository: %w", err)
 			}
-			fmt.Printf("Initialized Stonekeep repository at %q\n", args[0])
-			fmt.Printf("Repository ID: %q", id.String())
+
+			_, _ = fmt.Fprintf(
+				cmd.OutOrStdout(),
+				"Initialized Stowmark repository at %q\n",
+				repositoryPath,
+			)
+			_, _ = fmt.Fprintf(
+				cmd.OutOrStdout(),
+				"Repository ID: %s\n",
+				id.String(),
+			)
+
 			return nil
 		},
 	}
+
+	cmd.Flags().StringVar(
+		&repositoryPath,
+		"repo",
+		"",
+		"path to the Stowmark repository",
+	)
+
+	cmd.Flags().StringVar(
+		&compressionType,
+		"compression",
+		repository.NoneCompressionType.String(),
+		"compression type: none, zstd",
+	)
+
+	cmd.Flags().IntVar(
+		&level,
+		"level",
+		0,
+		"compression level: 0 for none, 1-22 for zstd",
+	)
+
+	_ = cmd.MarkFlagRequired("repo")
+	_ = cmd.MarkFlagRequired("compression")
+
+	return cmd
 }

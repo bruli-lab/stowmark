@@ -9,6 +9,8 @@ import (
 )
 
 func TestNewRepository(t *testing.T) {
+	compType, err := repository.NewCompression(repository.NoneCompressionType, nil)
+	require.NoError(t, err)
 	type args struct {
 		name   string
 		config *repository.Config
@@ -36,7 +38,7 @@ func TestNewRepository(t *testing.T) {
 			name: "with valid data, then it returns a valid repository struct",
 			args: args{
 				name:   "name",
-				config: repository.NewConfig(uuid.New(), repository.NoneCompression(repository.NoneCompressionType, nil)),
+				config: repository.NewConfig(uuid.New(), compType),
 			},
 		},
 	}

@@ -2,14 +2,23 @@ package repository
 
 import "errors"
 
-const NoneCompressionType CompressionType = "none"
+const (
+	NoneCompressionType CompressionType = "none"
+	ZstdCompressionType CompressionType = "zstd"
+
+	DefaultZstdLevel int = 3
+	MinimumZstdLevel int = 1
+	MaximumZstdLevel int = 22
+)
 
 var (
 	compressionTypes = map[string]CompressionType{
 		"none": NoneCompressionType,
+		"zstd": ZstdCompressionType,
 	}
 
 	ErrInvalidCompressionType = errors.New("invalid compression type")
+	ErrInvalidZstdLevel       = errors.New("zstd compression level must be between 1 and 22")
 )
 
 type CompressionType string
@@ -31,18 +40,33 @@ type Compression struct {
 	level    *int
 }
 
-func (c Compression) CompType() CompressionType {
+func (c *Compression) CompType() CompressionType {
 	return c.compType
 }
 
-func (c Compression) Level() *int {
+func (c *Compression) Level() *int {
 	return c.level
 }
 
-func NewCompression(compType CompressionType, level *int) *Compression {
-	return &Compression{compType: compType, level: level}
+func (c *Compression) validate() error {
+	switch c.compType {
+	case ZstdCompressionType:
+		if c.level == nil {
+			c.level = new(DefaultZstdLevel)
+		}
+		if *c.level < MinimumZstdLevel || *c.level > MaximumZstdLevel {
+			return ErrInvalidZstdLevel
+		}
+	case NoneCompressionType:
+		c.level = nil
+	}
+	return nil
 }
 
-func NoneCompression(compType CompressionType, level *int) *Compression {
-	return NewCompression(compType, level)
+func NewCompression(compType CompressionType, level *int) (*Compression, error) {
+	comp := Compression{compType: compType, level: level}
+	if err := comp.validate(); err != nil {
+		return nil, err
+	}
+	return &comp, nil
 }
