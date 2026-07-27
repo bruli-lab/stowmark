@@ -150,7 +150,7 @@ func (r ManifestRepository) Save(ctx context.Context, m *snapshot.Manifest) erro
 	man := manifest{
 		ID:        m.Id(),
 		Files:     files,
-		CreatedAt: m.CreatedAt(),
+		CreatedAt: timeFormat(m.CreatedAt()),
 		Source:    m.Source(),
 	}
 	data, err := json.MarshalIndent(man, "", " ")
@@ -176,4 +176,9 @@ func absolutePath(repositoryPath string) (string, error) {
 		return "", fmt.Errorf("resolve absolute path: %w", err)
 	}
 	return absolutePath, nil
+}
+
+func timeFormat(t time.Time) time.Time {
+	location, _ := time.LoadLocation("Europe/Madrid")
+	return t.In(location)
 }
