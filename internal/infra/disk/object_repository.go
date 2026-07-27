@@ -12,6 +12,7 @@ import (
 
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
+	"github.com/klauspost/compress/zstd"
 )
 
 type ObjectRepository struct {
@@ -43,10 +44,28 @@ func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Co
 		_ = source.Close()
 	}()
 
+	var reader io.Reader = source
+
 	switch comp.CompType() {
 	case repository.NoneCompressionType:
+	case repository.ZstdCompressionType:
+		decoder, err := zstd.NewReader(source)
+		if err != nil {
+			return fmt.Errorf(
+				"create zstd decoder for object %q: %w",
+				sourcePath,
+				err,
+			)
+		}
+		defer decoder.Close()
+
+		reader = decoder
+
 	default:
-		return fmt.Errorf("unsupported compression type %q", comp.CompType())
+		return fmt.Errorf(
+			"unsupported compression type %q",
+			comp.CompType(),
+		)
 	}
 
 	destinationPath := obj.Path()
@@ -65,18 +84,40 @@ func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Co
 		0o644,
 	)
 	if err != nil {
-		return fmt.Errorf("create restored file %q: %w", destinationPath, err)
+		return fmt.Errorf(
+			"create restored file %q: %w",
+			destinationPath,
+			err,
+		)
 	}
 
-	if _, err := io.Copy(destination, source); err != nil {
+	restoreCompleted := false
+	defer func() {
 		_ = destination.Close()
-		return fmt.Errorf("restore file %q: %w", destinationPath, err)
+
+		if !restoreCompleted {
+			_ = os.Remove(destinationPath)
+		}
+	}()
+
+	if _, err := io.Copy(destination, reader); err != nil {
+		return fmt.Errorf(
+			"restore object %q to %q: %w",
+			sourcePath,
+			destinationPath,
+			err,
+		)
 	}
 
 	if err := destination.Close(); err != nil {
-		return fmt.Errorf("close restored file %q: %w", destinationPath, err)
+		return fmt.Errorf(
+			"close restored file %q: %w",
+			destinationPath,
+			err,
+		)
 	}
 
+	restoreCompleted = true
 	return nil
 }
 

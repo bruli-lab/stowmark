@@ -3,17 +3,15 @@ package stowmark
 import (
 	"context"
 
-	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 )
 
 func (h *Handler) RestoreSnapshot(ctx context.Context, id string) (*Result, error) {
 	svc := snapshot.NewRestore(
 		h.manifestRepository,
-		repository.NewGetConfig(h.folderRepository),
 		h.objectRepository,
 	)
-	result, err := svc.Restore(ctx, h.repositoryPath, id)
+	result, err := svc.Restore(ctx, id)
 	if err != nil {
 		return nil, err
 	}

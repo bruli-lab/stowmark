@@ -16,9 +16,7 @@ func TestRestore_Restore(t *testing.T) {
 	manifest := fixtures.ManifestBuilder{Files: []snapshot.File{
 		fixtures.FileBuilder{}.Build(),
 	}}.Build()
-	config := fixtures.ConfigBuilder{}.Build(t)
 	type args struct {
-		repoPath   string
 		snapshotID string
 	}
 	tests := []struct {
@@ -27,7 +25,6 @@ func TestRestore_Restore(t *testing.T) {
 		expectedErr, getConfigErr,
 		manifestErr, restoreErr error
 		manifest          *snapshot.Manifest
-		config            *repository.Config
 		expectedSuccess   bool
 		expectedFailedLen int
 	}{
@@ -37,15 +34,8 @@ func TestRestore_Restore(t *testing.T) {
 			expectedErr: errTest,
 		},
 		{
-			name:         "and get config returns error, then it returns same error",
-			manifest:     &manifest,
-			getConfigErr: errTest,
-			expectedErr:  errTest,
-		},
-		{
 			name:              "and restore object returns error, then it returns a failed result",
 			manifest:          &manifest,
-			config:            &config,
 			restoreErr:        errTest,
 			expectedSuccess:   false,
 			expectedFailedLen: 1,
@@ -53,7 +43,6 @@ func TestRestore_Restore(t *testing.T) {
 		{
 			name:              "with no error, then it returns same error success result",
 			manifest:          &manifest,
-			config:            &config,
 			expectedSuccess:   true,
 			expectedFailedLen: 0,
 		},
@@ -66,17 +55,13 @@ func TestRestore_Restore(t *testing.T) {
 			manifestRepo.GetFunc = func(_ context.Context, _ string) (*snapshot.Manifest, error) {
 				return tt.manifest, tt.manifestErr
 			}
-			folderRepo := &repository.FolderRepositoryMock{}
-			folderRepo.GetConfigFunc = func(_ context.Context, _ string) (*repository.Config, error) {
-				return tt.config, tt.getConfigErr
-			}
 			objectRepo := &snapshot.ObjectRepositoryMock{}
 			objectRepo.RestoreObjectFunc = func(_ context.Context, _ *repository.Compression, _ *snapshot.File) error {
 				return tt.restoreErr
 			}
 
-			svc := snapshot.NewRestore(manifestRepo, repository.NewGetConfig(folderRepo), objectRepo)
-			result, err := svc.Restore(t.Context(), tt.args.repoPath, tt.args.snapshotID)
+			svc := snapshot.NewRestore(manifestRepo, objectRepo)
+			result, err := svc.Restore(t.Context(), tt.args.snapshotID)
 			if err != nil {
 				require.ErrorAs(t, err, &tt.expectedErr)
 				return
