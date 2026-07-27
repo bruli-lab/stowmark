@@ -121,9 +121,13 @@ func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Co
 	return nil
 }
 
-func (o ObjectRepository) ReadObject(ctx context.Context, originalPath, hash string) (*snapshot.File, error) {
+func (o ObjectRepository) ReadObject(ctx context.Context, comp *repository.Compression, originalPath, hash string) (*snapshot.File, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
+	}
+
+	if len(hash) < 3 {
+		return nil, fmt.Errorf("invalid object hash %q", hash)
 	}
 
 	objectPath := filepath.Join(
@@ -135,20 +139,43 @@ func (o ObjectRepository) ReadObject(ctx context.Context, originalPath, hash str
 
 	objectFile, err := os.Open(objectPath)
 	if err != nil {
-		switch {
-		case errors.Is(err, os.ErrNotExist):
+		if errors.Is(err, os.ErrNotExist) {
 			return nil, snapshot.NewNotFoundError(originalPath)
-		default:
-			return nil, fmt.Errorf(
-				"open object %q: %w",
-				objectPath,
-				err,
-			)
 		}
+
+		return nil, fmt.Errorf(
+			"open object %q: %w",
+			objectPath,
+			err,
+		)
 	}
 	defer func() {
 		_ = objectFile.Close()
 	}()
+
+	var reader io.Reader = objectFile
+
+	switch comp.CompType() {
+	case repository.NoneCompressionType:
+	case repository.ZstdCompressionType:
+		decoder, err := zstd.NewReader(objectFile)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"create zstd decoder for object %q: %w",
+				objectPath,
+				err,
+			)
+		}
+		defer decoder.Close()
+
+		reader = decoder
+
+	default:
+		return nil, fmt.Errorf(
+			"unsupported compression type %q",
+			comp.CompType(),
+		)
+	}
 
 	hasher := sha256.New()
 
@@ -156,7 +183,7 @@ func (o ObjectRepository) ReadObject(ctx context.Context, originalPath, hash str
 		hasher,
 		contextReader{
 			ctx:    ctx,
-			reader: objectFile,
+			reader: reader,
 		},
 	)
 	if err != nil {
@@ -167,11 +194,14 @@ func (o ObjectRepository) ReadObject(ctx context.Context, originalPath, hash str
 		)
 	}
 
-	calculatedHash := hex.EncodeToString(
-		hasher.Sum(nil),
-	)
+	calculatedHash := hex.EncodeToString(hasher.Sum(nil))
+
 	result := snapshot.File{}
-	result.Hydrate(originalPath, calculatedHash, size)
+	result.Hydrate(
+		originalPath,
+		calculatedHash,
+		size,
+	)
 
 	return &result, nil
 }

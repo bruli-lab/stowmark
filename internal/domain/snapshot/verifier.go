@@ -17,7 +17,7 @@ func (v Verifier) Verify(ctx context.Context, snapshotID string) (*Result, error
 	}
 	result := NewResult(snapshotID)
 	for _, f := range manifest.Files() {
-		obj, err := v.objectRepo.ReadObject(ctx, f.Path(), f.Hash())
+		obj, err := v.objectRepo.ReadObject(ctx, manifest.compression, f.Path(), f.Hash())
 		if err != nil {
 			switch {
 			case errors.As(err, &NotFoundError{}):

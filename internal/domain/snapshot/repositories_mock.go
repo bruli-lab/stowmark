@@ -310,7 +310,7 @@ var _ ObjectRepository = &ObjectRepositoryMock{}
 //			AlreadyExistsFunc: func(ctx context.Context, obj *File) (bool, error) {
 //				panic("mock out the AlreadyExists method")
 //			},
-//			ReadObjectFunc: func(ctx context.Context, originalPath string, hash string) (*File, error) {
+//			ReadObjectFunc: func(ctx context.Context, comp *repository.Compression, originalPath string, hash string) (*File, error) {
 //				panic("mock out the ReadObject method")
 //			},
 //			RestoreObjectFunc: func(ctx context.Context, comp *repository.Compression, obj *File) error {
@@ -330,7 +330,7 @@ type ObjectRepositoryMock struct {
 	AlreadyExistsFunc func(ctx context.Context, obj *File) (bool, error)
 
 	// ReadObjectFunc mocks the ReadObject method.
-	ReadObjectFunc func(ctx context.Context, originalPath string, hash string) (*File, error)
+	ReadObjectFunc func(ctx context.Context, comp *repository.Compression, originalPath string, hash string) (*File, error)
 
 	// RestoreObjectFunc mocks the RestoreObject method.
 	RestoreObjectFunc func(ctx context.Context, comp *repository.Compression, obj *File) error
@@ -351,6 +351,8 @@ type ObjectRepositoryMock struct {
 		ReadObject []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
+			// Comp is the comp argument value.
+			Comp *repository.Compression
 			// OriginalPath is the originalPath argument value.
 			OriginalPath string
 			// Hash is the hash argument value.
@@ -418,23 +420,25 @@ func (mock *ObjectRepositoryMock) AlreadyExistsCalls() []struct {
 }
 
 // ReadObject calls ReadObjectFunc.
-func (mock *ObjectRepositoryMock) ReadObject(ctx context.Context, originalPath string, hash string) (*File, error) {
+func (mock *ObjectRepositoryMock) ReadObject(ctx context.Context, comp *repository.Compression, originalPath string, hash string) (*File, error) {
 	if mock.ReadObjectFunc == nil {
 		panic("ObjectRepositoryMock.ReadObjectFunc: method is nil but ObjectRepository.ReadObject was just called")
 	}
 	callInfo := struct {
 		Ctx          context.Context
+		Comp         *repository.Compression
 		OriginalPath string
 		Hash         string
 	}{
 		Ctx:          ctx,
+		Comp:         comp,
 		OriginalPath: originalPath,
 		Hash:         hash,
 	}
 	mock.lockReadObject.Lock()
 	mock.calls.ReadObject = append(mock.calls.ReadObject, callInfo)
 	mock.lockReadObject.Unlock()
-	return mock.ReadObjectFunc(ctx, originalPath, hash)
+	return mock.ReadObjectFunc(ctx, comp, originalPath, hash)
 }
 
 // ReadObjectCalls gets all the calls that were made to ReadObject.
@@ -443,11 +447,13 @@ func (mock *ObjectRepositoryMock) ReadObject(ctx context.Context, originalPath s
 //	len(mockedObjectRepository.ReadObjectCalls())
 func (mock *ObjectRepositoryMock) ReadObjectCalls() []struct {
 	Ctx          context.Context
+	Comp         *repository.Compression
 	OriginalPath string
 	Hash         string
 } {
 	var calls []struct {
 		Ctx          context.Context
+		Comp         *repository.Compression
 		OriginalPath string
 		Hash         string
 	}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/fixtures"
 	"github.com/google/uuid"
@@ -74,7 +75,7 @@ func TestVerifier_Verify(t *testing.T) {
 		when Verify method is called `+tt.name, func(t *testing.T) {
 			t.Parallel()
 			objectRepo := &snapshot.ObjectRepositoryMock{}
-			objectRepo.ReadObjectFunc = func(_ context.Context, _ string, _ string) (*snapshot.File, error) {
+			objectRepo.ReadObjectFunc = func(_ context.Context, _ *repository.Compression, _ string, _ string) (*snapshot.File, error) {
 				return tt.file, tt.readObjectErr
 			}
 			manifestRepo := &snapshot.ManifestRepositoryMock{}
