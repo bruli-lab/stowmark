@@ -32,10 +32,8 @@ type ManifestRepository struct {
 }
 
 func (r ManifestRepository) Get(ctx context.Context, snapshotID string) (*snapshot.Manifest, error) {
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	default:
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	snapshotsPath := filepath.Join(
 		r.repositoryPath,
@@ -67,10 +65,8 @@ func (r ManifestRepository) Get(ctx context.Context, snapshotID string) (*snapsh
 }
 
 func (r ManifestRepository) List(ctx context.Context) ([]snapshot.Manifest, error) {
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	default:
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	snapshotsPath := filepath.Join(
 		r.repositoryPath,
@@ -140,10 +136,8 @@ func (r ManifestRepository) buildManifest(data []byte, manifestPath string) (*sn
 }
 
 func (r ManifestRepository) Save(ctx context.Context, m *snapshot.Manifest) error {
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	files := make([]file, len(m.Files()))
 	for i, f := range m.Files() {
@@ -159,10 +153,11 @@ func (r ManifestRepository) Save(ctx context.Context, m *snapshot.Manifest) erro
 		CreatedAt: m.CreatedAt(),
 		Source:    m.Source(),
 	}
-	data, err := json.Marshal(man)
+	data, err := json.MarshalIndent(man, "", " ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal manifest: %w", err)
 	}
+	data = append(data, '\n')
 	manFile := fmt.Sprintf("%s.json", m.Id())
 	return os.WriteFile(filepath.Join(fmt.Sprintf("%s/%s", r.repositoryPath, repository.SnapshotsFolder), manFile), data, 0o644)
 }

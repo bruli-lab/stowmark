@@ -136,10 +136,8 @@ func (o ObjectRepository) ReadObject(ctx context.Context, originalPath, hash str
 }
 
 func (o ObjectRepository) AlreadyExists(ctx context.Context, obj *snapshot.File) (bool, error) {
-	select {
-	case <-ctx.Done():
-		return false, ctx.Err()
-	default:
+	if err := ctx.Err(); err != nil {
+		return false, err
 	}
 	hash := obj.Hash()
 	destinationPath := filepath.Join(o.repositoryPath, repository.ObjectsFolder, hash[:2], hash[2:])
@@ -154,10 +152,8 @@ func (o ObjectRepository) AlreadyExists(ctx context.Context, obj *snapshot.File)
 }
 
 func (o ObjectRepository) Save(ctx context.Context, obj *snapshot.File) error {
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	hash := obj.Hash()
 	destinationPath := filepath.Join(o.repositoryPath, repository.ObjectsFolder, hash[:2], hash[2:])
@@ -232,10 +228,8 @@ type contextReader struct {
 }
 
 func (r contextReader) Read(buffer []byte) (int, error) {
-	select {
-	case <-r.ctx.Done():
-		return 0, r.ctx.Err()
-	default:
-		return r.reader.Read(buffer)
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
 	}
+	return r.reader.Read(buffer)
 }

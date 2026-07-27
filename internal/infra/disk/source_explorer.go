@@ -16,10 +16,8 @@ import (
 type SourceExplorer struct{}
 
 func (s SourceExplorer) CalculateHash(ctx context.Context, filePath string) (string, error) {
-	select {
-	case <-ctx.Done():
-		return "", ctx.Err()
-	default:
+	if err := ctx.Err(); err != nil {
+		return "", err
 	}
 	fi, err := os.Open(filePath)
 	if err != nil {
@@ -39,10 +37,8 @@ func (s SourceExplorer) CalculateHash(ctx context.Context, filePath string) (str
 }
 
 func (s SourceExplorer) Explore(ctx context.Context, sourcePath string) (*snapshot.Source, error) {
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	default:
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	absolutePath, err := absolutePath(sourcePath)
 	if err != nil {

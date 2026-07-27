@@ -89,11 +89,10 @@ func (f FolderRepositoryRepository) CreateFolder(ctx context.Context, path strin
 }
 
 func (f FolderRepositoryRepository) CreateConfig(ctx context.Context, path string, c *repository.Config) error {
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
+	if err := ctx.Err(); err != nil {
+		return err
 	}
+
 	co := config{
 		ID:            c.Id().String(),
 		FormatVersion: c.FormatVersion(),
@@ -103,11 +102,20 @@ func (f FolderRepositoryRepository) CreateConfig(ctx context.Context, path strin
 			Level: c.Compression().Level(),
 		},
 	}
-	data, err := json.Marshal(co)
+
+	data, err := json.MarshalIndent(co, "", "  ")
 	if err != nil {
-		return fmt.Errorf("failed to marshal config: %w", err)
+		return fmt.Errorf("marshal config: %w", err)
 	}
-	return os.WriteFile(filepath.Join(path, configFile), data, 0o644)
+
+	data = append(data, '\n')
+
+	configPath := filepath.Join(path, configFile)
+	if err := os.WriteFile(configPath, data, 0o644); err != nil {
+		return fmt.Errorf("write config %q: %w", configPath, err)
+	}
+
+	return nil
 }
 
 func NewFolderRepositoryRepository() *FolderRepositoryRepository {
