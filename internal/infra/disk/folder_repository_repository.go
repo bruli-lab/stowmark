@@ -29,10 +29,8 @@ type config struct {
 type FolderRepositoryRepository struct{}
 
 func (f FolderRepositoryRepository) GetConfig(ctx context.Context, path string) (*repository.Config, error) {
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	default:
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	absolutePath, err := absolutePath(path)
 	if err != nil {
@@ -64,10 +62,8 @@ func (f FolderRepositoryRepository) GetConfig(ctx context.Context, path string) 
 }
 
 func (f FolderRepositoryRepository) Exists(ctx context.Context, path string) (bool, error) {
-	select {
-	case <-ctx.Done():
-		return false, ctx.Err()
-	default:
+	if err := ctx.Err(); err != nil {
+		return false, err
 	}
 	info, err := os.Stat(path)
 	if errors.Is(err, os.ErrNotExist) {
@@ -80,10 +76,8 @@ func (f FolderRepositoryRepository) Exists(ctx context.Context, path string) (bo
 }
 
 func (f FolderRepositoryRepository) CreateFolder(ctx context.Context, path string) error {
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	return os.MkdirAll(path, 0o755)
 }
@@ -96,7 +90,7 @@ func (f FolderRepositoryRepository) CreateConfig(ctx context.Context, path strin
 	co := config{
 		ID:            c.Id().String(),
 		FormatVersion: c.FormatVersion(),
-		CreatedAt:     c.CreatedAt().Format(time.RFC3339),
+		CreatedAt:     timeFormat(c.CreatedAt()).Format(time.RFC3339),
 		Compression: compression{
 			Type:  c.Compression().CompType().String(),
 			Level: c.Compression().Level(),
