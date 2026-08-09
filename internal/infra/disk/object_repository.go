@@ -17,6 +17,7 @@ import (
 
 type ObjectRepository struct {
 	repositoryPath string
+	encoders       *encoderFactory
 }
 
 func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Compression, obj *snapshot.File) error {
@@ -253,13 +254,16 @@ func (o ObjectRepository) Save(ctx context.Context, obj *snapshot.File, comp *re
 		}
 	}()
 
-	if err := writeObject(destination, source, comp); err != nil {
-		return fmt.Errorf(
-			"write object %q to %q: %w",
-			obj.Path(),
-			destinationPath,
-			err,
-		)
+	encoder, err := o.encoders.getEncoder(comp.CompType())
+	if err != nil {
+		return err
+	}
+	writer, err := encoder.Encode(destination, comp.Level())
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(writer, source); err != nil {
+		return fmt.Errorf("copy object: %w", err)
 	}
 
 	if err := destination.Close(); err != nil {
@@ -279,7 +283,7 @@ func NewObjectRepository(repositoryPath string) (*ObjectRepository, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &ObjectRepository{repositoryPath: absPath}, nil
+	return &ObjectRepository{repositoryPath: absPath, encoders: newEncoderFactory()}, nil
 }
 
 type contextReader struct {
@@ -292,31 +296,4 @@ func (r contextReader) Read(buffer []byte) (int, error) {
 		return 0, err
 	}
 	return r.reader.Read(buffer)
-}
-
-func writeObject(
-	destination io.Writer,
-	source io.Reader,
-	comp *repository.Compression,
-) error {
-	switch comp.CompType() {
-	case repository.NoneCompressionType:
-		if _, err := io.Copy(destination, source); err != nil {
-			return fmt.Errorf("copy uncompressed object: %w", err)
-		}
-
-	case repository.ZstdCompressionType:
-		err := zstdCompression(destination, source, comp)
-		if err != nil {
-			return err
-		}
-
-	default:
-		return fmt.Errorf(
-			"unsupported compression type %q",
-			comp.CompType(),
-		)
-	}
-
-	return nil
 }
