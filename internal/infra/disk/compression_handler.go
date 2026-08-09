@@ -7,9 +7,19 @@ import (
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 )
 
+type WriterCloser struct {
+	Writer io.Writer
+	Closer func() error
+}
+
+type ReaderCloser struct {
+	Reader io.Reader
+	Closer func()
+}
+
 type compressionHandler interface {
-	Encode(destination io.Writer, level *int) (io.Writer, error)
-	Decode(origin io.Reader) (io.Reader, func(), error)
+	Encode(destination io.Writer, level *int) (*WriterCloser, error)
+	Decode(origin io.Reader) (*ReaderCloser, error)
 }
 
 type compressionHandlersFactory struct {

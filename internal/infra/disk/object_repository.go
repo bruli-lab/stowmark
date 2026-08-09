@@ -24,6 +24,14 @@ func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Co
 		return err
 	}
 
+	if comp == nil {
+		return errors.New("compression configuration is required")
+	}
+
+	if obj == nil {
+		return errors.New("snapshot object is required")
+	}
+
 	hash := obj.Hash()
 	if len(hash) < 3 {
 		return fmt.Errorf("invalid object hash %q", hash)
@@ -40,16 +48,25 @@ func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Co
 	if err != nil {
 		return fmt.Errorf("open object %q: %w", sourcePath, err)
 	}
+	defer func() {
+		_ = source.Close()
+	}()
 
 	handler, err := o.handlersFactory.getHandler(comp.CompType())
 	if err != nil {
 		return err
 	}
-	reader, closeFunc, err := handler.Decode(source)
+
+	decoded, err := handler.Decode(source)
 	if err != nil {
-		return err
+		return fmt.Errorf(
+			"decode object %q using %q: %w",
+			sourcePath,
+			comp.CompType(),
+			err,
+		)
 	}
-	defer closeFunc()
+	defer decoded.Closer()
 
 	destinationPath := obj.Path()
 
@@ -75,15 +92,21 @@ func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Co
 	}
 
 	restoreCompleted := false
-	defer func() {
-		_ = destination.Close()
 
+	defer func() {
 		if !restoreCompleted {
+			_ = destination.Close()
 			_ = os.Remove(destinationPath)
 		}
 	}()
 
-	if _, err := io.Copy(destination, reader); err != nil {
+	if _, err := io.Copy(
+		destination,
+		contextReader{
+			ctx:    ctx,
+			reader: decoded.Reader,
+		},
+	); err != nil {
 		return fmt.Errorf(
 			"restore object %q to %q: %w",
 			sourcePath,
@@ -101,6 +124,7 @@ func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Co
 	}
 
 	restoreCompleted = true
+
 	return nil
 }
 
@@ -244,16 +268,18 @@ func (o ObjectRepository) Save(ctx context.Context, obj *snapshot.File, comp *re
 	if err != nil {
 		return err
 	}
-	if _, err := io.Copy(writer, source); err != nil {
+	if _, err := io.Copy(writer.Writer, source); err != nil {
 		return fmt.Errorf("copy object: %w", err)
 	}
 
-	if err := destination.Close(); err != nil {
-		return fmt.Errorf(
-			"close destination file %q: %w",
-			destinationPath,
-			err,
-		)
+	if writer.Closer != nil {
+		if err := writer.Closer(); err != nil {
+			return fmt.Errorf(
+				"close destination file %q: %w",
+				destinationPath,
+				err,
+			)
+		}
 	}
 
 	writeCompleted = true

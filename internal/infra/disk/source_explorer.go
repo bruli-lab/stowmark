@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -14,7 +15,7 @@ import (
 )
 
 type SourceExplorer struct {
-	compressors *CompressorHash
+	handlersFactory *compressionHandlersFactory
 }
 
 func (s SourceExplorer) CalculateHash(ctx context.Context, filePath string, comp *repository.Compression) (string, error) {
@@ -32,12 +33,30 @@ func (s SourceExplorer) CalculateHash(ctx context.Context, filePath string, comp
 
 	hasher := sha256.New()
 
-	compress, err := s.compressors.apply(comp.CompType())
+	handler, err := s.handlersFactory.getHandler(comp.CompType())
 	if err != nil {
 		return "", err
 	}
-	if err := compress.Get(ctx, filePath, fi, hasher, *comp.Level()); err != nil {
+	encoder, err := handler.Encode(hasher, comp.Level())
+	if err != nil {
 		return "", err
+	}
+	if _, err := io.Copy(encoder.Writer, contextReader{
+		ctx:    ctx,
+		reader: fi,
+	}); err != nil {
+		if encoder.Closer != nil {
+			_ = encoder.Closer()
+			return "", fmt.Errorf("compress %q for hashing: %w", filePath, err)
+		}
+	}
+
+	if err := encoder.Closer(); err != nil {
+		return "", fmt.Errorf(
+			"finish compression for hashing %q: %w",
+			filePath,
+			err,
+		)
 	}
 
 	return hex.EncodeToString(hasher.Sum(nil)), nil
@@ -103,5 +122,5 @@ func (s SourceExplorer) readFiles(root string) ([]snapshot.File, error) {
 }
 
 func NewSourceRepository() *SourceExplorer {
-	return &SourceExplorer{compressors: newCompressorHash()}
+	return &SourceExplorer{handlersFactory: newCompressionHandlersFactory()}
 }
