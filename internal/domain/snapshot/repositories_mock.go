@@ -19,7 +19,7 @@ var _ SourceRepository = &SourceRepositoryMock{}
 //
 //		// make and configure a mocked SourceRepository
 //		mockedSourceRepository := &SourceRepositoryMock{
-//			CalculateHashFunc: func(ctx context.Context, filePath string) (string, error) {
+//			CalculateHashFunc: func(ctx context.Context, filePath string, comp *repository.Compression) (string, error) {
 //				panic("mock out the CalculateHash method")
 //			},
 //			ExploreFunc: func(ctx context.Context, sourcePath string) (*Source, error) {
@@ -33,7 +33,7 @@ var _ SourceRepository = &SourceRepositoryMock{}
 //	}
 type SourceRepositoryMock struct {
 	// CalculateHashFunc mocks the CalculateHash method.
-	CalculateHashFunc func(ctx context.Context, filePath string) (string, error)
+	CalculateHashFunc func(ctx context.Context, filePath string, comp *repository.Compression) (string, error)
 
 	// ExploreFunc mocks the Explore method.
 	ExploreFunc func(ctx context.Context, sourcePath string) (*Source, error)
@@ -46,6 +46,8 @@ type SourceRepositoryMock struct {
 			Ctx context.Context
 			// FilePath is the filePath argument value.
 			FilePath string
+			// Comp is the comp argument value.
+			Comp *repository.Compression
 		}
 		// Explore holds details about calls to the Explore method.
 		Explore []struct {
@@ -60,21 +62,23 @@ type SourceRepositoryMock struct {
 }
 
 // CalculateHash calls CalculateHashFunc.
-func (mock *SourceRepositoryMock) CalculateHash(ctx context.Context, filePath string) (string, error) {
+func (mock *SourceRepositoryMock) CalculateHash(ctx context.Context, filePath string, comp *repository.Compression) (string, error) {
 	if mock.CalculateHashFunc == nil {
 		panic("SourceRepositoryMock.CalculateHashFunc: method is nil but SourceRepository.CalculateHash was just called")
 	}
 	callInfo := struct {
 		Ctx      context.Context
 		FilePath string
+		Comp     *repository.Compression
 	}{
 		Ctx:      ctx,
 		FilePath: filePath,
+		Comp:     comp,
 	}
 	mock.lockCalculateHash.Lock()
 	mock.calls.CalculateHash = append(mock.calls.CalculateHash, callInfo)
 	mock.lockCalculateHash.Unlock()
-	return mock.CalculateHashFunc(ctx, filePath)
+	return mock.CalculateHashFunc(ctx, filePath, comp)
 }
 
 // CalculateHashCalls gets all the calls that were made to CalculateHash.
@@ -84,10 +88,12 @@ func (mock *SourceRepositoryMock) CalculateHash(ctx context.Context, filePath st
 func (mock *SourceRepositoryMock) CalculateHashCalls() []struct {
 	Ctx      context.Context
 	FilePath string
+	Comp     *repository.Compression
 } {
 	var calls []struct {
 		Ctx      context.Context
 		FilePath string
+		Comp     *repository.Compression
 	}
 	mock.lockCalculateHash.RLock()
 	calls = mock.calls.CalculateHash

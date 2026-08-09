@@ -101,7 +101,7 @@ func TestCreate_Do(t *testing.T) {
 			sourceRepo.ExploreFunc = func(_ context.Context, _ string) (*snapshot.Source, error) {
 				return tt.source, tt.exploreErr
 			}
-			sourceRepo.CalculateHashFunc = func(_ context.Context, _ string) (string, error) {
+			sourceRepo.CalculateHashFunc = func(_ context.Context, _ string, _ *repository.Compression) (string, error) {
 				return tt.hash, tt.calculateHashErr
 			}
 			manifestRepo := &snapshot.ManifestRepositoryMock{}

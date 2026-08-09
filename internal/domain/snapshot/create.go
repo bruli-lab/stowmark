@@ -27,7 +27,7 @@ func (c Create) Do(ctx context.Context, repoPath, sourcePath string) (*CreateRes
 	for i := range source.Files() {
 		file := source.Files()[i]
 		size += file.Size()
-		hash, err := c.sourceRepo.CalculateHash(ctx, file.Path())
+		hash, err := c.sourceRepo.CalculateHash(ctx, file.Path(), conf.Compression())
 		if err != nil {
 			return nil, err
 		}

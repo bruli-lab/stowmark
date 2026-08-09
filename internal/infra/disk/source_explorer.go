@@ -5,20 +5,23 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 
+	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 )
 
-type SourceExplorer struct{}
+type SourceExplorer struct {
+	compressors *CompressorHash
+}
 
-func (s SourceExplorer) CalculateHash(ctx context.Context, filePath string) (string, error) {
+func (s SourceExplorer) CalculateHash(ctx context.Context, filePath string, comp *repository.Compression) (string, error) {
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
+
 	fi, err := os.Open(filePath)
 	if err != nil {
 		return "", fmt.Errorf("open file %q: %w", filePath, err)
@@ -29,8 +32,12 @@ func (s SourceExplorer) CalculateHash(ctx context.Context, filePath string) (str
 
 	hasher := sha256.New()
 
-	if _, err := io.Copy(hasher, fi); err != nil {
-		return "", fmt.Errorf("calculate hash for %q: %w", filePath, err)
+	compress, err := s.compressors.apply(comp.CompType())
+	if err != nil {
+		return "", err
+	}
+	if err := compress.Get(ctx, filePath, fi, hasher, *comp.Level()); err != nil {
+		return "", err
 	}
 
 	return hex.EncodeToString(hasher.Sum(nil)), nil
@@ -96,5 +103,5 @@ func (s SourceExplorer) readFiles(root string) ([]snapshot.File, error) {
 }
 
 func NewSourceRepository() *SourceExplorer {
-	return &SourceExplorer{}
+	return &SourceExplorer{compressors: newCompressorHash()}
 }

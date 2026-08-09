@@ -9,7 +9,7 @@ import (
 //go:generate go tool moq -out repositories_mock.go . SourceRepository ManifestRepository ObjectRepository
 type SourceRepository interface {
 	Explore(ctx context.Context, sourcePath string) (*Source, error)
-	CalculateHash(ctx context.Context, filePath string) (string, error)
+	CalculateHash(ctx context.Context, filePath string, comp *repository.Compression) (string, error)
 }
 
 type ManifestRepository interface {
