@@ -12,12 +12,11 @@ import (
 
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
-	"github.com/klauspost/compress/zstd"
 )
 
 type ObjectRepository struct {
-	repositoryPath string
-	encoders       *encoderFactory
+	repositoryPath  string
+	handlersFactory *compressionHandlersFactory
 }
 
 func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Compression, obj *snapshot.File) error {
@@ -41,33 +40,16 @@ func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Co
 	if err != nil {
 		return fmt.Errorf("open object %q: %w", sourcePath, err)
 	}
-	defer func() {
-		_ = source.Close()
-	}()
 
-	var reader io.Reader = source
-
-	switch comp.CompType() {
-	case repository.NoneCompressionType:
-	case repository.ZstdCompressionType:
-		decoder, err := zstd.NewReader(source)
-		if err != nil {
-			return fmt.Errorf(
-				"create zstd decoder for object %q: %w",
-				sourcePath,
-				err,
-			)
-		}
-		defer decoder.Close()
-
-		reader = decoder
-
-	default:
-		return fmt.Errorf(
-			"unsupported compression type %q",
-			comp.CompType(),
-		)
+	handler, err := o.handlersFactory.getHandler(comp.CompType())
+	if err != nil {
+		return err
 	}
+	reader, closeFunc, err := handler.Decode(source)
+	if err != nil {
+		return err
+	}
+	defer closeFunc()
 
 	destinationPath := obj.Path()
 
@@ -254,7 +236,7 @@ func (o ObjectRepository) Save(ctx context.Context, obj *snapshot.File, comp *re
 		}
 	}()
 
-	encoder, err := o.encoders.getEncoder(comp.CompType())
+	encoder, err := o.handlersFactory.getHandler(comp.CompType())
 	if err != nil {
 		return err
 	}
@@ -283,7 +265,7 @@ func NewObjectRepository(repositoryPath string) (*ObjectRepository, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &ObjectRepository{repositoryPath: absPath, encoders: newEncoderFactory()}, nil
+	return &ObjectRepository{repositoryPath: absPath, handlersFactory: newCompressionHandlersFactory()}, nil
 }
 
 type contextReader struct {
