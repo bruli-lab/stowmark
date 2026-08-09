@@ -121,7 +121,7 @@ func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Co
 	return nil
 }
 
-func (o ObjectRepository) ReadObject(ctx context.Context, comp *repository.Compression, originalPath, hash string) (*snapshot.File, error) {
+func (o ObjectRepository) ReadObject(ctx context.Context, originalPath, hash string) (*snapshot.File, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -153,37 +153,13 @@ func (o ObjectRepository) ReadObject(ctx context.Context, comp *repository.Compr
 		_ = objectFile.Close()
 	}()
 
-	var reader io.Reader = objectFile
-
-	switch comp.CompType() {
-	case repository.NoneCompressionType:
-	case repository.ZstdCompressionType:
-		decoder, err := zstd.NewReader(objectFile)
-		if err != nil {
-			return nil, fmt.Errorf(
-				"create zstd decoder for object %q: %w",
-				objectPath,
-				err,
-			)
-		}
-		defer decoder.Close()
-
-		reader = decoder
-
-	default:
-		return nil, fmt.Errorf(
-			"unsupported compression type %q",
-			comp.CompType(),
-		)
-	}
-
 	hasher := sha256.New()
 
-	size, err := io.Copy(
+	storedSize, err := io.Copy(
 		hasher,
 		contextReader{
 			ctx:    ctx,
-			reader: reader,
+			reader: objectFile,
 		},
 	)
 	if err != nil {
@@ -200,7 +176,7 @@ func (o ObjectRepository) ReadObject(ctx context.Context, comp *repository.Compr
 	result.Hydrate(
 		originalPath,
 		calculatedHash,
-		size,
+		storedSize,
 	)
 
 	return &result, nil
