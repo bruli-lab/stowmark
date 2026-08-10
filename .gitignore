@@ -32,3 +32,4 @@ go.work.sum
 # .vscode/
 /backup/
 /documents
+/docker/ssh-test/

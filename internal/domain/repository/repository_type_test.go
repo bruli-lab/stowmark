@@ -24,42 +24,42 @@ func TestParseRepository(t *testing.T) {
 		{
 			name:         "with a local path, then it should return a local repository type",
 			args:         args{raw: "tmp/test"},
-			expectedType: repository.RepositoryLocal,
+			expectedType: repository.Local,
 		},
 		{
 			name:         "with a ssh path, then it should return a ssh repository type",
 			args:         args{raw: "ssh://user@host:/tmp/test"},
-			expectedType: repository.RepositorySSH,
+			expectedType: repository.Ssh,
 		},
 		{
 			name:         "with a smb path, then it should return a smb repository type",
 			args:         args{raw: "smb://host/tmp/test"},
-			expectedType: repository.RepositorySMB,
+			expectedType: repository.Smb,
 		},
 		{
 			name:         "with a s3 path, then it should return a s3 repository type",
 			args:         args{raw: "s3://bucket/tmp/test"},
-			expectedType: repository.RepositoryS3,
+			expectedType: repository.S3,
 		},
 		{
 			name:         "with a webdav path, then it should return a webdav repository type",
 			args:         args{raw: "webdav://host/tmp/test"},
-			expectedType: repository.RepositoryWebDAV,
+			expectedType: repository.WebDAV,
 		},
 		{
 			name:         "with a webdavs path, then it should return a webdav repository type",
 			args:         args{raw: "webdavs://host/tmp/test"},
-			expectedType: repository.RepositoryWebDAV,
+			expectedType: repository.WebDAV,
 		},
 		{
 			name:         "with a https path, then it should return a webdav repository type",
 			args:         args{raw: "https://host/tmp/test"},
-			expectedType: repository.RepositoryWebDAV,
+			expectedType: repository.WebDAV,
 		},
 		{
 			name:         "with a http path, then it should return a webdav repository type",
 			args:         args{raw: "http://host/tmp/test"},
-			expectedType: repository.RepositoryWebDAV,
+			expectedType: repository.WebDAV,
 		},
 	}
 	for _, tt := range tests {

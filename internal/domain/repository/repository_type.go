@@ -10,11 +10,11 @@ var ErrInvalidRepositoryPath = fmt.Errorf("invalid repository path")
 type RepositoryType string
 
 const (
-	RepositoryLocal  RepositoryType = "local"
-	RepositorySSH    RepositoryType = "ssh"
-	RepositorySMB    RepositoryType = "smb"
-	RepositoryS3     RepositoryType = "s3"
-	RepositoryWebDAV RepositoryType = "webdav"
+	Local  RepositoryType = "local"
+	Ssh    RepositoryType = "ssh"
+	Smb    RepositoryType = "smb"
+	S3     RepositoryType = "s3"
+	WebDAV RepositoryType = "webdav"
 )
 
 func ParseRepositoryType(raw string) (RepositoryType, error) {
@@ -24,14 +24,14 @@ func ParseRepositoryType(raw string) (RepositoryType, error) {
 	}
 	switch u.Scheme {
 	case "ssh", "sftp":
-		return RepositorySSH, nil
+		return Ssh, nil
 	case "smb":
-		return RepositorySMB, nil
+		return Smb, nil
 	case "s3":
-		return RepositoryS3, nil
+		return S3, nil
 	case "http", "https", "webdav", "webdavs":
-		return RepositoryWebDAV, nil
+		return WebDAV, nil
 	default:
-		return RepositoryLocal, nil
+		return Local, nil
 	}
 }
