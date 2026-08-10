@@ -12,12 +12,22 @@ import (
 	"time"
 
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
-	"github.com/bruli-lab/stowmark/internal/infra/model"
 	"github.com/google/uuid"
 	"github.com/pkg/sftp"
 )
 
 const configFilename = "config.json"
+
+type compression struct {
+	Type  string `json:"type"`
+	Level *int   `json:"level,omitempty"`
+}
+type config struct {
+	ID            string      `json:"id"`
+	FormatVersion int         `json:"format_version"`
+	CreatedAt     string      `json:"created_at"`
+	Compression   compression `json:"compression"`
+}
 
 type FolderRepositoryRepository struct {
 	client *sftp.Client
@@ -72,11 +82,11 @@ func (f FolderRepositoryRepository) CreateConfig(ctx context.Context, repository
 		return err
 	}
 
-	co := model.Config{
+	co := config{
 		ID:            c.Id().String(),
 		FormatVersion: c.FormatVersion(),
 		CreatedAt:     c.CreatedAt().In(time.Local).Format(time.RFC3339),
-		Compression: model.Compression{
+		Compression: compression{
 			Type:  c.Compression().CompType().String(),
 			Level: c.Compression().Level(),
 		},
@@ -129,7 +139,7 @@ func (f FolderRepositoryRepository) GetConfig(ctx context.Context, repositoryPat
 		_ = file.Close()
 	}()
 
-	var conf model.Config
+	var conf config
 
 	if err := decodeJSON(ctx, file, &conf); err != nil {
 		return nil, fmt.Errorf(

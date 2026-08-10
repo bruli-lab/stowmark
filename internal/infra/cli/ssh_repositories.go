@@ -10,7 +10,6 @@ import (
 
 	"github.com/bruli-lab/stowmark/internal/config"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
-	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	sshinfra "github.com/bruli-lab/stowmark/internal/infra/ssh"
 	gossh "golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
@@ -19,16 +18,8 @@ import (
 const DefaultSSHPort = "22"
 
 type SSHRepositories struct {
-	client         *sshinfra.Client
+	client *sshinfra.Client
 	repositoryPath string
-}
-
-func (s *SSHRepositories) ObjectRepository() (snapshot.ObjectRepository, error) {
-	return sshinfra.NewObjectRepository(s.repositoryPath, s.client.Sftp()), nil
-}
-
-func (s *SSHRepositories) ManifestRepository() (snapshot.ManifestRepository, error) {
-	return sshinfra.NewManifestRepository(s.repositoryPath, s.client.Sftp())
 }
 
 func (s *SSHRepositories) RepositoryPath() string {
@@ -91,7 +82,7 @@ func NewSSHRepositories(address string) (*SSHRepositories, error) {
 	}
 
 	return &SSHRepositories{
-		client:         client,
+		client: client,
 		repositoryPath: u.Path,
 	}, nil
 }

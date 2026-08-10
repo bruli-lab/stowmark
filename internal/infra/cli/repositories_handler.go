@@ -1,15 +1,10 @@
 package cli
 
-import (
-	"github.com/bruli-lab/stowmark/internal/domain/repository"
-	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
-)
+import "github.com/bruli-lab/stowmark/internal/domain/repository"
 
 type Repositories interface {
 	FolderRepository() repository.FolderRepository
 	RepositoryPath() string
-	ObjectRepository() (snapshot.ObjectRepository, error)
-	ManifestRepository() (snapshot.ManifestRepository, error)
 }
 
 func NewRepositoriesHandler(value string) (Repositories, error) {
