@@ -9,9 +9,17 @@ const (
 	XzCompressionType   CompressionType = "xz"
 	GzipCompressionType CompressionType = "gzip"
 
-	DefaultLevel     int = 3
+	DefaultZstdLevel int = 3
 	MinimumZstdLevel int = 1
 	MaximumZstdLevel int = 22
+
+	DefaultGzipLevel int = 6
+	MinimumGzipLevel int = 1
+	MaximumGzipLevel int = 9
+
+	DefaultLz4Level int = 0
+	MinimumLz4Level int = 0
+	MaximumLz4Level int = 9
 )
 
 var (
@@ -25,6 +33,8 @@ var (
 
 	ErrInvalidCompressionType = errors.New("invalid compression type")
 	ErrInvalidZstdLevel       = errors.New("zstd compression level must be between 1 and 22")
+	ErrInvalidGzipLevel       = errors.New("gzip compression level must be between 1 and 9")
+	ErrInvalidLz4Level        = errors.New("lz4 compression level must be between 0 and 9")
 )
 
 type CompressionType string
@@ -56,12 +66,26 @@ func (c *Compression) Level() *int {
 
 func (c *Compression) validate() error {
 	switch c.compType {
-	case ZstdCompressionType, GzipCompressionType, Lz4CompressionType:
+	case ZstdCompressionType:
 		if c.level == nil {
-			c.level = new(DefaultLevel)
+			c.level = new(DefaultZstdLevel)
 		}
 		if *c.level < MinimumZstdLevel || *c.level > MaximumZstdLevel {
 			return ErrInvalidZstdLevel
+		}
+	case GzipCompressionType:
+		if c.level == nil {
+			c.level = new(DefaultGzipLevel)
+		}
+		if *c.level < MinimumGzipLevel || *c.level > MaximumGzipLevel {
+			return ErrInvalidGzipLevel
+		}
+	case Lz4CompressionType:
+		if c.level == nil {
+			c.level = new(DefaultLz4Level)
+		}
+		if *c.level < MinimumLz4Level || *c.level > MaximumLz4Level {
+			return ErrInvalidLz4Level
 		}
 	case NoneCompressionType, XzCompressionType:
 		c.level = nil
