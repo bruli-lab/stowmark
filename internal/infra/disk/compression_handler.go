@@ -38,5 +38,6 @@ func newCompressionHandlersFactory() *compressionHandlersFactory {
 	return &compressionHandlersFactory{handlers: map[repository.CompressionType]compressionHandler{
 		repository.NoneCompressionType: noneHandler{},
 		repository.ZstdCompressionType: zstdHandler{},
+		repository.GzipCompressionType: GzipHandler{},
 	}}
 }

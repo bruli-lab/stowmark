@@ -85,9 +85,24 @@ func TestParseCompressionType(t *testing.T) {
 			expectedErr: repository.ErrInvalidCompressionType,
 		},
 		{
-			name:             "with a valid compression type, then it returns a valid compression type",
+			name:             "with a zstd compression type, then it returns a valid compression type",
 			args:             args{s: repository.ZstdCompressionType.String()},
 			expectedCompType: new(repository.ZstdCompressionType),
+		},
+		{
+			name:             "with a gzip compression type, then it returns a valid compression type",
+			args:             args{s: repository.GzipCompressionType.String()},
+			expectedCompType: new(repository.GzipCompressionType),
+		},
+		{
+			name:             "with a lz4 compression type, then it returns a valid compression type",
+			args:             args{s: repository.Lz4CompressionType.String()},
+			expectedCompType: new(repository.Lz4CompressionType),
+		},
+		{
+			name:             "with a xz compression type, then it returns a valid compression type",
+			args:             args{s: repository.XzCompressionType.String()},
+			expectedCompType: new(repository.XzCompressionType),
 		},
 	}
 	for _, tt := range tests {

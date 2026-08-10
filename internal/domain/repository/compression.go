@@ -5,6 +5,9 @@ import "errors"
 const (
 	NoneCompressionType CompressionType = "none"
 	ZstdCompressionType CompressionType = "zstd"
+	Lz4CompressionType  CompressionType = "lz4"
+	XzCompressionType   CompressionType = "xz"
+	GzipCompressionType CompressionType = "gzip"
 
 	DefaultZstdLevel int = 3
 	MinimumZstdLevel int = 1
@@ -15,6 +18,9 @@ var (
 	compressionTypes = map[string]CompressionType{
 		"none": NoneCompressionType,
 		"zstd": ZstdCompressionType,
+		"lz4":  Lz4CompressionType,
+		"xz":   XzCompressionType,
+		"gzip": GzipCompressionType,
 	}
 
 	ErrInvalidCompressionType = errors.New("invalid compression type")
