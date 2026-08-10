@@ -42,7 +42,7 @@ func TestNewCompression(t *testing.T) {
 				compType: repository.ZstdCompressionType,
 			},
 			expectedCompType: repository.ZstdCompressionType,
-			expectedLevel:    new(repository.DefaultLevel),
+			expectedLevel:    new(repository.DefaultZstdLevel),
 		},
 		{
 			name: "with a gzip compression type and nil level, then it returns a default level",
@@ -50,7 +50,33 @@ func TestNewCompression(t *testing.T) {
 				compType: repository.GzipCompressionType,
 			},
 			expectedCompType: repository.GzipCompressionType,
-			expectedLevel:    new(repository.DefaultLevel),
+			expectedLevel:    new(repository.DefaultGzipLevel),
+		},
+		{
+			name: "with a gzip compression type and invalid level, then it returns a default level",
+			args: args{
+				compType: repository.GzipCompressionType,
+				level:    new(200),
+			},
+			expectedCompType: repository.GzipCompressionType,
+			expectedErr:      repository.ErrInvalidGzipLevel,
+		},
+		{
+			name: "with a lz4 compression type and nil level, then it returns a default level",
+			args: args{
+				compType: repository.Lz4CompressionType,
+			},
+			expectedCompType: repository.Lz4CompressionType,
+			expectedLevel:    new(repository.DefaultLz4Level),
+		},
+		{
+			name: "with a lz4 compression type and invalid level, then it returns a default level",
+			args: args{
+				compType: repository.Lz4CompressionType,
+				level:    new(200),
+			},
+			expectedCompType: repository.Lz4CompressionType,
+			expectedErr:      repository.ErrInvalidLz4Level,
 		},
 		{
 			name: "with a zstd compression type and invalid level, then it returns a invalid zstd level error",
