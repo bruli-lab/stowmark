@@ -3,16 +3,21 @@ version: '3'
 vars:
   GOLANGCI_LINT_VERSION: 'v2.12.2'
 
+includes:
+    ssh:
+        taskfile: ./taskfiles/ssh/Taskfile.yaml
+        dir: .
+
 silent: false
 
 tasks:
   default:
-    desc: Mostra l'ajuda
+    desc: Show help
     cmds:
       - task --list
 
   fmt:
-    desc: Format Go amb gofumpt
+    desc: Formating Go with gofumpt
     cmds:
       - |
         set -euo pipefail
@@ -28,7 +33,7 @@ tasks:
         go fix -v ./...
 
   security:
-    desc: Revisar vulnerabilitats amb govulncheck
+    desc: Check vulnerabilities
     cmds:
       - |
         set -euo pipefail

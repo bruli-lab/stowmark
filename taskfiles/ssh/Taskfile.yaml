@@ -1,0 +1,53 @@
+version: '3'
+
+vars:
+  COMPOSE_FILE: docker/compose.yaml
+  SSH_SERVICE: ssh-server
+  SSH_KEYS_DIR: docker/ssh-test/keys
+  SSH_PRIVATE_KEY: '{{.SSH_KEYS_DIR}}/stowmark'
+
+tasks:
+  keys:
+    desc: Create SSH keys for testing
+    cmds:
+      - mkdir -p "{{.SSH_KEYS_DIR}}"
+      - |
+        ssh-keygen \
+          -t ed25519 \
+          -f "{{.SSH_PRIVATE_KEY}}" \
+          -N "" \
+          -C "stowmark-test"
+      - cp "{{.SSH_PRIVATE_KEY}}.pub" "{{.SSH_KEYS_DIR}}/authorized_keys"
+    status:
+      - test -f "{{.SSH_PRIVATE_KEY}}"
+      - test -f "{{.SSH_PRIVATE_KEY}}.pub"
+      - test -f "{{.SSH_KEYS_DIR}}/authorized_keys"
+
+  up:
+    desc: Start only the SSH server
+    deps:
+      - keys
+    cmds:
+      - docker compose -f "{{.COMPOSE_FILE}}" up -d "{{.SSH_SERVICE}}"
+
+  down:
+    desc: Stop and remove only the SSH server
+    cmds:
+      - docker compose -f "{{.COMPOSE_FILE}}" rm -s -f "{{.SSH_SERVICE}}"
+
+  stop:
+    desc: Stop the SSH server without removing it
+    cmds:
+      - docker compose -f "{{.COMPOSE_FILE}}" stop "{{.SSH_SERVICE}}"
+
+  logs:
+    desc: Show the SSH server logs
+    cmds:
+      - docker compose -f "{{.COMPOSE_FILE}}" logs -f "{{.SSH_SERVICE}}"
+
+  restart:
+    desc: Restart the SSH server
+    deps:
+      - keys
+    cmds:
+      - docker compose -f "{{.COMPOSE_FILE}}" restart "{{.SSH_SERVICE}}"
