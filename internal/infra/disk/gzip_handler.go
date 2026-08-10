@@ -15,10 +15,10 @@ func (g GzipHandler) Encode(destination io.Writer, level *int) (*WriterCloser, e
 		return nil, fmt.Errorf("create gzip writer: %w", err)
 	}
 
-	writer.Header.ModTime = time.Time{}
-	writer.Header.Name = ""
-	writer.Header.Comment = ""
-	writer.Header.OS = 255
+	writer.ModTime = time.Time{}
+	writer.Name = ""
+	writer.Comment = ""
+	writer.OS = 255
 	return &WriterCloser{
 		Writer: writer,
 		Closer: writer.Close,
