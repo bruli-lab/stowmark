@@ -6,7 +6,6 @@ import (
 	"io"
 	"text/tabwriter"
 
-	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/disk"
 	"github.com/spf13/cobra"
@@ -45,17 +44,13 @@ func newSnapshotRestoreCommand() *cobra.Command {
 				return err
 			}
 
-			confSvc := repository.NewGetConfig(disk.NewFolderRepositoryRepository())
-
 			svc := snapshot.NewRestore(
 				manifestRepo,
-				confSvc,
 				objectRepo,
 			)
 
 			result, err := svc.Restore(
 				cmd.Context(),
-				repositoryPath,
 				snapshotID,
 			)
 			if err != nil {

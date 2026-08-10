@@ -21,10 +21,11 @@ type file struct {
 }
 
 type manifest struct {
-	ID        string    `json:"id"`
-	Files     []file    `json:"files"`
-	CreatedAt time.Time `json:"created_at"`
-	Source    string    `json:"source"`
+	ID          string      `json:"id"`
+	Files       []file      `json:"files"`
+	CreatedAt   time.Time   `json:"created_at"`
+	Source      string      `json:"source"`
+	Compression compression `json:"compression"`
 }
 
 type ManifestRepository struct {
@@ -126,11 +127,20 @@ func (r ManifestRepository) buildManifest(data []byte, manifestPath string) (*sn
 		file.Hydrate(modelFile.Path, modelFile.Hash, modelFile.Size)
 		snapshotFiles[i] = file
 	}
+	compType, err := repository.ParseCompressionType(model.Compression.Type)
+	if err != nil {
+		return nil, err
+	}
+	comp, err := repository.NewCompression(*compType, model.Compression.Level)
+	if err != nil {
+		return nil, err
+	}
 	man := snapshot.NewManifest(
 		model.ID,
 		snapshotFiles,
 		model.CreatedAt,
 		model.Source,
+		comp,
 	)
 	return man, nil
 }
@@ -150,8 +160,12 @@ func (r ManifestRepository) Save(ctx context.Context, m *snapshot.Manifest) erro
 	man := manifest{
 		ID:        m.Id(),
 		Files:     files,
-		CreatedAt: timeFormat(m.CreatedAt()),
+		CreatedAt: m.CreatedAt().In(time.Local),
 		Source:    m.Source(),
+		Compression: compression{
+			Type:  m.Compression().CompType().String(),
+			Level: m.Compression().Level(),
+		},
 	}
 	data, err := json.MarshalIndent(man, "", " ")
 	if err != nil {
@@ -176,9 +190,4 @@ func absolutePath(repositoryPath string) (string, error) {
 		return "", fmt.Errorf("resolve absolute path: %w", err)
 	}
 	return absolutePath, nil
-}
-
-func timeFormat(t time.Time) time.Time {
-	location, _ := time.LoadLocation("Europe/Madrid")
-	return t.In(location)
 }

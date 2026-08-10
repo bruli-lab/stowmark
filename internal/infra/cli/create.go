@@ -61,7 +61,7 @@ func newSnapshotCreateCommand() *cobra.Command {
 		&repositoryPath,
 		"repo",
 		"",
-		"path to the Stonekeep repository",
+		"path to the Stowmark repository",
 	)
 
 	return cmd

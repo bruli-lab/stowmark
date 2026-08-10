@@ -14,13 +14,18 @@ func (i Init) Do(ctx context.Context, r *Repository) error {
 	if err != nil {
 		return err
 	}
-	if ex {
-		return NewInitError("repository already exists")
-	}
 	if err := i.repo.CreateFolder(ctx, r.Path()); err != nil {
 		return err
 	}
-	if err := i.repo.CreateConfig(ctx, r.Path(), r.Config()); err != nil {
+	conf := r.Config()
+	if ex {
+		previous, err := i.repo.GetConfig(ctx, r.path)
+		if err != nil {
+			return err
+		}
+		conf = NewConfig(previous.Id(), r.config.compression)
+	}
+	if err := i.repo.CreateConfig(ctx, r.Path(), conf); err != nil {
 		return err
 	}
 	if err := i.repo.CreateFolder(ctx, r.ObjectsFolder()); err != nil {

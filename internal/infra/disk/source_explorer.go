@@ -10,15 +10,19 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 )
 
-type SourceExplorer struct{}
+type SourceExplorer struct {
+	handlersFactory *compressionHandlersFactory
+}
 
-func (s SourceExplorer) CalculateHash(ctx context.Context, filePath string) (string, error) {
+func (s SourceExplorer) CalculateHash(ctx context.Context, filePath string, comp *repository.Compression) (string, error) {
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
+
 	fi, err := os.Open(filePath)
 	if err != nil {
 		return "", fmt.Errorf("open file %q: %w", filePath, err)
@@ -29,8 +33,30 @@ func (s SourceExplorer) CalculateHash(ctx context.Context, filePath string) (str
 
 	hasher := sha256.New()
 
-	if _, err := io.Copy(hasher, fi); err != nil {
-		return "", fmt.Errorf("calculate hash for %q: %w", filePath, err)
+	handler, err := s.handlersFactory.getHandler(comp.CompType())
+	if err != nil {
+		return "", err
+	}
+	encoder, err := handler.Encode(hasher, comp.Level())
+	if err != nil {
+		return "", err
+	}
+	if _, err := io.Copy(encoder.Writer, contextReader{
+		ctx:    ctx,
+		reader: fi,
+	}); err != nil {
+		if encoder.Closer != nil {
+			_ = encoder.Closer()
+			return "", fmt.Errorf("compress %q for hashing: %w", filePath, err)
+		}
+	}
+
+	if err := encoder.Closer(); err != nil {
+		return "", fmt.Errorf(
+			"finish compression for hashing %q: %w",
+			filePath,
+			err,
+		)
 	}
 
 	return hex.EncodeToString(hasher.Sum(nil)), nil
@@ -96,5 +122,5 @@ func (s SourceExplorer) readFiles(root string) ([]snapshot.File, error) {
 }
 
 func NewSourceRepository() *SourceExplorer {
-	return &SourceExplorer{}
+	return &SourceExplorer{handlersFactory: newCompressionHandlersFactory()}
 }

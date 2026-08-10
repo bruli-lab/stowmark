@@ -19,7 +19,7 @@ var _ SourceRepository = &SourceRepositoryMock{}
 //
 //		// make and configure a mocked SourceRepository
 //		mockedSourceRepository := &SourceRepositoryMock{
-//			CalculateHashFunc: func(ctx context.Context, filePath string) (string, error) {
+//			CalculateHashFunc: func(ctx context.Context, filePath string, comp *repository.Compression) (string, error) {
 //				panic("mock out the CalculateHash method")
 //			},
 //			ExploreFunc: func(ctx context.Context, sourcePath string) (*Source, error) {
@@ -33,7 +33,7 @@ var _ SourceRepository = &SourceRepositoryMock{}
 //	}
 type SourceRepositoryMock struct {
 	// CalculateHashFunc mocks the CalculateHash method.
-	CalculateHashFunc func(ctx context.Context, filePath string) (string, error)
+	CalculateHashFunc func(ctx context.Context, filePath string, comp *repository.Compression) (string, error)
 
 	// ExploreFunc mocks the Explore method.
 	ExploreFunc func(ctx context.Context, sourcePath string) (*Source, error)
@@ -46,6 +46,8 @@ type SourceRepositoryMock struct {
 			Ctx context.Context
 			// FilePath is the filePath argument value.
 			FilePath string
+			// Comp is the comp argument value.
+			Comp *repository.Compression
 		}
 		// Explore holds details about calls to the Explore method.
 		Explore []struct {
@@ -60,21 +62,23 @@ type SourceRepositoryMock struct {
 }
 
 // CalculateHash calls CalculateHashFunc.
-func (mock *SourceRepositoryMock) CalculateHash(ctx context.Context, filePath string) (string, error) {
+func (mock *SourceRepositoryMock) CalculateHash(ctx context.Context, filePath string, comp *repository.Compression) (string, error) {
 	if mock.CalculateHashFunc == nil {
 		panic("SourceRepositoryMock.CalculateHashFunc: method is nil but SourceRepository.CalculateHash was just called")
 	}
 	callInfo := struct {
 		Ctx      context.Context
 		FilePath string
+		Comp     *repository.Compression
 	}{
 		Ctx:      ctx,
 		FilePath: filePath,
+		Comp:     comp,
 	}
 	mock.lockCalculateHash.Lock()
 	mock.calls.CalculateHash = append(mock.calls.CalculateHash, callInfo)
 	mock.lockCalculateHash.Unlock()
-	return mock.CalculateHashFunc(ctx, filePath)
+	return mock.CalculateHashFunc(ctx, filePath, comp)
 }
 
 // CalculateHashCalls gets all the calls that were made to CalculateHash.
@@ -84,10 +88,12 @@ func (mock *SourceRepositoryMock) CalculateHash(ctx context.Context, filePath st
 func (mock *SourceRepositoryMock) CalculateHashCalls() []struct {
 	Ctx      context.Context
 	FilePath string
+	Comp     *repository.Compression
 } {
 	var calls []struct {
 		Ctx      context.Context
 		FilePath string
+		Comp     *repository.Compression
 	}
 	mock.lockCalculateHash.RLock()
 	calls = mock.calls.CalculateHash
@@ -316,7 +322,7 @@ var _ ObjectRepository = &ObjectRepositoryMock{}
 //			RestoreObjectFunc: func(ctx context.Context, comp *repository.Compression, obj *File) error {
 //				panic("mock out the RestoreObject method")
 //			},
-//			SaveFunc: func(ctx context.Context, obj *File) error {
+//			SaveFunc: func(ctx context.Context, obj *File, comp *repository.Compression) error {
 //				panic("mock out the Save method")
 //			},
 //		}
@@ -336,7 +342,7 @@ type ObjectRepositoryMock struct {
 	RestoreObjectFunc func(ctx context.Context, comp *repository.Compression, obj *File) error
 
 	// SaveFunc mocks the Save method.
-	SaveFunc func(ctx context.Context, obj *File) error
+	SaveFunc func(ctx context.Context, obj *File, comp *repository.Compression) error
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -371,6 +377,8 @@ type ObjectRepositoryMock struct {
 			Ctx context.Context
 			// Obj is the obj argument value.
 			Obj *File
+			// Comp is the comp argument value.
+			Comp *repository.Compression
 		}
 	}
 	lockAlreadyExists sync.RWMutex
@@ -496,21 +504,23 @@ func (mock *ObjectRepositoryMock) RestoreObjectCalls() []struct {
 }
 
 // Save calls SaveFunc.
-func (mock *ObjectRepositoryMock) Save(ctx context.Context, obj *File) error {
+func (mock *ObjectRepositoryMock) Save(ctx context.Context, obj *File, comp *repository.Compression) error {
 	if mock.SaveFunc == nil {
 		panic("ObjectRepositoryMock.SaveFunc: method is nil but ObjectRepository.Save was just called")
 	}
 	callInfo := struct {
-		Ctx context.Context
-		Obj *File
+		Ctx  context.Context
+		Obj  *File
+		Comp *repository.Compression
 	}{
-		Ctx: ctx,
-		Obj: obj,
+		Ctx:  ctx,
+		Obj:  obj,
+		Comp: comp,
 	}
 	mock.lockSave.Lock()
 	mock.calls.Save = append(mock.calls.Save, callInfo)
 	mock.lockSave.Unlock()
-	return mock.SaveFunc(ctx, obj)
+	return mock.SaveFunc(ctx, obj, comp)
 }
 
 // SaveCalls gets all the calls that were made to Save.
@@ -518,12 +528,14 @@ func (mock *ObjectRepositoryMock) Save(ctx context.Context, obj *File) error {
 //
 //	len(mockedObjectRepository.SaveCalls())
 func (mock *ObjectRepositoryMock) SaveCalls() []struct {
-	Ctx context.Context
-	Obj *File
+	Ctx  context.Context
+	Obj  *File
+	Comp *repository.Compression
 } {
 	var calls []struct {
-		Ctx context.Context
-		Obj *File
+		Ctx  context.Context
+		Obj  *File
+		Comp *repository.Compression
 	}
 	mock.lockSave.RLock()
 	calls = mock.calls.Save

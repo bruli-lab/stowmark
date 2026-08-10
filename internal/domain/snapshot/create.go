@@ -15,7 +15,7 @@ type Create struct {
 }
 
 func (c Create) Do(ctx context.Context, repoPath, sourcePath string) (*CreateResult, error) {
-	_, err := c.getConfigSvc.Get(ctx, repoPath)
+	conf, err := c.getConfigSvc.Get(ctx, repoPath)
 	if err != nil {
 		return nil, err
 	}
@@ -27,30 +27,30 @@ func (c Create) Do(ctx context.Context, repoPath, sourcePath string) (*CreateRes
 	for i := range source.Files() {
 		file := source.Files()[i]
 		size += file.Size()
-		hash, err := c.sourceRepo.CalculateHash(ctx, file.Path())
+		hash, err := c.sourceRepo.CalculateHash(ctx, file.Path(), conf.Compression())
 		if err != nil {
 			return nil, err
 		}
 		file.AddHash(hash)
-		if err := c.saveObject(ctx, file); err != nil {
+		if err := c.saveObject(ctx, file, conf.Compression()); err != nil {
 			return nil, err
 		}
 		source.Files()[i] = file
 	}
-	man := NewManifest(newID(), source.Files(), time.Now().UTC(), source.AbsolutePath())
+	man := NewManifest(newID(), source.Files(), time.Now().UTC(), source.AbsolutePath(), conf.Compression())
 	if err := c.manifestRepo.Save(ctx, man); err != nil {
 		return nil, err
 	}
 	return NewCreateResult(man.Id(), len(man.Files()), size), nil
 }
 
-func (c Create) saveObject(ctx context.Context, file File) error {
+func (c Create) saveObject(ctx context.Context, file File, comp *repository.Compression) error {
 	exist, err := c.objectRepo.AlreadyExists(ctx, &file)
 	if err != nil {
 		return err
 	}
 	if !exist {
-		if err := c.objectRepo.Save(ctx, &file); err != nil {
+		if err := c.objectRepo.Save(ctx, &file, comp); err != nil {
 			return err
 		}
 	}

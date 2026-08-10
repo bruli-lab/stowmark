@@ -30,10 +30,11 @@ the source path, creation time and references to its files.
 
 - Content-addressed object storage using SHA-256.
 - Deduplication of unchanged files between snapshots.
+- Optional `gzip`, `zstd`, `lz4` and `xz` compression.
 - Separate JSON manifest for every snapshot.
 - Snapshot listing ordered from newest to oldest.
 - Inspection of a snapshot and all its files.
-- Integrity verification using file hashes and sizes.
+- Integrity verification using SHA-256 hashes.
 - Local repositories with no external service required.
 - Linux builds for `amd64` and `arm64`.
 - Debian packages generated with GoReleaser.
@@ -77,6 +78,14 @@ Create a new Stowmark repository:
 
 ```bash
 stowmark init /srv/backups/stowmark
+```
+
+Create a repository using compression:
+
+```bash
+stowmark init /srv/backups/stowmark \
+  --compression zstd \
+  --level 3
 ```
 
 Create a snapshot of a directory:
@@ -136,6 +145,30 @@ stowmark snapshot --help
 stowmark snapshot create --help
 ```
 
+## Compression
+
+Compression is selected when the repository is initialized. Stowmark currently supports:
+
+| Type   | Description                                      | Compression level |
+|--------|--------------------------------------------------|-------------------|
+| `none` | Store objects without compression.               | Not used          |
+| `gzip` | Widely supported general-purpose compression.    | Supported         |
+| `zstd` | Fast compression with a good compression ratio.  | Supported         |
+| `lz4`  | Very fast compression and decompression.         | Supported         |
+| `xz`   | Slower compression with a high compression ratio. | Not used          |
+
+For example:
+
+```bash
+stowmark init /srv/backups/stowmark-gzip --compression gzip --level 6
+stowmark init /srv/backups/stowmark-zstd --compression zstd --level 3
+stowmark init /srv/backups/stowmark-lz4 --compression lz4 --level 0
+stowmark init /srv/backups/stowmark-xz --compression xz
+```
+
+The selected compression is applied to every object in the snapshot and recorded in its manifest. Compression is
+transparent during restoration: Stowmark decodes each stored object before writing the original file.
+
 ## Repository format
 
 A repository currently has the following structure:
@@ -154,14 +187,15 @@ repository/
 
 ### Objects
 
-Objects are stored using their SHA-256 hash. The first two characters are used as the directory name and the remaining
-characters as the file name:
+Objects are stored using the SHA-256 hash of their encoded representation. The first two characters are used as the
+directory name and the remaining characters as the file name:
 
 ```text
 objects/<first-two-hash-characters>/<remaining-hash-characters>
 ```
 
-When two snapshots contain the same file content, they both reference the same stored object.
+When two snapshots contain the same file content encoded with the same compression settings, they both reference the
+same stored object. The same original content encoded differently produces a different object and hash.
 
 ### Snapshot manifests
 
@@ -170,6 +204,7 @@ Each snapshot is stored as a JSON manifest containing:
 - A unique snapshot ID.
 - The snapshot creation time.
 - The original source path.
+- The compression type and level used by the snapshot.
 - The path, SHA-256 hash and size of every file.
 
 The manifest references objects but does not duplicate their contents.
@@ -180,7 +215,6 @@ The `snapshot verify` command reads each object referenced by the manifest and c
 
 1. The object exists.
 2. Its calculated SHA-256 hash matches the manifest.
-3. Its size matches the manifest.
 
 The command exits with an error when any referenced file fails verification, making it suitable for scripts and
 scheduled checks.
@@ -229,8 +263,6 @@ See all published versions on the
 
 Planned areas of development include:
 
-- Snapshot restoration.
-- Additional compression formats.
 - Remote storage drivers.
 - Repository maintenance and garbage collection.
 - More installation formats and platforms.

@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/bruli-lab/go-core/fixtures"
+	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/google/uuid"
 )
@@ -35,16 +36,17 @@ func (b FileBuilder) Build() snapshot.File {
 }
 
 type ManifestBuilder struct {
-	ID        *string
-	Source    *string
-	CreatedAt *time.Time
-	Files     []snapshot.File
+	ID          *string
+	Source      *string
+	CreatedAt   *time.Time
+	Files       []snapshot.File
+	Compression *repository.Compression
 }
 
 func (b ManifestBuilder) Build() snapshot.Manifest {
 	id := fixtures.SetData(uuid.NewString(), b.ID)
 	created := fixtures.SetData(time.Now(), b.CreatedAt)
 	source := fixtures.SetData("source", b.Source)
-	man := snapshot.NewManifest(id, b.Files, created, source)
+	man := snapshot.NewManifest(id, b.Files, created, source, b.Compression)
 	return *man
 }

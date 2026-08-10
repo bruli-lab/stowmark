@@ -5,8 +5,11 @@ go 1.26.5
 require (
 	github.com/bruli-lab/go-core v1.7.0
 	github.com/google/uuid v1.6.0
+	github.com/klauspost/compress v1.19.1
+	github.com/pierrec/lz4/v4 v4.1.28
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
+	github.com/ulikunitz/xz v0.5.16
 )
 
 require (

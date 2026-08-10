@@ -61,13 +61,8 @@ func newSnapshotListCommand() *cobra.Command {
 				return err
 			}
 
-			location, err := time.LoadLocation("Europe/Madrid")
-			if err != nil {
-				return err
-			}
-
 			for _, item := range snapshots {
-				created := item.CreatedAt().In(location)
+				created := item.CreatedAt().In(time.Local)
 				_, err = fmt.Fprintf(
 					writer,
 					"%s\t%s\t%d\t%s\t%s\n",

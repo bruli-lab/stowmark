@@ -56,13 +56,6 @@ func TestVerifier_Verify(t *testing.T) {
 			file:              new(fixtures.FileBuilder{}.Build()),
 		},
 		{
-			name:              "and read object returns with different size, then it returns a failed result",
-			manifest:          &manifest,
-			expectedSuccess:   false,
-			expectedFailedLen: 1,
-			file:              new(fixtures.FileBuilder{Hash: new(hash), Size: new(int64(200))}.Build()),
-		},
-		{
 			name:            "and read object returns same file data, then it returns a success result",
 			manifest:        &manifest,
 			expectedSuccess: true,

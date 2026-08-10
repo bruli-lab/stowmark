@@ -21,20 +21,16 @@ func TestInit_Do(t *testing.T) {
 		args args
 		expectedErr, existErr,
 		createRepoErr, createConfigErr,
-		createObjectErr, createSnapshotErr error
+		createObjectErr, createSnapshotErr,
+		getConfigErr error
 		exists bool
+		config *repository.Config
 	}{
 		{
 			name:        "and exists returns an error, then it returns same error",
 			existErr:    errTest,
 			args:        args{r: &re},
 			expectedErr: errTest,
-		},
-		{
-			name:        "and exists returns true, then it returns init error",
-			exists:      true,
-			args:        args{r: &re},
-			expectedErr: repository.InitError{},
 		},
 		{
 			name:          "and create repository folder returns an error, then it returns same error",
@@ -44,23 +40,34 @@ func TestInit_Do(t *testing.T) {
 			expectedErr:   errTest,
 		},
 		{
+			name:         "and get config returns an error, then it returns same error",
+			exists:       true,
+			args:         args{r: &re},
+			config:       &repository.Config{},
+			getConfigErr: errTest,
+			expectedErr:  errTest,
+		},
+		{
 			name:            "and create config returns an error, then it returns same error",
-			exists:          false,
+			exists:          true,
 			args:            args{r: &re},
+			config:          &repository.Config{},
 			createConfigErr: errTest,
 			expectedErr:     errTest,
 		},
 		{
 			name:            "and create objects folder returns an error, then it returns same error",
-			exists:          false,
+			exists:          true,
 			args:            args{r: &re},
+			config:          &repository.Config{},
 			createObjectErr: errTest,
 			expectedErr:     errTest,
 		},
 		{
 			name:              "and create snapshots folder returns an error, then it returns same error",
-			exists:            false,
+			exists:            true,
 			args:              args{r: &re},
+			config:            &repository.Config{},
 			createSnapshotErr: errTest,
 			expectedErr:       errTest,
 		},
@@ -80,6 +87,9 @@ func TestInit_Do(t *testing.T) {
 				},
 				CreateConfigFunc: func(_ context.Context, _ string, _ *repository.Config) error {
 					return tt.createConfigErr
+				},
+				GetConfigFunc: func(_ context.Context, _ string) (*repository.Config, error) {
+					return tt.config, tt.getConfigErr
 				},
 			}
 			repo.CreateFolderFunc = func(_ context.Context, _ string) error {

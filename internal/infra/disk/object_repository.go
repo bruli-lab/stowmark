@@ -15,12 +15,21 @@ import (
 )
 
 type ObjectRepository struct {
-	repositoryPath string
+	repositoryPath  string
+	handlersFactory *compressionHandlersFactory
 }
 
 func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Compression, obj *snapshot.File) error {
 	if err := ctx.Err(); err != nil {
 		return err
+	}
+
+	if comp == nil {
+		return errors.New("compression configuration is required")
+	}
+
+	if obj == nil {
+		return errors.New("snapshot object is required")
 	}
 
 	hash := obj.Hash()
@@ -43,11 +52,21 @@ func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Co
 		_ = source.Close()
 	}()
 
-	switch comp.CompType() {
-	case repository.NoneCompressionType:
-	default:
-		return fmt.Errorf("unsupported compression type %q", comp.CompType())
+	handler, err := o.handlersFactory.getHandler(comp.CompType())
+	if err != nil {
+		return err
 	}
+
+	decoded, err := handler.Decode(source)
+	if err != nil {
+		return fmt.Errorf(
+			"decode object %q using %q: %w",
+			sourcePath,
+			comp.CompType(),
+			err,
+		)
+	}
+	defer decoded.Closer()
 
 	destinationPath := obj.Path()
 
@@ -65,17 +84,46 @@ func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Co
 		0o644,
 	)
 	if err != nil {
-		return fmt.Errorf("create restored file %q: %w", destinationPath, err)
+		return fmt.Errorf(
+			"create restored file %q: %w",
+			destinationPath,
+			err,
+		)
 	}
 
-	if _, err := io.Copy(destination, source); err != nil {
-		_ = destination.Close()
-		return fmt.Errorf("restore file %q: %w", destinationPath, err)
+	restoreCompleted := false
+
+	defer func() {
+		if !restoreCompleted {
+			_ = destination.Close()
+			_ = os.Remove(destinationPath)
+		}
+	}()
+
+	if _, err := io.Copy(
+		destination,
+		contextReader{
+			ctx:    ctx,
+			reader: decoded.Reader,
+		},
+	); err != nil {
+		return fmt.Errorf(
+			"restore object %q to %q: %w",
+			sourcePath,
+			destinationPath,
+			err,
+		)
 	}
 
 	if err := destination.Close(); err != nil {
-		return fmt.Errorf("close restored file %q: %w", destinationPath, err)
+		return fmt.Errorf(
+			"close restored file %q: %w",
+			destinationPath,
+			err,
+		)
 	}
+
+	restoreCompleted = true
 
 	return nil
 }
@@ -83,6 +131,10 @@ func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Co
 func (o ObjectRepository) ReadObject(ctx context.Context, originalPath, hash string) (*snapshot.File, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
+	}
+
+	if len(hash) < 3 {
+		return nil, fmt.Errorf("invalid object hash %q", hash)
 	}
 
 	objectPath := filepath.Join(
@@ -94,16 +146,15 @@ func (o ObjectRepository) ReadObject(ctx context.Context, originalPath, hash str
 
 	objectFile, err := os.Open(objectPath)
 	if err != nil {
-		switch {
-		case errors.Is(err, os.ErrNotExist):
+		if errors.Is(err, os.ErrNotExist) {
 			return nil, snapshot.NewNotFoundError(originalPath)
-		default:
-			return nil, fmt.Errorf(
-				"open object %q: %w",
-				objectPath,
-				err,
-			)
 		}
+
+		return nil, fmt.Errorf(
+			"open object %q: %w",
+			objectPath,
+			err,
+		)
 	}
 	defer func() {
 		_ = objectFile.Close()
@@ -111,7 +162,7 @@ func (o ObjectRepository) ReadObject(ctx context.Context, originalPath, hash str
 
 	hasher := sha256.New()
 
-	size, err := io.Copy(
+	storedSize, err := io.Copy(
 		hasher,
 		contextReader{
 			ctx:    ctx,
@@ -126,11 +177,14 @@ func (o ObjectRepository) ReadObject(ctx context.Context, originalPath, hash str
 		)
 	}
 
-	calculatedHash := hex.EncodeToString(
-		hasher.Sum(nil),
-	)
+	calculatedHash := hex.EncodeToString(hasher.Sum(nil))
+
 	result := snapshot.File{}
-	result.Hydrate(originalPath, calculatedHash, size)
+	result.Hydrate(
+		originalPath,
+		calculatedHash,
+		storedSize,
+	)
 
 	return &result, nil
 }
@@ -151,12 +205,19 @@ func (o ObjectRepository) AlreadyExists(ctx context.Context, obj *snapshot.File)
 	return false, nil
 }
 
-func (o ObjectRepository) Save(ctx context.Context, obj *snapshot.File) error {
+func (o ObjectRepository) Save(ctx context.Context, obj *snapshot.File, comp *repository.Compression) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+
 	hash := obj.Hash()
-	destinationPath := filepath.Join(o.repositoryPath, repository.ObjectsFolder, hash[:2], hash[2:])
+	destinationPath := filepath.Join(
+		o.repositoryPath,
+		repository.ObjectsFolder,
+		hash[:2],
+		hash[2:],
+	)
+
 	if err := os.MkdirAll(filepath.Dir(destinationPath), 0o755); err != nil {
 		return fmt.Errorf(
 			"create object directory %q: %w",
@@ -164,6 +225,7 @@ func (o ObjectRepository) Save(ctx context.Context, obj *snapshot.File) error {
 			err,
 		)
 	}
+
 	source, err := os.Open(obj.Path())
 	if err != nil {
 		return fmt.Errorf("open source file %q: %w", obj.Path(), err)
@@ -171,6 +233,7 @@ func (o ObjectRepository) Save(ctx context.Context, obj *snapshot.File) error {
 	defer func() {
 		_ = source.Close()
 	}()
+
 	destination, err := os.OpenFile(
 		destinationPath,
 		os.O_WRONLY|os.O_CREATE|os.O_EXCL,
@@ -187,30 +250,39 @@ func (o ObjectRepository) Save(ctx context.Context, obj *snapshot.File) error {
 			err,
 		)
 	}
-	copyCompleted := false
+
+	writeCompleted := false
 	defer func() {
 		_ = destination.Close()
 
-		if !copyCompleted {
+		if !writeCompleted {
 			_ = os.Remove(destinationPath)
 		}
 	}()
-	if _, err := io.Copy(destination, source); err != nil {
-		return fmt.Errorf(
-			"copy %q to %q: %w",
-			obj.Path(),
-			destinationPath,
-			err,
-		)
+
+	encoder, err := o.handlersFactory.getHandler(comp.CompType())
+	if err != nil {
+		return err
 	}
-	if err := destination.Close(); err != nil {
-		return fmt.Errorf(
-			"close destination file %q: %w",
-			destinationPath,
-			err,
-		)
+	writer, err := encoder.Encode(destination, comp.Level())
+	if err != nil {
+		return err
 	}
-	copyCompleted = true
+	if _, err := io.Copy(writer.Writer, source); err != nil {
+		return fmt.Errorf("copy object: %w", err)
+	}
+
+	if writer.Closer != nil {
+		if err := writer.Closer(); err != nil {
+			return fmt.Errorf(
+				"close destination file %q: %w",
+				destinationPath,
+				err,
+			)
+		}
+	}
+
+	writeCompleted = true
 	return nil
 }
 
@@ -219,7 +291,7 @@ func NewObjectRepository(repositoryPath string) (*ObjectRepository, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &ObjectRepository{repositoryPath: absPath}, nil
+	return &ObjectRepository{repositoryPath: absPath, handlersFactory: newCompressionHandlersFactory()}, nil
 }
 
 type contextReader struct {

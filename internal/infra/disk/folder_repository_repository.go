@@ -58,7 +58,11 @@ func (f FolderRepositoryRepository) GetConfig(ctx context.Context, path string) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse compression type: %w", err)
 	}
-	return repository.NewConfig(id, repository.NewCompression(*compType, conf.Compression.Level)), nil
+	comp, err := repository.NewCompression(*compType, conf.Compression.Level)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create compression: %w", err)
+	}
+	return repository.NewConfig(id, comp), nil
 }
 
 func (f FolderRepositoryRepository) Exists(ctx context.Context, path string) (bool, error) {
@@ -90,7 +94,7 @@ func (f FolderRepositoryRepository) CreateConfig(ctx context.Context, path strin
 	co := config{
 		ID:            c.Id().String(),
 		FormatVersion: c.FormatVersion(),
-		CreatedAt:     timeFormat(c.CreatedAt()).Format(time.RFC3339),
+		CreatedAt:     c.CreatedAt().In(time.Local).Format(time.RFC3339),
 		Compression: compression{
 			Type:  c.Compression().CompType().String(),
 			Level: c.Compression().Level(),
