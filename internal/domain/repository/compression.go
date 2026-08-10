@@ -9,7 +9,7 @@ const (
 	XzCompressionType   CompressionType = "xz"
 	GzipCompressionType CompressionType = "gzip"
 
-	DefaultZstdLevel int = 3
+	DefaultLevel     int = 3
 	MinimumZstdLevel int = 1
 	MaximumZstdLevel int = 22
 )
@@ -56,14 +56,14 @@ func (c *Compression) Level() *int {
 
 func (c *Compression) validate() error {
 	switch c.compType {
-	case ZstdCompressionType:
+	case ZstdCompressionType, GzipCompressionType, Lz4CompressionType:
 		if c.level == nil {
-			c.level = new(DefaultZstdLevel)
+			c.level = new(DefaultLevel)
 		}
 		if *c.level < MinimumZstdLevel || *c.level > MaximumZstdLevel {
 			return ErrInvalidZstdLevel
 		}
-	case NoneCompressionType:
+	case NoneCompressionType, XzCompressionType:
 		c.level = nil
 	}
 	return nil

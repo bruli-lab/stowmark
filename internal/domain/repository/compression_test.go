@@ -28,12 +28,29 @@ func TestNewCompression(t *testing.T) {
 			expectedLevel:    nil,
 		},
 		{
+			name: "with a xz compression type and level, then it returns a compression struct with nil level",
+			args: args{
+				compType: repository.NoneCompressionType,
+				level:    new(1),
+			},
+			expectedCompType: repository.NoneCompressionType,
+			expectedLevel:    nil,
+		},
+		{
 			name: "with a zstd compression type and nil level, then it returns a default zstd level",
 			args: args{
 				compType: repository.ZstdCompressionType,
 			},
 			expectedCompType: repository.ZstdCompressionType,
-			expectedLevel:    new(repository.DefaultZstdLevel),
+			expectedLevel:    new(repository.DefaultLevel),
+		},
+		{
+			name: "with a gzip compression type and nil level, then it returns a default level",
+			args: args{
+				compType: repository.GzipCompressionType,
+			},
+			expectedCompType: repository.GzipCompressionType,
+			expectedLevel:    new(repository.DefaultLevel),
 		},
 		{
 			name: "with a zstd compression type and invalid level, then it returns a invalid zstd level error",
