@@ -16,8 +16,6 @@ import (
 
 const configFile = "config.json"
 
-
-
 type FolderRepositoryRepository struct{}
 
 func (f FolderRepositoryRepository) GetConfig(ctx context.Context, path string) (*repository.Config, error) {
