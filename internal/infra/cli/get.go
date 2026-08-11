@@ -27,10 +27,13 @@ func newSnapshotGetCommand() *cobra.Command {
 				return errors.New("--id is required")
 			}
 
-			repohand, err := NewRepositoriesHandler(repositoryPath)
+			repohand, err := NewRepositoriesHandler(cmd.Context(), repositoryPath)
 			if err != nil {
 				return err
 			}
+			defer func() {
+				_ = repohand.Close()
+			}()
 
 			manifestRepo, err := repohand.ManifestRepository()
 			if err != nil {

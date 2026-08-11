@@ -10,6 +10,10 @@ type LocalRepositories struct {
 	repositoryPath string
 }
 
+func (l LocalRepositories) Close() error {
+	return nil
+}
+
 func (l LocalRepositories) ManifestRepository() (snapshot.ManifestRepository, error) {
 	return disk.NewManifestRepository(l.repositoryPath)
 }

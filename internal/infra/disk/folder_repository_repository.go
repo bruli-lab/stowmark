@@ -14,8 +14,6 @@ import (
 	"github.com/google/uuid"
 )
 
-const configFile = "config.json"
-
 type FolderRepositoryRepository struct{}
 
 func (f FolderRepositoryRepository) GetConfig(ctx context.Context, path string) (*repository.Config, error) {
@@ -26,7 +24,7 @@ func (f FolderRepositoryRepository) GetConfig(ctx context.Context, path string) 
 	if err != nil {
 		return nil, fmt.Errorf("resolve absolute path: %w", err)
 	}
-	configPath := filepath.Join(absolutePath, configFile)
+	configPath := filepath.Join(absolutePath, model.ConfigFile)
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		switch {
@@ -98,7 +96,7 @@ func (f FolderRepositoryRepository) CreateConfig(ctx context.Context, path strin
 
 	data = append(data, '\n')
 
-	configPath := filepath.Join(path, configFile)
+	configPath := filepath.Join(path, model.ConfigFile)
 	if err := os.WriteFile(configPath, data, 0o644); err != nil {
 		return fmt.Errorf("write config %q: %w", configPath, err)
 	}

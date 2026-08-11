@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"context"
+
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 )
@@ -10,9 +12,10 @@ type Repositories interface {
 	RepositoryPath() string
 	ObjectRepository() (snapshot.ObjectRepository, error)
 	ManifestRepository() (snapshot.ManifestRepository, error)
+	Close() error
 }
 
-func NewRepositoriesHandler(value string) (Repositories, error) {
+func NewRepositoriesHandler(ctx context.Context, value string) (Repositories, error) {
 	repoType, err := repository.ParseRepositoryType(value)
 	if err != nil {
 		return nil, err
@@ -22,6 +25,8 @@ func NewRepositoriesHandler(value string) (Repositories, error) {
 		return NewLocalRepositories(value), nil
 	case repository.Ssh:
 		return NewSSHRepositories(value)
+	case repository.Smb:
+		return NewSmbRepositories(ctx, value)
 	}
 	return nil, nil
 }

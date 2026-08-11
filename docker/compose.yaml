@@ -50,7 +50,7 @@ services:
       ports:
         - "1445:445"
 
-      tmpfs:
-        - /shares/stowmark:mode=0777
+      volumes:
+          - ./smb-test/data:/shares/stowmark
 
       restart: unless-stopped

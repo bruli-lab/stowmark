@@ -17,8 +17,6 @@ import (
 	"github.com/pkg/sftp"
 )
 
-const configFilename = "config.json"
-
 type FolderRepositoryRepository struct {
 	client *sftp.Client
 }
@@ -89,7 +87,7 @@ func (f FolderRepositoryRepository) CreateConfig(ctx context.Context, repository
 
 	data = append(data, '\n')
 
-	configPath := path.Join(repositoryPath, configFilename)
+	configPath := path.Join(repositoryPath, model.ConfigFile)
 	temporaryPath := configPath + ".tmp"
 
 	if err := f.writeFile(ctx, temporaryPath, data); err != nil {
@@ -115,7 +113,7 @@ func (f FolderRepositoryRepository) GetConfig(ctx context.Context, repositoryPat
 		return nil, err
 	}
 
-	configPath := path.Join(repositoryPath, configFilename)
+	configPath := path.Join(repositoryPath, model.ConfigFile)
 
 	file, err := f.client.Open(configPath)
 	if err != nil {

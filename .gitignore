@@ -33,3 +33,4 @@ go.work.sum
 /backup/
 /documents
 /docker/ssh-test/
+/docker/smb-test/

@@ -1,5 +1,7 @@
 package model
 
+const ConfigFile = "config.json"
+
 type Compression struct {
 	Type  string `json:"type"`
 	Level *int   `json:"level,omitempty"`
