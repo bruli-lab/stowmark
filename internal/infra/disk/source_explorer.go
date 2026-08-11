@@ -12,10 +12,11 @@ import (
 
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
+	"github.com/bruli-lab/stowmark/internal/infra/compression"
 )
 
 type SourceExplorer struct {
-	handlersFactory *compressionHandlersFactory
+	handlersFactory *compression.HandlersFactory
 }
 
 func (s SourceExplorer) CalculateHash(ctx context.Context, filePath string, comp *repository.Compression) (string, error) {
@@ -33,7 +34,7 @@ func (s SourceExplorer) CalculateHash(ctx context.Context, filePath string, comp
 
 	hasher := sha256.New()
 
-	handler, err := s.handlersFactory.getHandler(comp.CompType())
+	handler, err := s.handlersFactory.GetHandler(comp.CompType())
 	if err != nil {
 		return "", err
 	}
@@ -122,5 +123,5 @@ func (s SourceExplorer) readFiles(root string) ([]snapshot.File, error) {
 }
 
 func NewSourceRepository() *SourceExplorer {
-	return &SourceExplorer{handlersFactory: newCompressionHandlersFactory()}
+	return &SourceExplorer{handlersFactory: compression.NewHandlersFactory()}
 }

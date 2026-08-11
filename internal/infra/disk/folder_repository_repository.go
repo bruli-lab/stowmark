@@ -10,21 +10,13 @@ import (
 	"time"
 
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
+	"github.com/bruli-lab/stowmark/internal/infra/model"
 	"github.com/google/uuid"
 )
 
 const configFile = "config.json"
 
-type compression struct {
-	Type  string `json:"type"`
-	Level *int   `json:"level,omitempty"`
-}
-type config struct {
-	ID            string      `json:"id"`
-	FormatVersion int         `json:"format_version"`
-	CreatedAt     string      `json:"created_at"`
-	Compression   compression `json:"compression"`
-}
+
 
 type FolderRepositoryRepository struct{}
 
@@ -46,7 +38,7 @@ func (f FolderRepositoryRepository) GetConfig(ctx context.Context, path string) 
 			return nil, fmt.Errorf("failed to read config: %w", err)
 		}
 	}
-	var conf config
+	var conf model.Config
 	if err := json.Unmarshal(data, &conf); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
@@ -91,11 +83,11 @@ func (f FolderRepositoryRepository) CreateConfig(ctx context.Context, path strin
 		return err
 	}
 
-	co := config{
+	co := model.Config{
 		ID:            c.Id().String(),
 		FormatVersion: c.FormatVersion(),
 		CreatedAt:     c.CreatedAt().In(time.Local).Format(time.RFC3339),
-		Compression: compression{
+		Compression: model.Compression{
 			Type:  c.Compression().CompType().String(),
 			Level: c.Compression().Level(),
 		},
