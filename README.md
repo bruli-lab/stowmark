@@ -16,7 +16,8 @@
 
 ---
 
-Stowmark is a lightweight backup tool that stores directory snapshots in a local, immutable-style repository.
+Stowmark is a lightweight backup tool that stores directory snapshots in a local or SSH-hosted, immutable-style
+repository.
 
 Files are identified by their SHA-256 hash and stored only once. Each snapshot is represented by a manifest containing
 the source path, creation time and references to its files.
@@ -36,6 +37,7 @@ the source path, creation time and references to its files.
 - Inspection of a snapshot and all its files.
 - Integrity verification using SHA-256 hashes.
 - Local repositories with no external service required.
+- Remote repositories over SSH/SFTP using public-key authentication.
 - Linux builds for `amd64` and `arm64`.
 - Debian packages generated with GoReleaser.
 
@@ -126,6 +128,54 @@ stowmark snapshot restore \
   --repo /srv/backups/stowmark
 ```
 
+## SSH repositories
+
+Stowmark can store a repository on a remote server over SSH. The source directory and restored files remain on the
+local machine; repository configuration, objects and snapshot manifests are read and written remotely over SFTP.
+
+Set the private key used to authenticate with the SSH server:
+
+```bash
+export STOWMARK_SSH_PRIVATE_KEY="$HOME/.ssh/id_ed25519"
+```
+
+Use an SSH repository URL anywhere that `--repo` or the repository argument is accepted:
+
+```text
+ssh://<user>@<host>[:<port>]/<absolute-path>
+```
+
+Initialize a remote repository:
+
+```bash
+stowmark init ssh://backup@example.com/srv/backups/stowmark
+```
+
+Create and list snapshots:
+
+```bash
+stowmark snapshot create ~/documents \
+  --repo ssh://backup@example.com/srv/backups/stowmark
+
+stowmark snapshot list \
+  --repo ssh://backup@example.com/srv/backups/stowmark
+```
+
+Verify and restore a remote snapshot:
+
+```bash
+stowmark snapshot verify \
+  --id <snapshot-id> \
+  --repo ssh://backup@example.com/srv/backups/stowmark
+
+stowmark snapshot restore \
+  --id <snapshot-id> \
+  --repo ssh://backup@example.com/srv/backups/stowmark
+```
+
+The SSH user must have permission to create and modify the repository directory. The SSH server must provide the SFTP
+subsystem. Password authentication is not used.
+
 ## Commands
 
 | Command                                                   | Description                           |
@@ -184,6 +234,8 @@ repository/
     ├── <snapshot-id>.json
     └── ...
 ```
+
+The format is identical for local and SSH repositories.
 
 ### Objects
 
