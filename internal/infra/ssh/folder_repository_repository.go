@@ -19,7 +19,6 @@ import (
 
 const configFilename = "config.json"
 
-
 type FolderRepositoryRepository struct {
 	client *sftp.Client
 }

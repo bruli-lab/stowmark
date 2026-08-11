@@ -326,8 +326,8 @@ func (o ObjectRepository) Save(ctx context.Context, obj *snapshot.File, comp *re
 
 func NewObjectRepository(repositoryPath string, client *sftp.Client) *ObjectRepository {
 	return &ObjectRepository{
-		repositoryPath: repositoryPath,
+		repositoryPath:  repositoryPath,
 		handlersFactory: compression.NewHandlersFactory(),
-		client: client,
+		client:          client,
 	}
 }

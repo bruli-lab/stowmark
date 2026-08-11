@@ -29,4 +29,3 @@ func (l LocalRepositories) FolderRepository() repository.FolderRepository {
 func NewLocalRepositories(value string) *LocalRepositories {
 	return &LocalRepositories{repositoryPath: value}
 }
-
