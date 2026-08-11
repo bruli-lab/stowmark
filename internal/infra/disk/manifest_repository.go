@@ -12,21 +12,8 @@ import (
 
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
+	"github.com/bruli-lab/stowmark/internal/infra/model"
 )
-
-type file struct {
-	Path string `json:"path"`
-	Hash string `json:"hash"`
-	Size int64  `json:"size"`
-}
-
-type manifest struct {
-	ID          string      `json:"id"`
-	Files       []file      `json:"files"`
-	CreatedAt   time.Time   `json:"created_at"`
-	Source      string      `json:"source"`
-	Compression compression `json:"compression"`
-}
 
 type ManifestRepository struct {
 	repositoryPath string
@@ -54,7 +41,7 @@ func (r ManifestRepository) Get(ctx context.Context, snapshotID string) (*snapsh
 			)
 		}
 	}
-	var man manifest
+	var man model.Manifest
 	if err := json.Unmarshal(data, &man); err != nil {
 		return nil, fmt.Errorf(
 			"failed to unmarshal manifest %q: %w",
@@ -110,8 +97,8 @@ func (r ManifestRepository) List(ctx context.Context) ([]snapshot.Manifest, erro
 }
 
 func (r ManifestRepository) buildManifest(data []byte, manifestPath string) (*snapshot.Manifest, error) {
-	var model manifest
-	if err := json.Unmarshal(data, &model); err != nil {
+	var mo model.Manifest
+	if err := json.Unmarshal(data, &mo); err != nil {
 		return nil, fmt.Errorf(
 			"failed to unmarshal manifest %q: %w",
 			manifestPath,
@@ -120,26 +107,26 @@ func (r ManifestRepository) buildManifest(data []byte, manifestPath string) (*sn
 	}
 	snapshotFiles := make(
 		[]snapshot.File,
-		len(model.Files),
+		len(mo.Files),
 	)
-	for i, modelFile := range model.Files {
+	for i, modelFile := range mo.Files {
 		file := snapshot.File{}
 		file.Hydrate(modelFile.Path, modelFile.Hash, modelFile.Size)
 		snapshotFiles[i] = file
 	}
-	compType, err := repository.ParseCompressionType(model.Compression.Type)
+	compType, err := repository.ParseCompressionType(mo.Compression.Type)
 	if err != nil {
 		return nil, err
 	}
-	comp, err := repository.NewCompression(*compType, model.Compression.Level)
+	comp, err := repository.NewCompression(*compType, mo.Compression.Level)
 	if err != nil {
 		return nil, err
 	}
 	man := snapshot.NewManifest(
-		model.ID,
+		mo.ID,
 		snapshotFiles,
-		model.CreatedAt,
-		model.Source,
+		mo.CreatedAt,
+		mo.Source,
 		comp,
 	)
 	return man, nil
@@ -149,20 +136,20 @@ func (r ManifestRepository) Save(ctx context.Context, m *snapshot.Manifest) erro
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	files := make([]file, len(m.Files()))
+	files := make([]model.File, len(m.Files()))
 	for i, f := range m.Files() {
-		files[i] = file{
+		files[i] = model.File{
 			Path: f.Path(),
 			Hash: f.Hash(),
 			Size: f.Size(),
 		}
 	}
-	man := manifest{
+	man := model.Manifest{
 		ID:        m.Id(),
 		Files:     files,
 		CreatedAt: m.CreatedAt().In(time.Local),
 		Source:    m.Source(),
-		Compression: compression{
+		Compression: model.Compression{
 			Type:  m.Compression().CompType().String(),
 			Level: m.Compression().Level(),
 		},

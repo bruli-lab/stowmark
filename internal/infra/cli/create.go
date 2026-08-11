@@ -25,20 +25,25 @@ func newSnapshotCreateCommand() *cobra.Command {
 				return errors.New("--repo is required")
 			}
 
-			manifestRepo, err := disk.NewManifestRepository(repositoryPath)
+			repoHand, err := NewRepositoriesHandler(repositoryPath)
 			if err != nil {
 				return err
 			}
-			objRepo, err := disk.NewObjectRepository(repositoryPath)
+
+			manifestRepo, err := repoHand.ManifestRepository()
 			if err != nil {
 				return err
 			}
-			folderRepositoryRepo := disk.NewFolderRepositoryRepository()
+			objRepo, err := repoHand.ObjectRepository()
+			if err != nil {
+				return err
+			}
+			folderRepositoryRepo := repoHand.FolderRepository()
 			create := snapshot.NewCreate(sourceRepo, manifestRepo, objRepo, repository.NewGetConfig(folderRepositoryRepo))
 
 			result, err := create.Do(
 				cmd.Context(),
-				repositoryPath,
+				repoHand.RepositoryPath(),
 				sourcePath,
 			)
 			if err != nil {

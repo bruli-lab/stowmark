@@ -7,7 +7,6 @@ import (
 	"text/tabwriter"
 
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
-	"github.com/bruli-lab/stowmark/internal/infra/disk"
 	"github.com/spf13/cobra"
 )
 
@@ -30,16 +29,17 @@ func newSnapshotVerifyCommand() *cobra.Command {
 				return errors.New("--id is required")
 			}
 
-			manifestRepo, err := disk.NewManifestRepository(
-				repositoryPath,
-			)
+			repoHand, err := NewRepositoriesHandler(repositoryPath)
 			if err != nil {
 				return err
 			}
 
-			objectRepo, err := disk.NewObjectRepository(
-				repositoryPath,
-			)
+			manifestRepo, err := repoHand.ManifestRepository()
+			if err != nil {
+				return err
+			}
+
+			objectRepo, err := repoHand.ObjectRepository()
 			if err != nil {
 				return err
 			}

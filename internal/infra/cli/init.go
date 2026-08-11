@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
-	"github.com/bruli-lab/stowmark/internal/infra/disk"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )
@@ -16,14 +15,16 @@ func newInitCommand() *cobra.Command {
 		level           int
 	)
 
-	repo := disk.NewFolderRepositoryRepository()
-	svc := repository.NewInit(repo)
-
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Initialize a new Stowmark repository",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			repoHand, err := NewRepositoriesHandler(repositoryPath)
+			if err != nil {
+				return err
+			}
+			svc := repository.NewInit(repoHand.FolderRepository())
 			compType, err := repository.ParseCompressionType(compressionType)
 			if err != nil {
 				return fmt.Errorf("invalid compression type: %w", err)
@@ -37,7 +38,7 @@ func newInitCommand() *cobra.Command {
 			id := uuid.New()
 
 			re, err := repository.NewRepository(
-				repositoryPath,
+				repoHand.RepositoryPath(),
 				repository.NewConfig(id, comp),
 			)
 			if err != nil {
@@ -51,7 +52,7 @@ func newInitCommand() *cobra.Command {
 			_, _ = fmt.Fprintf(
 				cmd.OutOrStdout(),
 				"Initialized Stowmark repository at %q\n",
-				repositoryPath,
+				repoHand.RepositoryPath(),
 			)
 			_, _ = fmt.Fprintf(
 				cmd.OutOrStdout(),

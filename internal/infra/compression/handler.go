@@ -1,4 +1,4 @@
-package disk
+package compression
 
 import (
 	"fmt"
@@ -17,16 +17,16 @@ type ReaderCloser struct {
 	Closer func()
 }
 
-type compressionHandler interface {
+type Handler interface {
 	Encode(destination io.Writer, level *int) (*WriterCloser, error)
 	Decode(origin io.Reader) (*ReaderCloser, error)
 }
 
-type compressionHandlersFactory struct {
-	handlers map[repository.CompressionType]compressionHandler
+type HandlersFactory struct {
+	handlers map[repository.CompressionType]Handler
 }
 
-func (e *compressionHandlersFactory) getHandler(ct repository.CompressionType) (compressionHandler, error) {
+func (e *HandlersFactory) GetHandler(ct repository.CompressionType) (Handler, error) {
 	enc, ok := e.handlers[ct]
 	if !ok {
 		return nil, fmt.Errorf("unsupported compression type %s", ct.String())
@@ -34,8 +34,8 @@ func (e *compressionHandlersFactory) getHandler(ct repository.CompressionType) (
 	return enc, nil
 }
 
-func newCompressionHandlersFactory() *compressionHandlersFactory {
-	return &compressionHandlersFactory{handlers: map[repository.CompressionType]compressionHandler{
+func NewHandlersFactory() *HandlersFactory {
+	return &HandlersFactory{handlers: map[repository.CompressionType]Handler{
 		repository.NoneCompressionType: noneHandler{},
 		repository.ZstdCompressionType: zstdHandler{},
 		repository.GzipCompressionType: GzipHandler{},

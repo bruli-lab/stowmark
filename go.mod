@@ -4,12 +4,15 @@ go 1.26.5
 
 require (
 	github.com/bruli-lab/go-core v1.7.0
+	github.com/caarlos0/env/v11 v11.4.1
 	github.com/google/uuid v1.6.0
 	github.com/klauspost/compress v1.19.2
 	github.com/pierrec/lz4/v4 v4.1.28
+	github.com/pkg/sftp v1.13.11
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
 	github.com/ulikunitz/xz v0.5.16
+	golang.org/x/crypto v0.54.0
 )
 
 require (
@@ -21,6 +24,7 @@ require (
 	github.com/charmbracelet/x/term v0.2.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
+	github.com/kr/fs v0.1.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/matryer/moq v0.7.1 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
@@ -35,7 +39,7 @@ require (
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/telemetry v0.0.0-20260708182218-49f421fb7959 // indirect
-	golang.org/x/term v0.32.0 // indirect
+	golang.org/x/term v0.45.0 // indirect
 	golang.org/x/tools v0.48.0 // indirect
 	golang.org/x/vuln v1.6.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
