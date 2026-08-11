@@ -7,6 +7,9 @@ includes:
     ssh:
         taskfile: ./taskfiles/ssh/Taskfile.yaml
         dir: .
+    smb:
+        taskfile: ./taskfiles/smb/Taskfile.yaml
+        dir: .
 
 silent: false
 
