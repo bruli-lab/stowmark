@@ -11,8 +11,8 @@ import (
 
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/infra/model"
+	"github.com/cloudsoda/go-smb2"
 	"github.com/google/uuid"
-	"github.com/hirochachacha/go-smb2"
 )
 
 type FolderRepositoryRepository struct {

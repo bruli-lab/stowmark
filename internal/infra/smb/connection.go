@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/hirochachacha/go-smb2"
+	"github.com/cloudsoda/go-smb2"
 )
 
 type Connection struct {
@@ -33,7 +33,7 @@ func Connect(
 		},
 	}
 
-	session, err := dialer.Dial(conn)
+	session, err := dialer.Dial(ctx, address)
 	if err != nil {
 		_ = conn.Close()
 		return nil, fmt.Errorf("create SMB session: %w", err)
