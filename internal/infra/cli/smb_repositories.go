@@ -29,13 +29,11 @@ func (s SmbRepositories) RepositoryPath() string {
 }
 
 func (s SmbRepositories) ObjectRepository() (snapshot.ObjectRepository, error) {
-	// TODO implement me
-	panic("implement me")
+	return smb.NewObjectRepository(s.repositoryPath, s.share), nil
 }
 
 func (s SmbRepositories) ManifestRepository() (snapshot.ManifestRepository, error) {
-	// TODO implement me
-	panic("implement me")
+	return smb.NewManifestRepository(s.repositoryPath, s.share), nil
 }
 
 func NewSmbRepositories(ctx context.Context, repositoryPath string) (*SmbRepositories, error) {
