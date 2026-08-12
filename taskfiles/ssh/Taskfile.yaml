@@ -1,7 +1,7 @@
 version: '3'
 
 vars:
-  COMPOSE_FILE: docker/compose.yaml
+  COMPOSE_FILE: docker/ssh-compose.yaml
   SSH_SERVICE: ssh-server
   SSH_KEYS_DIR: docker/ssh-test/keys
   SSH_PRIVATE_KEY: '{{.SSH_KEYS_DIR}}/stowmark'

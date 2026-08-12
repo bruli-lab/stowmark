@@ -1,0 +1,81 @@
+version: "3"
+
+vars:
+  COMPOSE_FILE: docker/s3-compose.yaml
+  S3_SERVICE: s3-server
+  S3_CLIENT: s3-client
+  S3_BUCKET: stowmark
+
+tasks:
+  up:
+    desc: Start the local S3 server and create the bucket
+    cmds:
+      - docker compose -f "{{.COMPOSE_FILE}}" up -d "{{.S3_SERVICE}}" "{{.S3_CLIENT}}"
+      - |
+        docker compose -f "{{.COMPOSE_FILE}}" exec -T "{{.S3_CLIENT}}" \
+          aws s3api head-bucket --bucket "{{.S3_BUCKET}}" 2>/dev/null ||
+        docker compose -f "{{.COMPOSE_FILE}}" exec -T "{{.S3_CLIENT}}" \
+          aws s3api create-bucket --bucket "{{.S3_BUCKET}}"
+      - echo "S3 is ready at http://localhost:5000"
+
+  down:
+    desc: Stop and remove the local S3 containers
+    cmds:
+      - docker compose -f "{{.COMPOSE_FILE}}" down
+
+  stop:
+    desc: Stop the local S3 services
+    cmds:
+      - docker compose -f "{{.COMPOSE_FILE}}" stop "{{.S3_SERVICE}}" "{{.S3_CLIENT}}"
+
+  restart:
+    desc: Restart the local S3 services
+    cmds:
+      - docker compose -f "{{.COMPOSE_FILE}}" restart "{{.S3_SERVICE}}" "{{.S3_CLIENT}}"
+
+  status:
+    desc: Show the local S3 service status
+    cmds:
+      - docker compose -f "{{.COMPOSE_FILE}}" ps "{{.S3_SERVICE}}" "{{.S3_CLIENT}}"
+
+  logs:
+    desc: Follow the local S3 server logs
+    cmds:
+      - docker compose -f "{{.COMPOSE_FILE}}" logs -f "{{.S3_SERVICE}}"
+
+  buckets:
+    desc: List all S3 buckets
+    cmds:
+      - docker compose -f "{{.COMPOSE_FILE}}" exec -T "{{.S3_CLIENT}}" aws s3 ls
+
+  list:
+    desc: List every object in the Stowmark bucket
+    cmds:
+      - docker compose -f "{{.COMPOSE_FILE}}" exec -T "{{.S3_CLIENT}}" aws s3 ls "s3://{{.S3_BUCKET}}" --recursive
+
+  list-prefix:
+    desc: List objects under a prefix
+    requires:
+      vars: [PREFIX]
+    cmds:
+      - docker compose -f "{{.COMPOSE_FILE}}" exec -T "{{.S3_CLIENT}}" aws s3 ls "s3://{{.S3_BUCKET}}/{{.PREFIX}}" --recursive
+
+  show:
+    desc: Print an object's contents
+    requires:
+      vars: [OBJECT]
+    cmds:
+      - docker compose -f "{{.COMPOSE_FILE}}" exec -T "{{.S3_CLIENT}}" aws s3 cp "s3://{{.S3_BUCKET}}/{{.OBJECT}}" -
+
+  info:
+    desc: Show an object's metadata
+    requires:
+      vars: [OBJECT]
+    cmds:
+      - docker compose -f "{{.COMPOSE_FILE}}" exec -T "{{.S3_CLIENT}}" aws s3api head-object --bucket "{{.S3_BUCKET}}" --key "{{.OBJECT}}"
+
+  clean:
+    desc: Remove every object from the development bucket
+    prompt: Remove all objects from the local Stowmark bucket?
+    cmds:
+      - docker compose -f "{{.COMPOSE_FILE}}" exec -T "{{.S3_CLIENT}}" aws s3 rm "s3://{{.S3_BUCKET}}" --recursive

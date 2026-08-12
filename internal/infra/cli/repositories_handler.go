@@ -27,6 +27,8 @@ func NewRepositoriesHandler(ctx context.Context, value string) (Repositories, er
 		return NewSSHRepositories(value)
 	case repository.Smb:
 		return NewSmbRepositories(ctx, value)
+	case repository.S3:
+		return NewS3Repositories(ctx, value)
 	}
 	return nil, nil
 }

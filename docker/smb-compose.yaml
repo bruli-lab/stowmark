@@ -1,31 +1,4 @@
 services:
-  ssh-server:
-    image: lscr.io/linuxserver/openssh-server:latest
-    container_name: stowmark-ssh-test
-    hostname: stowmark-ssh-test
-
-    environment:
-      PUID: "1000"
-      PGID: "1000"
-      TZ: "Europe/Madrid"
-
-      USER_NAME: "stowmark"
-      PUBLIC_KEY_FILE: "/keys/stowmark.pub"
-
-      PASSWORD_ACCESS: "false"
-      SUDO_ACCESS: "false"
-      LOG_STDOUT: "true"
-
-    volumes:
-      - ./ssh-test/config:/config
-      - ./ssh-test/keys/stowmark.pub:/keys/stowmark.pub:ro
-      - ./ssh-test/repositories:/repositories
-
-    ports:
-      - "127.0.0.1:2222:2222"
-
-    restart: unless-stopped
-
   smb-server:
       image: ghcr.io/servercontainers/samba:smbd-only-latest
       hostname: stowmark-smb-test
