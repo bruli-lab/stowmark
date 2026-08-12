@@ -25,3 +25,32 @@ services:
       - "127.0.0.1:2222:2222"
 
     restart: unless-stopped
+
+  smb-server:
+      image: ghcr.io/servercontainers/samba:smbd-only-latest
+      hostname: stowmark-smb-test
+      environment:
+        ACCOUNT_stowmark: stowmark
+        UID_stowmark: 1000
+
+        AVAHI_DISABLE: "true"
+        WSDD2_DISABLE: "true"
+        NETBIOS_DISABLE: "true"
+
+        SAMBA_VOLUME_CONFIG_stowmark: |
+          [stowmark]
+          path = /shares/stowmark
+          valid users = stowmark
+          read only = no
+          browseable = yes
+          guest ok = no
+          create mask = 0644
+          directory mask = 0755
+
+      ports:
+        - "1445:445"
+
+      volumes:
+          - ./smb-test/data:/shares/stowmark
+
+      restart: unless-stopped

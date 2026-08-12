@@ -20,10 +20,13 @@ func newInitCommand() *cobra.Command {
 		Short: "Initialize a new Stowmark repository",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			repoHand, err := NewRepositoriesHandler(repositoryPath)
+			repoHand, err := NewRepositoriesHandler(cmd.Context(), repositoryPath)
 			if err != nil {
 				return err
 			}
+			defer func() {
+				_ = repoHand.Close()
+			}()
 			svc := repository.NewInit(repoHand.FolderRepository())
 			compType, err := repository.ParseCompressionType(compressionType)
 			if err != nil {
