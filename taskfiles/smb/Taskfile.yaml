@@ -1,7 +1,7 @@
 version: '3'
 
 vars:
-  COMPOSE_FILE: docker/compose.yaml
+  COMPOSE_FILE: docker/smb-compose.yaml
   SMB_SERVICE: smb-server
 
 tasks:

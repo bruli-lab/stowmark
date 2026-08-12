@@ -1,7 +1,7 @@
 version: "3"
 
 vars:
-  COMPOSE_FILE: docker/compose.yaml
+  COMPOSE_FILE: docker/s3-compose.yaml
   S3_SERVICE: s3-server
   S3_CLIENT: s3-client
   S3_BUCKET: stowmark
