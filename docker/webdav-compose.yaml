@@ -8,7 +8,7 @@ services:
       - "18080:8080"
     volumes:
       - ./webdav-test/config.yml:/config.yml:ro
-      - webdav-data:/data
+      - ./webdav-data:/data
     restart: unless-stopped
 
 volumes:

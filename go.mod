@@ -16,6 +16,7 @@ require (
 	github.com/pkg/sftp v1.13.11
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
+	github.com/studio-b12/gowebdav v0.13.0
 	github.com/ulikunitz/xz v0.5.16
 	golang.org/x/crypto v0.55.0
 )
