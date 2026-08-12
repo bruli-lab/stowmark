@@ -54,3 +54,35 @@ services:
           - ./smb-test/data:/shares/stowmark
 
       restart: unless-stopped
+  s3-server:
+      image: motoserver/moto:5.2.2
+      container_name: stowmark-s3-test
+      environment:
+        MOTO_SERVICE: s3
+      ports:
+        - "5000:5000"
+      healthcheck:
+        test:
+          - CMD
+          - python
+          - -c
+          - |
+            import urllib.request
+            urllib.request.urlopen("http://localhost:5000/moto-api/")
+        interval: 2s
+        timeout: 2s
+        retries: 15
+
+  s3-client:
+    image: amazon/aws-cli:2.27.49
+    container_name: stowmark-s3-client
+    depends_on:
+      s3-server:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: stowmark
+      AWS_SECRET_ACCESS_KEY: stowmark-secret
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ENDPOINT_URL: http://s3-server:5000
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["sleep infinity"]

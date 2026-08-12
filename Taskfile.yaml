@@ -10,6 +10,9 @@ includes:
     smb:
         taskfile: ./taskfiles/smb/Taskfile.yaml
         dir: .
+    s3:
+        taskfile: ./taskfiles/s3/Taskfile.yaml
+        dir: .
 
 silent: false
 
