@@ -16,8 +16,8 @@
 
 ---
 
-Stowmark is a lightweight backup tool that stores directory snapshots in a local, SSH-hosted or SMB-hosted,
-immutable-style repository.
+Stowmark is a lightweight backup tool that stores directory snapshots in a local, SSH-hosted, SMB-hosted or
+S3-compatible immutable-style repository.
 
 Files are identified by their SHA-256 hash and stored only once. Each snapshot is represented by a manifest containing
 the source path, creation time and references to its files.
@@ -39,6 +39,7 @@ the source path, creation time and references to its files.
 - Local repositories with no external service required.
 - Remote repositories over SSH/SFTP using public-key authentication.
 - Remote repositories over SMB using password authentication.
+- Remote repositories in Amazon S3 and S3-compatible object storage.
 - Linux builds for `amd64` and `arm64`.
 - Debian packages generated with GoReleaser.
 
@@ -226,6 +227,72 @@ The SMB user must have permission to create, read, modify and remove files and d
 The share name is the first path component after the host; any remaining components identify the repository directory
 inside the share.
 
+## S3 repositories
+
+Stowmark can store a repository in Amazon S3 or an S3-compatible object storage service. The source directory and
+restored files remain on the local machine; repository configuration, objects and snapshot manifests are stored as
+objects in the selected bucket.
+
+Set the credentials and region used to connect to S3:
+
+```bash
+export AWS_ACCESS_KEY="<access-key>"
+export AWS_SECRET_ACCESS_KEY="<secret-key>"
+export AWS_REGION="<region>"
+```
+
+Use an S3 repository URL anywhere that `--repo` or the repository argument is accepted:
+
+```text
+s3://<bucket>/<repository-path>
+```
+
+Initialize a repository in Amazon S3:
+
+```bash
+stowmark init --repo s3://stowmark-backups/home-server
+```
+
+Create and list snapshots:
+
+```bash
+stowmark snapshot create ~/documents \
+  --repo s3://stowmark-backups/home-server
+
+stowmark snapshot list \
+  --repo s3://stowmark-backups/home-server
+```
+
+Verify and restore an S3 snapshot:
+
+```bash
+stowmark snapshot verify \
+  --id <snapshot-id> \
+  --repo s3://stowmark-backups/home-server
+
+stowmark snapshot restore \
+  --id <snapshot-id> \
+  --repo s3://stowmark-backups/home-server
+```
+
+For an S3-compatible service with a custom endpoint, set the endpoint and enable path-style addressing when required:
+
+```bash
+export STOWMARK_S3_ENDPOINT="http://localhost:5000"
+export STOWMARK_S3_PATH_STYLE="true"
+```
+
+For example, a local development repository using the `stowmark` bucket and the `backups` repository path is
+initialized with:
+
+```bash
+stowmark init --repo s3://stowmark/backups
+```
+
+`STOWMARK_S3_ENDPOINT` and `STOWMARK_S3_PATH_STYLE` are optional and should normally be omitted when connecting to
+Amazon S3. The configured credentials must allow Stowmark to read, create and inspect objects in the bucket. The bucket
+must already exist; Stowmark creates the repository objects under the path specified in the URL.
+
 ## Commands
 
 | Command                                                   | Description                           |
@@ -285,7 +352,8 @@ repository/
     └── ...
 ```
 
-The format is identical for local, SSH and SMB repositories.
+The format is identical for local, SSH, SMB and S3 repositories. In S3, directories are represented by object key
+prefixes rather than physical folders.
 
 ### Objects
 
