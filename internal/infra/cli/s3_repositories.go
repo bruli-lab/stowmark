@@ -24,13 +24,11 @@ func (s S3Repositories) RepositoryPath() string {
 }
 
 func (s S3Repositories) ObjectRepository() (snapshot.ObjectRepository, error) {
-	// TODO implement me
-	panic("implement me")
+	return s3infra.NewObjectRepository(s.client, s.bucket, s.repositoryPath), nil
 }
 
 func (s S3Repositories) ManifestRepository() (snapshot.ManifestRepository, error) {
-	// TODO implement me
-	panic("implement me")
+	return s3infra.NewManifestRepository(s.client, s.bucket, s.repositoryPath), nil
 }
 
 func (s S3Repositories) Close() error {

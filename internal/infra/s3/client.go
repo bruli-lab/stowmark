@@ -14,10 +14,6 @@ func NewS3Client(
 	ctx context.Context,
 	cfg *config.S3Config,
 ) (*s3.Client, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-
 	awsCfg, err := awsconfig.LoadDefaultConfig(
 		ctx,
 		awsconfig.WithRegion(cfg.Region),
@@ -27,13 +23,14 @@ func NewS3Client(
 	}
 
 	if cfg.Endpoint != nil {
-		awsCfg.ResponseChecksumValidation =
-			aws.ResponseChecksumValidationWhenRequired
+		awsCfg.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
+
+		awsCfg.ResponseChecksumValidation = aws.ResponseChecksumValidationWhenRequired
 	}
 
 	client := s3.NewFromConfig(awsCfg, func(options *s3.Options) {
 		if cfg.Endpoint != nil {
-			options.BaseEndpoint = aws.String(*cfg.Endpoint)
+			options.BaseEndpoint = cfg.Endpoint
 		}
 
 		if cfg.PathStyle != nil {
