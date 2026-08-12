@@ -34,3 +34,4 @@ go.work.sum
 /documents
 /docker/ssh-test/
 /docker/smb-test/
+/.s3-source
