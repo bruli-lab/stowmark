@@ -16,8 +16,8 @@
 
 ---
 
-Stowmark is a lightweight backup tool that stores directory snapshots in a local or SSH-hosted, immutable-style
-repository.
+Stowmark is a lightweight backup tool that stores directory snapshots in a local, SSH-hosted or SMB-hosted,
+immutable-style repository.
 
 Files are identified by their SHA-256 hash and stored only once. Each snapshot is represented by a manifest containing
 the source path, creation time and references to its files.
@@ -38,6 +38,7 @@ the source path, creation time and references to its files.
 - Integrity verification using SHA-256 hashes.
 - Local repositories with no external service required.
 - Remote repositories over SSH/SFTP using public-key authentication.
+- Remote repositories over SMB using password authentication.
 - Linux builds for `amd64` and `arm64`.
 - Debian packages generated with GoReleaser.
 
@@ -176,6 +177,55 @@ stowmark snapshot restore \
 The SSH user must have permission to create and modify the repository directory. The SSH server must provide the SFTP
 subsystem. Password authentication is not used.
 
+## SMB repositories
+
+Stowmark can store a repository on an SMB share. The source directory and restored files remain on the local machine;
+repository configuration, objects and snapshot manifests are read and written remotely over SMB.
+
+Set the password used to authenticate with the SMB server:
+
+```bash
+export STOWMARK_SMB_PASSWORD="<password>"
+```
+
+Use an SMB repository URL anywhere that `--repo` or the repository argument is accepted:
+
+```text
+smb://<user>@<host>[:<port>]/<share>[/<path>]
+```
+
+Initialize a repository on an SMB share:
+
+```bash
+stowmark init smb://backup@example.com/backups/stowmark
+```
+
+Create and list snapshots:
+
+```bash
+stowmark snapshot create ~/documents \
+  --repo smb://backup@example.com/backups/stowmark
+
+stowmark snapshot list \
+  --repo smb://backup@example.com/backups/stowmark
+```
+
+Verify and restore an SMB snapshot:
+
+```bash
+stowmark snapshot verify \
+  --id <snapshot-id> \
+  --repo smb://backup@example.com/backups/stowmark
+
+stowmark snapshot restore \
+  --id <snapshot-id> \
+  --repo smb://backup@example.com/backups/stowmark
+```
+
+The SMB user must have permission to create, read, modify and remove files and directories in the repository path.
+The share name is the first path component after the host; any remaining components identify the repository directory
+inside the share.
+
 ## Commands
 
 | Command                                                   | Description                           |
@@ -235,7 +285,7 @@ repository/
     └── ...
 ```
 
-The format is identical for local and SSH repositories.
+The format is identical for local, SSH and SMB repositories.
 
 ### Objects
 
