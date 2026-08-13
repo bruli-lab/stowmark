@@ -1,0 +1,28 @@
+services:
+  gcs-server:
+    image: fsouza/fake-gcs-server:1.55.1
+    container_name: stowmark-gcs-test
+    command:
+      - -scheme
+      - http
+      - -port
+      - "4443"
+      - -backend
+      - filesystem
+      - -filesystem-root
+      - /storage
+    ports:
+      - "4443:4443"
+    volumes:
+      - ./gcs-test/data:/storage
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - --quiet
+        - --spider
+        - http://localhost:4443/storage/v1/b
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s

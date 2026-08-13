@@ -17,7 +17,7 @@
 ---
 
 Stowmark is a lightweight backup tool that stores directory snapshots in a local, SSH-hosted, SMB-hosted,
-S3-compatible or WebDAV-hosted immutable-style repository.
+S3-compatible, Google Cloud Storage or WebDAV-hosted immutable-style repository.
 
 Files are identified by their SHA-256 hash and stored only once. Each snapshot is represented by a manifest containing
 the source path, creation time and references to its files.
@@ -40,6 +40,7 @@ the source path, creation time and references to its files.
 - Remote repositories over SSH/SFTP using public-key authentication.
 - Remote repositories over SMB using password authentication.
 - Remote repositories in Amazon S3 and S3-compatible object storage.
+- Remote repositories in Google Cloud Storage using Application Default Credentials.
 - Remote repositories over WebDAV using username and password authentication.
 - Linux builds for `amd64` and `arm64`.
 - Debian packages generated with GoReleaser.
@@ -294,6 +295,75 @@ stowmark init --repo s3://stowmark/backups
 Amazon S3. The configured credentials must allow Stowmark to read, create and inspect objects in the bucket. The bucket
 must already exist; Stowmark creates the repository objects under the path specified in the URL.
 
+## Google Cloud Storage repositories
+
+Stowmark can store a repository natively in Google Cloud Storage (GCS). The source directory and restored files remain
+on the local machine; repository configuration, objects and snapshot manifests are stored as objects in the selected
+bucket.
+
+Stowmark uses Google Application Default Credentials (ADC). When running outside Google Cloud, authenticate with a
+service account credentials file:
+
+```bash
+export GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account.json"
+```
+
+For local development against a real GCS bucket, ADC can also be configured with the Google Cloud CLI:
+
+```bash
+gcloud auth application-default login
+```
+
+When running on Google Compute Engine, Google Kubernetes Engine or Cloud Run, Stowmark can use the identity assigned to
+the workload, so `GOOGLE_APPLICATION_CREDENTIALS` does not need to be set.
+
+Use a GCS repository URL anywhere that `--repo` or the repository argument is accepted:
+
+```text
+gcs://<bucket>/<repository-path>
+```
+
+Initialize a repository in Google Cloud Storage:
+
+```bash
+stowmark init --repo gcs://stowmark-backups/home-server
+```
+
+Create and list snapshots:
+
+```bash
+stowmark snapshot create ~/documents \
+  --repo gcs://stowmark-backups/home-server
+
+stowmark snapshot list \
+  --repo gcs://stowmark-backups/home-server
+```
+
+Verify and restore a GCS snapshot:
+
+```bash
+stowmark snapshot verify \
+  --id <snapshot-id> \
+  --repo gcs://stowmark-backups/home-server
+
+stowmark snapshot restore \
+  --id <snapshot-id> \
+  --repo gcs://stowmark-backups/home-server
+```
+
+For local development with a GCS emulator, set its JSON API endpoint:
+
+```bash
+export STOWMARK_GCS_ENDPOINT="http://localhost:4443/storage/v1/"
+
+stowmark init --repo gcs://stowmark/backups
+```
+
+`STOWMARK_GCS_ENDPOINT` is optional and should be omitted when connecting to Google Cloud Storage. Authentication is
+disabled when a custom endpoint is configured. The bucket must already exist; Stowmark creates the repository objects
+under the path specified in the URL. For GCS itself, the active identity must have permission to read, create and
+inspect objects in the bucket.
+
 ## WebDAV repositories
 
 Stowmark can store a repository on a WebDAV server. The source directory and restored files remain on the local
@@ -415,8 +485,8 @@ repository/
     └── ...
 ```
 
-The format is identical for local, SSH, SMB, S3 and WebDAV repositories. In S3, directories are represented by object
-key prefixes rather than physical folders.
+The format is identical for local, SSH, SMB, S3, GCS and WebDAV repositories. In S3 and GCS, directories are represented
+by object key prefixes rather than physical folders.
 
 ### Objects
 

@@ -31,6 +31,8 @@ func NewRepositoriesHandler(ctx context.Context, value string) (Repositories, er
 		return NewS3Repositories(ctx, value)
 	case repository.WebDAV:
 		return NewWebDavRepositories(value)
+	case repository.Gcs:
+		return NewGCSRepositories(ctx, value)
 	}
 	return nil, nil
 }
