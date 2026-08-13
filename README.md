@@ -1,6 +1,6 @@
-# Stowmark
-
-**Immutable, content-addressed snapshot backups from the command line.**
+<p align="center">
+  <img src="web/assets/brand-image.png" alt="Stowmark" width="620">
+</p>
 
 [![CI](https://github.com/bruli-lab/stowmark/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/bruli-lab/stowmark/actions/workflows/release.yml)
 [![Coverage](https://codecov.io/gh/bruli-lab/stowmark/branch/main/graph/badge.svg)](https://codecov.io/gh/bruli-lab/stowmark)
