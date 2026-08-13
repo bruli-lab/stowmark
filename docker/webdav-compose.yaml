@@ -1,0 +1,15 @@
+services:
+  webdav-server:
+    image: ghcr.io/hacdias/webdav:latest
+    command:
+      - --config
+      - /config.yml
+    ports:
+      - "18080:8080"
+    volumes:
+      - ./webdav-test/config.yml:/config.yml:ro
+      - ./webdav-data:/data
+    restart: unless-stopped
+
+volumes:
+  webdav-data:

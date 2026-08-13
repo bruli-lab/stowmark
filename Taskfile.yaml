@@ -14,6 +14,11 @@ includes:
         taskfile: ./taskfiles/s3/Taskfile.yaml
         dir: .
 
+    webdav:
+        taskfile: ./taskfiles/webdav/Taskfile.yaml
+        dir: .
+
+
 silent: false
 
 tasks:

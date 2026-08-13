@@ -92,9 +92,9 @@ func (ma ManifestRepository) Save(ctx context.Context, m *snapshot.Manifest) err
 
 	if _, err := io.Copy(
 		file,
-		contextReader{
-			ctx:    ctx,
-			reader: bytes.NewReader(data),
+		model.ContextReader{
+			Ctx:    ctx,
+			Reader: bytes.NewReader(data),
 		},
 	); err != nil {
 		return fmt.Errorf("write remote manifest %q: %w", manifestPath, err)
@@ -153,9 +153,9 @@ func (ma ManifestRepository) List(ctx context.Context) ([]snapshot.Manifest, err
 			return nil, fmt.Errorf("open remote manifest %q: %w", manifestPath, err)
 		}
 
-		data, readErr := io.ReadAll(contextReader{
-			ctx:    ctx,
-			reader: manifestFile,
+		data, readErr := io.ReadAll(model.ContextReader{
+			Ctx:    ctx,
+			Reader: manifestFile,
 		})
 		closeErr := manifestFile.Close()
 
@@ -167,7 +167,7 @@ func (ma ManifestRepository) List(ctx context.Context) ([]snapshot.Manifest, err
 			return nil, fmt.Errorf("close remote manifest %q: %w", manifestPath, closeErr)
 		}
 
-		manifest, err := ma.buildManifest(data, manifestPath)
+		manifest, err := model.BuildManifestDomain(data, manifestPath)
 		if err != nil {
 			return nil, fmt.Errorf("build manifest %q: %w", manifestPath, err)
 		}
@@ -202,52 +202,16 @@ func (ma ManifestRepository) Get(ctx context.Context, snapshotID string) (*snaps
 	}()
 
 	data, err := io.ReadAll(
-		contextReader{
-			ctx:    ctx,
-			reader: file,
+		model.ContextReader{
+			Ctx:    ctx,
+			Reader: file,
 		},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("read remote manifest %q: %w", filePath, err)
 	}
 
-	return ma.buildManifest(data, filePath)
-}
-
-func (ma ManifestRepository) buildManifest(data []byte, manifestPath string) (*snapshot.Manifest, error) {
-	var mo model.Manifest
-	if err := json.Unmarshal(data, &mo); err != nil {
-		return nil, fmt.Errorf(
-			"failed to unmarshal manifest %q: %w",
-			manifestPath,
-			err,
-		)
-	}
-	snapshotFiles := make(
-		[]snapshot.File,
-		len(mo.Files),
-	)
-	for i, modelFile := range mo.Files {
-		file := snapshot.File{}
-		file.Hydrate(modelFile.Path, modelFile.Hash, modelFile.Size)
-		snapshotFiles[i] = file
-	}
-	compType, err := repository.ParseCompressionType(mo.Compression.Type)
-	if err != nil {
-		return nil, err
-	}
-	comp, err := repository.NewCompression(*compType, mo.Compression.Level)
-	if err != nil {
-		return nil, err
-	}
-	man := snapshot.NewManifest(
-		mo.ID,
-		snapshotFiles,
-		mo.CreatedAt,
-		mo.Source,
-		comp,
-	)
-	return man, nil
+	return model.BuildManifestDomain(data, filePath)
 }
 
 func NewManifestRepository(repositoryPath string, client *sftp.Client) (*ManifestRepository, error) {

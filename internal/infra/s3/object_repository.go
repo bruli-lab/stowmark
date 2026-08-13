@@ -17,6 +17,7 @@ import (
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/compression"
+	"github.com/bruli-lab/stowmark/internal/infra/model"
 )
 
 type ObjectRepository struct {
@@ -91,9 +92,9 @@ func (o ObjectRepository) Save(ctx context.Context, obj *snapshot.File, comp *re
 
 	_, copyErr := io.Copy(
 		encoded.Writer,
-		contextReader{
-			ctx:    ctx,
-			reader: source,
+		model.ContextReader{
+			Ctx:    ctx,
+			Reader: source,
 		},
 	)
 	if copyErr != nil {
@@ -223,9 +224,9 @@ func (o ObjectRepository) ReadObject(ctx context.Context, originalPath, hash str
 
 	storedSize, readErr := io.Copy(
 		hasher,
-		contextReader{
-			ctx:    ctx,
-			reader: output.Body,
+		model.ContextReader{
+			Ctx:    ctx,
+			Reader: output.Body,
 		},
 	)
 
@@ -361,9 +362,9 @@ func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Co
 
 	_, err = io.Copy(
 		destination,
-		contextReader{
-			ctx:    ctx,
-			reader: decoded.Reader,
+		model.ContextReader{
+			Ctx:    ctx,
+			Reader: decoded.Reader,
 		},
 	)
 	if err != nil {
@@ -405,17 +406,4 @@ func isPreconditionFailedError(err error) bool {
 	}
 
 	return apiErr.ErrorCode() == "PreconditionFailed"
-}
-
-type contextReader struct {
-	ctx    context.Context
-	reader io.Reader
-}
-
-func (r contextReader) Read(data []byte) (int, error) {
-	if err := r.ctx.Err(); err != nil {
-		return 0, err
-	}
-
-	return r.reader.Read(data)
 }

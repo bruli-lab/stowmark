@@ -29,6 +29,8 @@ func NewRepositoriesHandler(ctx context.Context, value string) (Repositories, er
 		return NewSmbRepositories(ctx, value)
 	case repository.S3:
 		return NewS3Repositories(ctx, value)
+	case repository.WebDAV:
+		return NewWebDavRepositories(value)
 	}
 	return nil, nil
 }

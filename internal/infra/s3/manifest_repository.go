@@ -163,44 +163,12 @@ func (r ManifestRepository) getManifest(ctx context.Context, key string) (*snaps
 		return nil, fmt.Errorf("close manifest %q response body: %w", key, closeErr)
 	}
 
-	manifest, err := r.buildManifest(data, key)
+	manifest, err := model.BuildManifestDomain(data, key)
 	if err != nil {
 		return nil, err
 	}
 
 	return manifest, nil
-}
-
-func (r ManifestRepository) buildManifest(data []byte, manifestPath string) (*snapshot.Manifest, error) {
-	var mo model.Manifest
-	if err := json.Unmarshal(data, &mo); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal manifest %q: %w", manifestPath, err)
-	}
-	snapshotFiles := make(
-		[]snapshot.File,
-		len(mo.Files),
-	)
-	for i, modelFile := range mo.Files {
-		file := snapshot.File{}
-		file.Hydrate(modelFile.Path, modelFile.Hash, modelFile.Size)
-		snapshotFiles[i] = file
-	}
-	compType, err := repository.ParseCompressionType(mo.Compression.Type)
-	if err != nil {
-		return nil, err
-	}
-	comp, err := repository.NewCompression(*compType, mo.Compression.Level)
-	if err != nil {
-		return nil, err
-	}
-	man := snapshot.NewManifest(
-		mo.ID,
-		snapshotFiles,
-		mo.CreatedAt,
-		mo.Source,
-		comp,
-	)
-	return man, nil
 }
 
 func (r ManifestRepository) Get(ctx context.Context, snapshotID string) (*snapshot.Manifest, error) {

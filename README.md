@@ -1,6 +1,6 @@
-# Stowmark
-
-**Immutable, content-addressed snapshot backups from the command line.**
+<p align="center">
+  <img src="web/assets/brand-image.png" alt="Stowmark" width="620">
+</p>
 
 [![CI](https://github.com/bruli-lab/stowmark/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/bruli-lab/stowmark/actions/workflows/release.yml)
 [![Coverage](https://codecov.io/gh/bruli-lab/stowmark/branch/main/graph/badge.svg)](https://codecov.io/gh/bruli-lab/stowmark)
@@ -16,8 +16,8 @@
 
 ---
 
-Stowmark is a lightweight backup tool that stores directory snapshots in a local, SSH-hosted, SMB-hosted or
-S3-compatible immutable-style repository.
+Stowmark is a lightweight backup tool that stores directory snapshots in a local, SSH-hosted, SMB-hosted,
+S3-compatible or WebDAV-hosted immutable-style repository.
 
 Files are identified by their SHA-256 hash and stored only once. Each snapshot is represented by a manifest containing
 the source path, creation time and references to its files.
@@ -40,6 +40,7 @@ the source path, creation time and references to its files.
 - Remote repositories over SSH/SFTP using public-key authentication.
 - Remote repositories over SMB using password authentication.
 - Remote repositories in Amazon S3 and S3-compatible object storage.
+- Remote repositories over WebDAV using username and password authentication.
 - Linux builds for `amd64` and `arm64`.
 - Debian packages generated with GoReleaser.
 
@@ -293,6 +294,68 @@ stowmark init --repo s3://stowmark/backups
 Amazon S3. The configured credentials must allow Stowmark to read, create and inspect objects in the bucket. The bucket
 must already exist; Stowmark creates the repository objects under the path specified in the URL.
 
+## WebDAV repositories
+
+Stowmark can store a repository on a WebDAV server. The source directory and restored files remain on the local
+machine; repository configuration, objects and snapshot manifests are read and written remotely over WebDAV.
+
+Set the username and password used to authenticate with the WebDAV server:
+
+```bash
+export STOWMARK_WEBDAV_USERNAME="<username>"
+export STOWMARK_WEBDAV_PASSWORD="<password>"
+```
+
+Use a WebDAV repository URL anywhere that `--repo` or the repository argument is accepted:
+
+```text
+webdav://<host>[:<port>]/<repository-path>
+webdavs://<host>[:<port>]/<repository-path>
+```
+
+The `webdav://` scheme connects over HTTP and is intended for local development or trusted networks. Use
+`webdavs://` to connect over HTTPS in production so that credentials and repository data are encrypted in transit.
+
+Initialize a WebDAV repository:
+
+```bash
+stowmark init --repo webdavs://dav.example.com/backups/stowmark
+```
+
+Create and list snapshots:
+
+```bash
+stowmark snapshot create ~/documents \
+  --repo webdavs://dav.example.com/backups/stowmark
+
+stowmark snapshot list \
+  --repo webdavs://dav.example.com/backups/stowmark
+```
+
+Verify and restore a WebDAV snapshot:
+
+```bash
+stowmark snapshot verify \
+  --id <snapshot-id> \
+  --repo webdavs://dav.example.com/backups/stowmark
+
+stowmark snapshot restore \
+  --id <snapshot-id> \
+  --repo webdavs://dav.example.com/backups/stowmark
+```
+
+For example, a local development server listening on port `18080` can be used with:
+
+```bash
+export STOWMARK_WEBDAV_USERNAME="stowmark"
+export STOWMARK_WEBDAV_PASSWORD="stowmark"
+
+stowmark init --repo webdav://localhost:18080/backups
+```
+
+Both credential variables must be set together. The WebDAV user must have permission to create, read, update, move
+and remove files and collections under the repository path.
+
 ## Commands
 
 | Command                                                   | Description                           |
@@ -352,8 +415,8 @@ repository/
     └── ...
 ```
 
-The format is identical for local, SSH, SMB and S3 repositories. In S3, directories are represented by object key
-prefixes rather than physical folders.
+The format is identical for local, SSH, SMB, S3 and WebDAV repositories. In S3, directories are represented by object
+key prefixes rather than physical folders.
 
 ### Objects
 
