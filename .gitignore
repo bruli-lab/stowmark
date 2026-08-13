@@ -36,3 +36,4 @@ go.work.sum
 /docker/smb-test/
 /.s3-source
 /docker/webdav-data/
+/docker/gcs-test/

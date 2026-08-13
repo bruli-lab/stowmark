@@ -18,6 +18,10 @@ includes:
         taskfile: ./taskfiles/webdav/Taskfile.yaml
         dir: .
 
+    gcs:
+        taskfile: ./taskfiles/gcs/Taskfile.yaml
+        dir: .
+
 
 silent: false
 

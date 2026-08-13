@@ -1,0 +1,59 @@
+version: "3"
+
+vars:
+  COMPOSE_FILE: docker/gcs-compose.yaml
+  GCS_SERVICE: gcs-server
+  GCS_DATA_DIR: docker/gcs-test/data
+  GCS_BUCKET: stowmark
+  GCS_ENDPOINT: http://localhost:4443
+
+tasks:
+  init:
+    desc: Create the local GCS bucket directory
+    cmds:
+      - mkdir -p "{{.GCS_DATA_DIR}}/{{.GCS_BUCKET}}"
+    status:
+      - test -d "{{.GCS_DATA_DIR}}/{{.GCS_BUCKET}}"
+
+  up:
+    desc: Start the local GCS emulator
+    deps:
+      - init
+    cmds:
+      - docker compose -f "{{.COMPOSE_FILE}}" up -d "{{.GCS_SERVICE}}"
+      - |
+        echo "Waiting for the GCS emulator..."
+        until curl --fail --silent "{{.GCS_ENDPOINT}}/storage/v1/b" > /dev/null; do
+          sleep 1
+        done
+        echo "GCS emulator is ready"
+
+  down:
+    desc: Stop the local GCS emulator
+    cmds:
+      - docker compose -f "{{.COMPOSE_FILE}}" stop "{{.GCS_SERVICE}}"
+
+  restart:
+    desc: Restart the local GCS emulator
+    cmds:
+      - docker compose -f "{{.COMPOSE_FILE}}" restart "{{.GCS_SERVICE}}"
+
+  status:
+    desc: Show the local GCS emulator status
+    cmds:
+      - docker compose -f "{{.COMPOSE_FILE}}" ps "{{.GCS_SERVICE}}"
+
+  logs:
+    desc: Show the local GCS emulator logs
+    cmds:
+      - docker compose -f "{{.COMPOSE_FILE}}" logs -f "{{.GCS_SERVICE}}"
+
+  buckets:
+    desc: List local GCS buckets
+    cmds:
+      - curl --fail --silent --show-error "{{.GCS_ENDPOINT}}/storage/v1/b"|jq
+
+  objects:
+    desc: List objects stored in the test bucket
+    cmds:
+      - curl --fail --silent --show-error "{{.GCS_ENDPOINT}}/storage/v1/b/{{.GCS_BUCKET}}/o"|jq
