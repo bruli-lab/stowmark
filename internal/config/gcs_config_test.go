@@ -35,10 +35,10 @@ func TestNewGCSConfig(t *testing.T) {
 		{
 			name: "with al env vars sets, it returns all values",
 			envVars: map[string]string{
-				"STOWMARK_GCS_ENDPOINT": "test-endpoint",
+				"STOWMARK_GCS_ENDPOINT":          "test-endpoint",
 				"GOOGLE_APPLICATION_CREDENTIALS": "test-credentials",
 			},
-			expectedEndpoint: new("test-endpoint"),
+			expectedEndpoint:          new("test-endpoint"),
 			expectedGoogleCredentials: new("test-credentials"),
 		},
 	}

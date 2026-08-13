@@ -7,12 +7,14 @@ services:
       - http
       - -port
       - "4443"
-      - -data
-      - /data
+      - -backend
+      - filesystem
+      - -filesystem-root
+      - /storage
     ports:
       - "4443:4443"
     volumes:
-      - ./gcs-test/data:/data
+      - ./gcs-test/data:/storage
     healthcheck:
       test:
         - CMD
@@ -24,4 +26,3 @@ services:
       timeout: 3s
       retries: 10
       start_period: 5s
-    restart: unless-stopped
