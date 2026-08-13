@@ -14,6 +14,7 @@ func newSnapshotRestoreCommand() *cobra.Command {
 	var (
 		repositoryPath string
 		snapshotID     string
+		filePath       string
 	)
 
 	cmd := &cobra.Command{
@@ -47,34 +48,12 @@ func newSnapshotRestoreCommand() *cobra.Command {
 				return err
 			}
 
-			svc := snapshot.NewRestore(
-				manifestRepo,
-				objectRepo,
-			)
-
-			result, err := svc.Restore(
-				cmd.Context(),
-				snapshotID,
-			)
-			if err != nil {
-				return err
+			switch filePath {
+			case "":
+				return executeRestore(cmd, manifestRepo, objectRepo, snapshotID)
+			default:
+				return executeRestoreFile(cmd, manifestRepo, objectRepo, snapshotID, filePath)
 			}
-
-			if err := printRestoreResult(
-				cmd.OutOrStdout(),
-				result,
-			); err != nil {
-				return err
-			}
-
-			if !result.IsSuccess() {
-				return fmt.Errorf(
-					"snapshot %q failed restoration",
-					snapshotID,
-				)
-			}
-
-			return nil
 		},
 	}
 
@@ -92,7 +71,70 @@ func newSnapshotRestoreCommand() *cobra.Command {
 		"snapshot ID",
 	)
 
+	cmd.Flags().StringVar(
+		&filePath,
+		"file",
+		"",
+		"path to the file to restore",
+	)
+
 	return cmd
+}
+
+func executeRestoreFile(
+	cmd *cobra.Command,
+	manifestRepo snapshot.ManifestRepository,
+	objectRepo snapshot.ObjectRepository,
+	snapshotID, filePath string,
+) error {
+	svc := snapshot.NewRestoreFile(manifestRepo, objectRepo)
+
+	if err := svc.Restore(cmd.Context(), snapshotID, filePath); err != nil {
+		return err
+	}
+	_, err := fmt.Fprintf(
+		cmd.OutOrStdout(),
+		"Restored file %q from snapshot %q\n",
+		filePath,
+		snapshotID,
+	)
+	return err
+}
+
+func executeRestore(
+	cmd *cobra.Command,
+	manifestRepo snapshot.ManifestRepository,
+	objectRepo snapshot.ObjectRepository,
+	snapshotID string,
+) error {
+	svc := snapshot.NewRestore(
+		manifestRepo,
+		objectRepo,
+	)
+
+	result, err := svc.Restore(
+		cmd.Context(),
+		snapshotID,
+	)
+	if err != nil {
+		return err
+	}
+
+	if err := printRestoreResult(
+		cmd.OutOrStdout(),
+		result,
+	); err != nil {
+		return err
+	}
+
+	if !result.IsSuccess() {
+		return fmt.Errorf(
+			"snapshot %q failed restoration",
+			snapshotID,
+		)
+	}
+
+	return nil
 }
 
 func printRestoreResult(
