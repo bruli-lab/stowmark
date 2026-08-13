@@ -15,6 +15,7 @@ const (
 	Smb    RepositoryType = "smb"
 	S3     RepositoryType = "s3"
 	WebDAV RepositoryType = "webdav"
+	Gcs    RepositoryType = "gcs"
 )
 
 func ParseRepositoryType(raw string) (RepositoryType, error) {
@@ -31,6 +32,8 @@ func ParseRepositoryType(raw string) (RepositoryType, error) {
 		return S3, nil
 	case "http", "https", "webdav", "webdavs":
 		return WebDAV, nil
+	case "gcs":
+		return Gcs, nil
 	default:
 		return Local, nil
 	}

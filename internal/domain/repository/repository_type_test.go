@@ -61,6 +61,11 @@ func TestParseRepository(t *testing.T) {
 			args:         args{raw: "http://host/tmp/test"},
 			expectedType: repository.WebDAV,
 		},
+		{
+			name:         "with a gcs path, then it should return a gcs repository type",
+			args:         args{raw: "gcs://stowmark/backups"},
+			expectedType: repository.Gcs,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(`Given a ParseRepositoryType method 
