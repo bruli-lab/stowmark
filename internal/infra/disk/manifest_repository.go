@@ -49,7 +49,7 @@ func (r ManifestRepository) Get(ctx context.Context, snapshotID string) (*snapsh
 			err,
 		)
 	}
-	return r.buildManifest(data, filePath)
+	return model.BuildManifestDomain(data, filePath)
 }
 
 func (r ManifestRepository) List(ctx context.Context) ([]snapshot.Manifest, error) {
@@ -84,7 +84,7 @@ func (r ManifestRepository) List(ctx context.Context) ([]snapshot.Manifest, erro
 				err,
 			)
 		}
-		man, err := r.buildManifest(data, manifestPath)
+		man, err := model.BuildManifestDomain(data, manifestPath)
 		if err != nil {
 			return nil, err
 		}
@@ -94,42 +94,6 @@ func (r ManifestRepository) List(ctx context.Context) ([]snapshot.Manifest, erro
 		return b.CreatedAt().Compare(a.CreatedAt())
 	})
 	return manifests, nil
-}
-
-func (r ManifestRepository) buildManifest(data []byte, manifestPath string) (*snapshot.Manifest, error) {
-	var mo model.Manifest
-	if err := json.Unmarshal(data, &mo); err != nil {
-		return nil, fmt.Errorf(
-			"failed to unmarshal manifest %q: %w",
-			manifestPath,
-			err,
-		)
-	}
-	snapshotFiles := make(
-		[]snapshot.File,
-		len(mo.Files),
-	)
-	for i, modelFile := range mo.Files {
-		file := snapshot.File{}
-		file.Hydrate(modelFile.Path, modelFile.Hash, modelFile.Size)
-		snapshotFiles[i] = file
-	}
-	compType, err := repository.ParseCompressionType(mo.Compression.Type)
-	if err != nil {
-		return nil, err
-	}
-	comp, err := repository.NewCompression(*compType, mo.Compression.Level)
-	if err != nil {
-		return nil, err
-	}
-	man := snapshot.NewManifest(
-		mo.ID,
-		snapshotFiles,
-		mo.CreatedAt,
-		mo.Source,
-		comp,
-	)
-	return man, nil
 }
 
 func (r ManifestRepository) Save(ctx context.Context, m *snapshot.Manifest) error {

@@ -1,11 +1,9 @@
-package smb
+package webdav
 
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"os"
 	"path"
 	"slices"
 	"time"
@@ -13,12 +11,12 @@ import (
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/model"
-	"github.com/cloudsoda/go-smb2"
+	"github.com/studio-b12/gowebdav"
 )
 
 type ManifestRepository struct {
+	client *gowebdav.Client
 	repositoryPath string
-	share          *smb2.Share
 }
 
 func (r ManifestRepository) Save(ctx context.Context, m *snapshot.Manifest) error {
@@ -27,15 +25,15 @@ func (r ManifestRepository) Save(ctx context.Context, m *snapshot.Manifest) erro
 	}
 
 	files := make([]model.File, len(m.Files()))
-	for i, f := range m.Files() {
+	for i, file := range m.Files() {
 		files[i] = model.File{
-			Path: f.Path(),
-			Hash: f.Hash(),
-			Size: f.Size(),
+			Path: file.Path(),
+			Hash: file.Hash(),
+			Size: file.Size(),
 		}
 	}
 
-	man := model.Manifest{
+	manifest := model.Manifest{
 		ID:        m.Id(),
 		Files:     files,
 		CreatedAt: m.CreatedAt().In(time.Local),
@@ -46,11 +44,10 @@ func (r ManifestRepository) Save(ctx context.Context, m *snapshot.Manifest) erro
 		},
 	}
 
-	data, err := json.MarshalIndent(man, "", " ")
+	data, err := json.MarshalIndent(manifest, "", " ")
 	if err != nil {
 		return fmt.Errorf("marshal manifest: %w", err)
 	}
-
 	data = append(data, '\n')
 
 	manifestPath := path.Join(
@@ -59,22 +56,8 @@ func (r ManifestRepository) Save(ctx context.Context, m *snapshot.Manifest) erro
 		fmt.Sprintf("%s.json", m.Id()),
 	)
 
-	file, err := r.share.OpenFile(
-		manifestPath,
-		os.O_WRONLY|os.O_CREATE|os.O_TRUNC,
-		0o644,
-	)
-	if err != nil {
-		return fmt.Errorf("open manifest %q: %w", manifestPath, err)
-	}
-
-	if _, err := file.Write(data); err != nil {
-		_ = file.Close()
-		return fmt.Errorf("write manifest %q: %w", manifestPath, err)
-	}
-
-	if err := file.Close(); err != nil {
-		return fmt.Errorf("close manifest %q: %w", manifestPath, err)
+	if err := r.client.Write(manifestPath, data, 0o644); err != nil {
+		return fmt.Errorf("write WebDAV manifest %q: %w", manifestPath, err)
 	}
 
 	return nil
@@ -90,9 +73,9 @@ func (r ManifestRepository) List(ctx context.Context) ([]snapshot.Manifest, erro
 		repository.SnapshotsFolder,
 	)
 
-	entries, err := r.share.ReadDir(snapshotsPath)
+	entries, err := r.client.ReadDir(snapshotsPath)
 	if err != nil {
-		return nil, fmt.Errorf("read snapshots folder %q: %w", snapshotsPath, err)
+		return nil, fmt.Errorf("read WebDAV snapshots folder %q: %w", snapshotsPath, err)
 	}
 
 	manifests := make([]snapshot.Manifest, 0, len(entries))
@@ -111,22 +94,25 @@ func (r ManifestRepository) List(ctx context.Context) ([]snapshot.Manifest, erro
 			entry.Name(),
 		)
 
-		data, err := r.share.ReadFile(manifestPath)
+		data, err := r.client.Read(manifestPath)
 		if err != nil {
-			return nil, fmt.Errorf("read manifest %q: %w", manifestPath, err)
+			return nil, fmt.Errorf("read WebDAV manifest %q: %w", manifestPath, err)
 		}
 
 		manifest, err := model.BuildManifestDomain(data, manifestPath)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("build manifest from %q: %w", manifestPath, err)
 		}
 
 		manifests = append(manifests, *manifest)
 	}
 
-	slices.SortFunc(manifests, func(a, b snapshot.Manifest) int {
-		return b.CreatedAt().Compare(a.CreatedAt())
-	})
+	slices.SortFunc(
+		manifests,
+		func(a, b snapshot.Manifest) int {
+			return b.CreatedAt().Compare(a.CreatedAt())
+		},
+	)
 
 	return manifests, nil
 }
@@ -136,29 +122,29 @@ func (r ManifestRepository) Get(ctx context.Context, snapshotID string) (*snapsh
 		return nil, err
 	}
 
-	filePath := path.Join(
+	manifestPath := path.Join(
 		r.repositoryPath,
 		repository.SnapshotsFolder,
 		fmt.Sprintf("%s.json", snapshotID),
 	)
 
-	data, err := r.share.ReadFile(filePath)
+	data, err := r.client.Read(manifestPath)
 	if err != nil {
-		switch {
-		case errors.Is(err, os.ErrNotExist):
+		if gowebdav.IsErrNotFound(err) {
 			return nil, repository.NewNotFoundError("manifest not found")
-		default:
-			return nil, fmt.Errorf(
-				"read manifest %q: %w",
-				filePath,
-				err,
-			)
 		}
+
+		return nil, fmt.Errorf("read WebDAV manifest %q: %w", manifestPath, err)
 	}
 
-	return model.BuildManifestDomain(data, filePath)
+	manifest, err := model.BuildManifestDomain(data, manifestPath)
+	if err != nil {
+		return nil, fmt.Errorf("build manifest from %q: %w", manifestPath, err)
+	}
+
+	return manifest, nil
 }
 
-func NewManifestRepository(repositoryPath string, share *smb2.Share) *ManifestRepository {
-	return &ManifestRepository{repositoryPath: repositoryPath, share: share}
+func NewManifestRepository(client *gowebdav.Client, repositoryPath string) *ManifestRepository {
+	return &ManifestRepository{client: client, repositoryPath: repositoryPath}
 }

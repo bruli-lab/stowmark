@@ -22,13 +22,11 @@ func (w WebDavRepositories) RepositoryPath() string {
 }
 
 func (w WebDavRepositories) ObjectRepository() (snapshot.ObjectRepository, error) {
-	//TODO implement me
-	panic("implement me")
+	return webdav.NewObjectRepository(w.client, w.repositoryPath), nil
 }
 
 func (w WebDavRepositories) ManifestRepository() (snapshot.ManifestRepository, error) {
-	//TODO implement me
-	panic("implement me")
+	return webdav.NewManifestRepository(w.client, w.repositoryPath), nil
 }
 
 func (w WebDavRepositories) Close() error {
