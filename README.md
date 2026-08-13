@@ -131,6 +131,14 @@ stowmark snapshot restore \
   --id <snapshot-id> \
   --repo /srv/backups/stowmark
 ```
+Restore a file from snapshot:
+
+```bash
+stowmark snapshot restore \
+  --id <snapshot-id> \
+  --file <path> \
+  --repo /srv/backups/stowmark
+```
 
 ## SSH repositories
 
