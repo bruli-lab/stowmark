@@ -18,28 +18,28 @@ type FolderRepositoryRepository struct {
 	client *gowebdav.Client
 }
 
-func (f FolderRepositoryRepository) Exists(ctx context.Context, path string) (bool, error) {
+func (f FolderRepositoryRepository) Exists(ctx context.Context, repositoryPath string) (bool, error) {
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}
 
-	info, err := f.client.Stat(path)
+	info, err := f.client.Stat(repositoryPath)
 	if gowebdav.IsErrNotFound(err) {
 		return false, nil
 	}
 	if err != nil {
-		return false, fmt.Errorf("stat WebDAV path %q: %w", path, err)
+		return false, fmt.Errorf("stat WebDAV path %q: %w", repositoryPath, err)
 	}
 
 	return info.IsDir(), nil
 }
 
-func (f FolderRepositoryRepository) CreateFolder(ctx context.Context, path string) error {
+func (f FolderRepositoryRepository) CreateFolder(ctx context.Context, repositoryPath string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 
-	remotePath := webDAVPath(path)
+	remotePath := webDAVPath(repositoryPath)
 	if err := f.client.MkdirAll(remotePath, 0o755); err != nil {
 		return fmt.Errorf("create WebDAV folder %q: %w", remotePath, err)
 	}

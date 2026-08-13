@@ -14,6 +14,7 @@ import (
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/compression"
+	"github.com/bruli-lab/stowmark/internal/infra/model"
 	"github.com/pkg/sftp"
 )
 
@@ -112,9 +113,9 @@ func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Co
 
 	if _, err := io.Copy(
 		destination,
-		contextReader{
-			ctx:    ctx,
-			reader: decoded.Reader,
+		model.ContextReader{
+			Ctx:    ctx,
+			Reader: decoded.Reader,
 		},
 	); err != nil {
 		return fmt.Errorf(
@@ -174,9 +175,9 @@ func (o ObjectRepository) ReadObject(ctx context.Context, originalPath, hash str
 
 	storedSize, err := io.Copy(
 		hasher,
-		contextReader{
-			ctx:    ctx,
-			reader: objectFile,
+		model.ContextReader{
+			Ctx:    ctx,
+			Reader: objectFile,
 		},
 	)
 	if err != nil {
@@ -305,7 +306,7 @@ func (o ObjectRepository) Save(ctx context.Context, obj *snapshot.File, comp *re
 		return fmt.Errorf("encode remote object %q using %q: %w", destinationPath, comp.CompType(), err)
 	}
 
-	if _, err := io.Copy(encoded.Writer, contextReader{ctx: ctx, reader: source}); err != nil {
+	if _, err := io.Copy(encoded.Writer, model.ContextReader{Ctx: ctx, Reader: source}); err != nil {
 		return fmt.Errorf("write local file %q to remote object %q: %w", obj.Path(), destinationPath, err)
 	}
 

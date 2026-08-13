@@ -15,7 +15,7 @@ import (
 )
 
 type ManifestRepository struct {
-	client *gowebdav.Client
+	client         *gowebdav.Client
 	repositoryPath string
 }
 

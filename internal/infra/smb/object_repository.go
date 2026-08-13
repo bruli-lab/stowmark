@@ -14,6 +14,7 @@ import (
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/compression"
+	"github.com/bruli-lab/stowmark/internal/infra/model"
 	"github.com/cloudsoda/go-smb2"
 )
 
@@ -95,9 +96,9 @@ func (o ObjectRepository) Save(ctx context.Context, obj *snapshot.File, comp *re
 
 	if _, err := io.Copy(
 		writer.Writer,
-		contextReader{
-			ctx:    ctx,
-			reader: source,
+		model.ContextReader{
+			Ctx:    ctx,
+			Reader: source,
 		},
 	); err != nil {
 		return fmt.Errorf(
@@ -107,7 +108,6 @@ func (o ObjectRepository) Save(ctx context.Context, obj *snapshot.File, comp *re
 		)
 	}
 
-	// Finalitza la compressió i escriu els buffers i el footer.
 	if writer.Closer != nil {
 		if err := writer.Closer(); err != nil {
 			return fmt.Errorf(
@@ -194,9 +194,9 @@ func (o ObjectRepository) ReadObject(ctx context.Context, originalPath, hash str
 
 	storedSize, err := io.Copy(
 		hasher,
-		contextReader{
-			ctx:    ctx,
-			reader: objectFile,
+		model.ContextReader{
+			Ctx:    ctx,
+			Reader: objectFile,
 		},
 	)
 	if err != nil {
@@ -304,9 +304,9 @@ func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Co
 
 	if _, err := io.Copy(
 		destination,
-		contextReader{
-			ctx:    ctx,
-			reader: decoded.Reader,
+		model.ContextReader{
+			Ctx:    ctx,
+			Reader: decoded.Reader,
 		},
 	); err != nil {
 		return fmt.Errorf("restore object %q to %q: %w", sourcePath, destinationPath, err)
@@ -330,16 +330,4 @@ func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Co
 
 func NewObjectRepository(repositoryPath string, share *smb2.Share) *ObjectRepository {
 	return &ObjectRepository{repositoryPath: repositoryPath, share: share, handlersFactory: compression.NewHandlersFactory()}
-}
-
-type contextReader struct {
-	ctx    context.Context
-	reader io.Reader
-}
-
-func (r contextReader) Read(buffer []byte) (int, error) {
-	if err := r.ctx.Err(); err != nil {
-		return 0, err
-	}
-	return r.reader.Read(buffer)
 }

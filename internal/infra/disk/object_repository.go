@@ -13,6 +13,7 @@ import (
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/compression"
+	"github.com/bruli-lab/stowmark/internal/infra/model"
 )
 
 type ObjectRepository struct {
@@ -103,9 +104,9 @@ func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Co
 
 	if _, err := io.Copy(
 		destination,
-		contextReader{
-			ctx:    ctx,
-			reader: decoded.Reader,
+		model.ContextReader{
+			Ctx:    ctx,
+			Reader: decoded.Reader,
 		},
 	); err != nil {
 		return fmt.Errorf(
@@ -165,9 +166,9 @@ func (o ObjectRepository) ReadObject(ctx context.Context, originalPath, hash str
 
 	storedSize, err := io.Copy(
 		hasher,
-		contextReader{
-			ctx:    ctx,
-			reader: objectFile,
+		model.ContextReader{
+			Ctx:    ctx,
+			Reader: objectFile,
 		},
 	)
 	if err != nil {
@@ -293,16 +294,4 @@ func NewObjectRepository(repositoryPath string) (*ObjectRepository, error) {
 		return nil, err
 	}
 	return &ObjectRepository{repositoryPath: absPath, handlersFactory: compression.NewHandlersFactory()}, nil
-}
-
-type contextReader struct {
-	ctx    context.Context
-	reader io.Reader
-}
-
-func (r contextReader) Read(buffer []byte) (int, error) {
-	if err := r.ctx.Err(); err != nil {
-		return 0, err
-	}
-	return r.reader.Read(buffer)
 }

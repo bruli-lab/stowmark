@@ -13,6 +13,7 @@ import (
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/compression"
+	"github.com/bruli-lab/stowmark/internal/infra/model"
 )
 
 type SourceExplorer struct {
@@ -42,9 +43,9 @@ func (s SourceExplorer) CalculateHash(ctx context.Context, filePath string, comp
 	if err != nil {
 		return "", err
 	}
-	if _, err := io.Copy(encoder.Writer, contextReader{
-		ctx:    ctx,
-		reader: fi,
+	if _, err := io.Copy(encoder.Writer, model.ContextReader{
+		Ctx:    ctx,
+		Reader: fi,
 	}); err != nil {
 		if encoder.Closer != nil {
 			_ = encoder.Closer()

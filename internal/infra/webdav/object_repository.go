@@ -14,6 +14,7 @@ import (
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/compression"
+	"github.com/bruli-lab/stowmark/internal/infra/model"
 	"github.com/google/uuid"
 	"github.com/studio-b12/gowebdav"
 )
@@ -185,7 +186,7 @@ func (o ObjectRepository) AlreadyExists(ctx context.Context, obj *snapshot.File)
 	}
 }
 
-func (o ObjectRepository) ReadObject(ctx context.Context, originalPath string, hash string) (*snapshot.File, error) {
+func (o ObjectRepository) ReadObject(ctx context.Context, originalPath, hash string) (*snapshot.File, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -217,9 +218,9 @@ func (o ObjectRepository) ReadObject(ctx context.Context, originalPath string, h
 
 	storedSize, err := io.Copy(
 		hasher,
-		contextReader{
-			ctx:    ctx,
-			reader: objectReader,
+		model.ContextReader{
+			Ctx:    ctx,
+			Reader: objectReader,
 		},
 	)
 	if err != nil {
@@ -321,9 +322,9 @@ func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Co
 
 	if _, err := io.Copy(
 		destination,
-		contextReader{
-			ctx:    ctx,
-			reader: decoded.Reader,
+		model.ContextReader{
+			Ctx:    ctx,
+			Reader: decoded.Reader,
 		},
 	); err != nil {
 		return fmt.Errorf("restore WebDAV object %q to %q: %w", remotePath, destinationPath, err)
@@ -353,16 +354,4 @@ func (o ObjectRepository) objectPath(hash string) (string, error) {
 
 func NewObjectRepository(client *gowebdav.Client, repositoryPath string) *ObjectRepository {
 	return &ObjectRepository{client: client, repositoryPath: repositoryPath, handlersFactory: compression.NewHandlersFactory()}
-}
-
-type contextReader struct {
-	ctx    context.Context
-	reader io.Reader
-}
-
-func (r contextReader) Read(buffer []byte) (int, error) {
-	if err := r.ctx.Err(); err != nil {
-		return 0, err
-	}
-	return r.reader.Read(buffer)
 }

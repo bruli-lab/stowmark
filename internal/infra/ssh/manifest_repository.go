@@ -92,9 +92,9 @@ func (ma ManifestRepository) Save(ctx context.Context, m *snapshot.Manifest) err
 
 	if _, err := io.Copy(
 		file,
-		contextReader{
-			ctx:    ctx,
-			reader: bytes.NewReader(data),
+		model.ContextReader{
+			Ctx:    ctx,
+			Reader: bytes.NewReader(data),
 		},
 	); err != nil {
 		return fmt.Errorf("write remote manifest %q: %w", manifestPath, err)
@@ -153,9 +153,9 @@ func (ma ManifestRepository) List(ctx context.Context) ([]snapshot.Manifest, err
 			return nil, fmt.Errorf("open remote manifest %q: %w", manifestPath, err)
 		}
 
-		data, readErr := io.ReadAll(contextReader{
-			ctx:    ctx,
-			reader: manifestFile,
+		data, readErr := io.ReadAll(model.ContextReader{
+			Ctx:    ctx,
+			Reader: manifestFile,
 		})
 		closeErr := manifestFile.Close()
 
@@ -202,9 +202,9 @@ func (ma ManifestRepository) Get(ctx context.Context, snapshotID string) (*snaps
 	}()
 
 	data, err := io.ReadAll(
-		contextReader{
-			ctx:    ctx,
-			reader: file,
+		model.ContextReader{
+			Ctx:    ctx,
+			Reader: file,
 		},
 	)
 	if err != nil {

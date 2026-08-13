@@ -164,9 +164,9 @@ func (f FolderRepositoryRepository) writeFile(ctx context.Context, filePath stri
 
 	_, writeErr := io.Copy(
 		file,
-		contextReader{
-			ctx:    ctx,
-			reader: bytes.NewReader(data),
+		model.ContextReader{
+			Ctx:    ctx,
+			Reader: bytes.NewReader(data),
 		},
 	)
 
@@ -195,22 +195,9 @@ func (f FolderRepositoryRepository) writeFile(ctx context.Context, filePath stri
 
 func decodeJSON(ctx context.Context, reader io.Reader, value any) error {
 	return json.NewDecoder(
-		contextReader{
-			ctx:    ctx,
-			reader: reader,
+		model.ContextReader{
+			Ctx:    ctx,
+			Reader: reader,
 		},
 	).Decode(value)
-}
-
-type contextReader struct {
-	ctx    context.Context
-	reader io.Reader
-}
-
-func (r contextReader) Read(data []byte) (int, error) {
-	if err := r.ctx.Err(); err != nil {
-		return 0, err
-	}
-
-	return r.reader.Read(data)
 }
