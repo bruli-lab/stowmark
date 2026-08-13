@@ -25,13 +25,11 @@ func (r GCSRepositories) RepositoryPath() string {
 }
 
 func (r GCSRepositories) ObjectRepository() (snapshot.ObjectRepository, error) {
-	// TODO implement me
-	panic("implement me")
+	return gcs.NewObjectRepository(r.repositoryPath, r.bucket, r.client), nil
 }
 
 func (r GCSRepositories) ManifestRepository() (snapshot.ManifestRepository, error) {
-	// TODO implement me
-	panic("implement me")
+	return gcs.NewManifestRepository(r.client, r.bucket, r.repositoryPath), nil
 }
 
 func (r GCSRepositories) Close() error {
