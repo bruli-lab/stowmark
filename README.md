@@ -130,7 +130,9 @@ Restore a snapshot:
 stowmark snapshot restore \
   --id <snapshot-id> \
   --repo /srv/backups/stowmark
+  --destination /srv/backups/stowmark-restore //optional
 ```
+
 Restore a file from snapshot:
 
 ```bash
@@ -138,6 +140,7 @@ stowmark snapshot restore \
   --id <snapshot-id> \
   --file <path> \
   --repo /srv/backups/stowmark
+  --destination /srv/backups/stowmark-restore //optional
 ```
 
 ## SSH repositories
