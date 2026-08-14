@@ -17,7 +17,8 @@ func TestRestore_Restore(t *testing.T) {
 		fixtures.FileBuilder{}.Build(),
 	}}.Build()
 	type args struct {
-		snapshotID string
+		snapshotID      string
+		destinationPath *string
 	}
 	tests := []struct {
 		name string
@@ -42,6 +43,7 @@ func TestRestore_Restore(t *testing.T) {
 		},
 		{
 			name:              "with no error, then it returns same error success result",
+			args:              args{snapshotID: "id", destinationPath: new("/tmp")},
 			manifest:          &manifest,
 			expectedSuccess:   true,
 			expectedFailedLen: 0,
@@ -61,7 +63,7 @@ func TestRestore_Restore(t *testing.T) {
 			}
 
 			svc := snapshot.NewRestore(manifestRepo, objectRepo)
-			result, err := svc.Restore(t.Context(), tt.args.snapshotID)
+			result, err := svc.Restore(t.Context(), tt.args.snapshotID, tt.args.destinationPath)
 			if err != nil {
 				require.ErrorAs(t, err, &tt.expectedErr)
 				return

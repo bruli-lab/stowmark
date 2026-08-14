@@ -6,12 +6,12 @@ import (
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 )
 
-func (h *Handler) RestoreSnapshot(ctx context.Context, snapshotID string) (*Result, error) {
+func (h *Handler) RestoreSnapshot(ctx context.Context, snapshotID string, destinationPath *string) (*Result, error) {
 	svc := snapshot.NewRestore(
 		h.manifestRepository,
 		h.objectRepository,
 	)
-	result, err := svc.Restore(ctx, snapshotID)
+	result, err := svc.Restore(ctx, snapshotID, destinationPath)
 	if err != nil {
 		return nil, err
 	}

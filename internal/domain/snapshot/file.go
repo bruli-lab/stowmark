@@ -22,6 +22,10 @@ func (f *File) AddHash(hash string) {
 	f.hash = hash
 }
 
+func (f *File) ChangePath(p string) {
+	f.path = p
+}
+
 func (f *File) Hydrate(path, hash string, size int64) {
 	f.size = size
 	f.path = path

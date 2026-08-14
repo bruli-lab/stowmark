@@ -12,9 +12,10 @@ import (
 
 func newSnapshotRestoreCommand() *cobra.Command {
 	var (
-		repositoryPath string
-		snapshotID     string
-		filePath       string
+		repositoryPath  string
+		snapshotID      string
+		filePath        string
+		destinationPath string
 	)
 
 	cmd := &cobra.Command{
@@ -22,12 +23,17 @@ func newSnapshotRestoreCommand() *cobra.Command {
 		Short: "Restore snapshot",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			var destination *string
 			if repositoryPath == "" {
 				return errors.New("--repo is required")
 			}
 
 			if snapshotID == "" {
 				return errors.New("--id is required")
+			}
+
+			if destinationPath != "" {
+				destination = &destinationPath
 			}
 
 			repohand, err := NewRepositoriesHandler(cmd.Context(), repositoryPath)
@@ -50,9 +56,9 @@ func newSnapshotRestoreCommand() *cobra.Command {
 
 			switch filePath {
 			case "":
-				return executeRestore(cmd, manifestRepo, objectRepo, snapshotID)
+				return executeRestore(cmd, manifestRepo, objectRepo, snapshotID, destination)
 			default:
-				return executeRestoreFile(cmd, manifestRepo, objectRepo, snapshotID, filePath)
+				return executeRestoreFile(cmd, manifestRepo, objectRepo, snapshotID, filePath, destination)
 			}
 		},
 	}
@@ -77,6 +83,12 @@ func newSnapshotRestoreCommand() *cobra.Command {
 		"",
 		"path to the file to restore",
 	)
+	cmd.Flags().StringVar(
+		&destinationPath,
+		"destination",
+		"",
+		"destination path",
+	)
 
 	return cmd
 }
@@ -86,10 +98,11 @@ func executeRestoreFile(
 	manifestRepo snapshot.ManifestRepository,
 	objectRepo snapshot.ObjectRepository,
 	snapshotID, filePath string,
+	destinationPath *string,
 ) error {
 	svc := snapshot.NewRestoreFile(manifestRepo, objectRepo)
 
-	if err := svc.Restore(cmd.Context(), snapshotID, filePath); err != nil {
+	if err := svc.Restore(cmd.Context(), snapshotID, filePath, destinationPath); err != nil {
 		return err
 	}
 	_, err := fmt.Fprintf(
@@ -106,6 +119,7 @@ func executeRestore(
 	manifestRepo snapshot.ManifestRepository,
 	objectRepo snapshot.ObjectRepository,
 	snapshotID string,
+	destination *string,
 ) error {
 	svc := snapshot.NewRestore(
 		manifestRepo,
@@ -115,6 +129,7 @@ func executeRestore(
 	result, err := svc.Restore(
 		cmd.Context(),
 		snapshotID,
+		destination,
 	)
 	if err != nil {
 		return err
