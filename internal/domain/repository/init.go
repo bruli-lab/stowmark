@@ -23,7 +23,7 @@ func (i Init) Do(ctx context.Context, r *Repository) error {
 		if err != nil {
 			return err
 		}
-		conf = NewConfig(previous.Id(), r.config.compression)
+		conf = NewConfig(previous.Id(), previous.formatVersion, r.config.compression)
 	}
 	if err := i.repo.CreateConfig(ctx, r.Path(), conf); err != nil {
 		return err

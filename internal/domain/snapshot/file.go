@@ -1,5 +1,7 @@
 package snapshot
 
+import "strings"
+
 type File struct {
 	path string
 	size int64
@@ -20,6 +22,10 @@ func (f *File) Hash() string {
 
 func (f *File) AddHash(hash string) {
 	f.hash = hash
+}
+
+func (f *File) ChangeSourcePath(source, destination string) {
+	f.path = strings.ReplaceAll(f.path, source, destination)
 }
 
 func (f *File) Hydrate(path, hash string, size int64) {

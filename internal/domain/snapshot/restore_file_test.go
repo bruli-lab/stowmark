@@ -15,7 +15,8 @@ import (
 func TestRestoreFile_Restore(t *testing.T) {
 	errTest := errors.New("test error")
 	type args struct {
-		filePath string
+		filePath        string
+		destinationPath *string
 	}
 	files := []snapshot.File{
 		fixtures.FileBuilder{Path: new("path1")}.Build(),
@@ -49,7 +50,7 @@ func TestRestoreFile_Restore(t *testing.T) {
 		},
 		{
 			name:     "and restore object return nil, then it returns nil",
-			args:     args{filePath: "path3"},
+			args:     args{filePath: "path3", destinationPath: new("destinationPath")},
 			manifest: new(fixtures.ManifestBuilder{Files: files}.Build()),
 		},
 	}
@@ -66,7 +67,7 @@ func TestRestoreFile_Restore(t *testing.T) {
 				return tt.objectErr
 			}
 			svc := snapshot.NewRestoreFile(manifestRepo, objectRepo)
-			err := svc.Restore(t.Context(), uuid.NewString(), tt.args.filePath)
+			err := svc.Restore(t.Context(), uuid.NewString(), tt.args.filePath, tt.args.destinationPath)
 			if err != nil {
 				require.ErrorAs(t, err, &tt.expectedErr)
 			}

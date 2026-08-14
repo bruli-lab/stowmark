@@ -10,7 +10,7 @@ type RestoreFile struct {
 	objectRepo   ObjectRepository
 }
 
-func (r *RestoreFile) Restore(ctx context.Context, snapshotID, filePath string) error {
+func (r *RestoreFile) Restore(ctx context.Context, snapshotID, filePath string, destinationPath *string) error {
 	man, err := r.manifestRepo.Get(ctx, snapshotID)
 	if err != nil {
 		return err
@@ -18,6 +18,9 @@ func (r *RestoreFile) Restore(ctx context.Context, snapshotID, filePath string) 
 	file, err := r.findFile(man, filePath)
 	if err != nil {
 		return err
+	}
+	if destinationPath != nil {
+		file.ChangeSourcePath(man.Source(), *destinationPath)
 	}
 	if err := r.objectRepo.RestoreObject(ctx, man.compression, file); err != nil {
 		return err

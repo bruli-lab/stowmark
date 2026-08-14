@@ -23,13 +23,15 @@ func (b RepositoryBuilder) Build(t *testing.T) repository.Repository {
 }
 
 type ConfigBuilder struct {
-	ID *uuid.UUID
+	ID            *uuid.UUID
+	FormatVersion *int
 }
 
 func (c ConfigBuilder) Build(t *testing.T) repository.Config {
 	id := fixtures.SetData(uuid.New(), c.ID)
 	compType, err := repository.NewCompression(repository.NoneCompressionType, nil)
 	require.NoError(t, err)
-	co := repository.NewConfig(id, compType)
+	version := fixtures.SetData(repository.CurrentFormatVersion, c.FormatVersion)
+	co := repository.NewConfig(id, version, compType)
 	return *co
 }

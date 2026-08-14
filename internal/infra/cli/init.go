@@ -42,7 +42,7 @@ func newInitCommand() *cobra.Command {
 
 			re, err := repository.NewRepository(
 				repoHand.RepositoryPath(),
-				repository.NewConfig(id, comp),
+				repository.NewConfig(id, repository.CurrentFormatVersion, comp),
 			)
 			if err != nil {
 				return fmt.Errorf("create repository: %w", err)

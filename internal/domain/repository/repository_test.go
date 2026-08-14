@@ -38,7 +38,7 @@ func TestNewRepository(t *testing.T) {
 			name: "with valid data, then it returns a valid repository struct",
 			args: args{
 				name:   "name",
-				config: repository.NewConfig(uuid.New(), compType),
+				config: repository.NewConfig(uuid.New(), repository.CurrentFormatVersion, compType),
 			},
 		},
 	}

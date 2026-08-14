@@ -9,13 +9,16 @@ type Restore struct {
 	objectRepo   ObjectRepository
 }
 
-func (r *Restore) Restore(ctx context.Context, snapshotID string) (*Result, error) {
+func (r *Restore) Restore(ctx context.Context, snapshotID string, destinationPath *string) (*Result, error) {
 	man, err := r.manifestRepo.Get(ctx, snapshotID)
 	if err != nil {
 		return nil, err
 	}
 	result := NewResult(snapshotID)
 	for _, f := range man.Files() {
+		if destinationPath != nil {
+			f.ChangeSourcePath(man.Source(), *destinationPath)
+		}
 		if err := r.objectRepo.RestoreObject(ctx, man.compression, &f); err != nil {
 			result.AddFailed(*NewFailedResult(f.Path(), err.Error()))
 			continue
