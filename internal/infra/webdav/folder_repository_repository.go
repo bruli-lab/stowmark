@@ -124,7 +124,7 @@ func (f FolderRepositoryRepository) GetConfig(ctx context.Context, repositoryPat
 		return nil, fmt.Errorf("create compression: %w", err)
 	}
 
-	return repository.NewConfig(id, compression), nil
+	return repository.NewConfig(id, conf.FormatVersion, compression), nil
 }
 
 func NewFolderRepositoryRepository(client *gowebdav.Client) *FolderRepositoryRepository {

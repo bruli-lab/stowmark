@@ -6,7 +6,11 @@ import (
 	"github.com/google/uuid"
 )
 
-const DefaultFormatVersion = 1
+const (
+	OneFormatVersion = iota + 1
+
+	CurrentFormatVersion = OneFormatVersion
+)
 
 type Config struct {
 	id            uuid.UUID
@@ -31,6 +35,6 @@ func (c Config) CreatedAt() time.Time {
 	return c.createdAt
 }
 
-func NewConfig(id uuid.UUID, comp *Compression) *Config {
-	return &Config{id: id, formatVersion: DefaultFormatVersion, createdAt: time.Now().UTC(), compression: comp}
+func NewConfig(id uuid.UUID, version int, comp *Compression) *Config {
+	return &Config{id: id, formatVersion: version, createdAt: time.Now().UTC(), compression: comp}
 }

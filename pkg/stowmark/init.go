@@ -22,7 +22,7 @@ func (h *Handler) Init(ctx context.Context, source string, comp *Compression) er
 	if err != nil {
 		return err
 	}
-	conf := repository.NewConfig(uuid.New(), compre)
+	conf := repository.NewConfig(uuid.New(), repository.CurrentFormatVersion, compre)
 	repo, err := repository.NewRepository(source, conf)
 	if err != nil {
 		return err

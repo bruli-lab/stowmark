@@ -188,7 +188,7 @@ func (f FolderRepositoryRepository) GetConfig(ctx context.Context, repositoryPat
 		)
 	}
 
-	return repository.NewConfig(id, comp), nil
+	return repository.NewConfig(id, conf.FormatVersion, comp), nil
 }
 
 func NewFolderRepositoryRepository(client *s3.Client, bucket string) *FolderRepositoryRepository {
