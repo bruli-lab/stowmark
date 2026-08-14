@@ -20,7 +20,7 @@ func (r *RestoreFile) Restore(ctx context.Context, snapshotID, filePath string, 
 		return err
 	}
 	if destinationPath != nil {
-		file.ChangePath(*destinationPath)
+		file.ChangeSourcePath(man.Source(), *destinationPath)
 	}
 	if err := r.objectRepo.RestoreObject(ctx, man.compression, file); err != nil {
 		return err

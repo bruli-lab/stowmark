@@ -17,7 +17,7 @@ func (r *Restore) Restore(ctx context.Context, snapshotID string, destinationPat
 	result := NewResult(snapshotID)
 	for _, f := range man.Files() {
 		if destinationPath != nil {
-			f.ChangePath(*destinationPath)
+			f.ChangeSourcePath(man.Source(), *destinationPath)
 		}
 		if err := r.objectRepo.RestoreObject(ctx, man.compression, &f); err != nil {
 			result.AddFailed(*NewFailedResult(f.Path(), err.Error()))
