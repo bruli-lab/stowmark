@@ -23,6 +23,7 @@ import (
 	"github.com/bruli-lab/stowmark/internal/infra/chunkio"
 	"github.com/bruli-lab/stowmark/internal/infra/compression"
 	"github.com/bruli-lab/stowmark/internal/infra/model"
+	objectrestore "github.com/bruli-lab/stowmark/internal/infra/object_restore"
 )
 
 type ObjectRepository struct {
@@ -288,29 +289,10 @@ func (o ObjectRepository) AlreadyExists(ctx context.Context, hash string) (bool,
 }
 
 func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Compression, obj *snapshot.File) error {
-	if err := ctx.Err(); err != nil {
+	key, err := objectrestore.ObjectPath(ctx, o.repositoryPath, comp, obj)
+	if err != nil {
 		return err
 	}
-
-	if comp == nil {
-		return errors.New("compression configuration is required")
-	}
-
-	if obj == nil {
-		return errors.New("snapshot object is required")
-	}
-
-	hash := obj.Hash()
-	if len(hash) < 3 {
-		return fmt.Errorf("invalid object hash %q", hash)
-	}
-
-	key := path.Join(
-		o.repositoryPath,
-		repository.ObjectsFolder,
-		hash[:2],
-		hash[2:],
-	)
 
 	output, err := o.client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(o.bucket),

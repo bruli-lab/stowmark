@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -17,6 +16,7 @@ import (
 	"github.com/bruli-lab/stowmark/internal/infra/chunkio"
 	"github.com/bruli-lab/stowmark/internal/infra/compression"
 	"github.com/bruli-lab/stowmark/internal/infra/model"
+	objectrestore "github.com/bruli-lab/stowmark/internal/infra/object_restore"
 	"github.com/google/uuid"
 	"github.com/studio-b12/gowebdav"
 )
@@ -307,29 +307,10 @@ func (o ObjectRepository) AlreadyExists(ctx context.Context, hash string) (bool,
 }
 
 func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Compression, obj *snapshot.File) error {
-	if err := ctx.Err(); err != nil {
+	remotePath, err := objectrestore.ObjectPath(ctx, o.repositoryPath, comp, obj)
+	if err != nil {
 		return err
 	}
-
-	if comp == nil {
-		return errors.New("compression configuration is required")
-	}
-
-	if obj == nil {
-		return errors.New("snapshot object is required")
-	}
-
-	hash := obj.Hash()
-	if len(hash) < 3 {
-		return fmt.Errorf("invalid object hash %q", hash)
-	}
-
-	remotePath := path.Join(
-		o.repositoryPath,
-		repository.ObjectsFolder,
-		hash[:2],
-		hash[2:],
-	)
 
 	source, err := o.client.ReadStream(remotePath)
 	if err != nil {
