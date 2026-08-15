@@ -1,4 +1,4 @@
-package cli
+package repositories
 
 import (
 	"github.com/bruli-lab/stowmark/internal/domain/repository"

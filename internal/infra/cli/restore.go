@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
+	"github.com/bruli-lab/stowmark/internal/infra/repositories"
 	"github.com/spf13/cobra"
 )
 
@@ -34,20 +35,20 @@ func newSnapshotRestoreCommand() *cobra.Command {
 				destination = &destinationPath
 			}
 
-			repohand, err := NewRepositoriesHandler(cmd.Context(), repositoryPath)
+			repoHandler, err := repositories.NewHandler(cmd.Context(), repositoryPath)
 			if err != nil {
 				return err
 			}
 			defer func() {
-				_ = repohand.Close()
+				_ = repoHandler.Close()
 			}()
 
-			manifestRepo, err := repohand.ManifestRepository()
+			manifestRepo, err := repoHandler.ManifestRepository()
 			if err != nil {
 				return err
 			}
 
-			objectRepo, err := repohand.ObjectRepository()
+			objectRepo, err := repoHandler.ObjectRepository()
 			if err != nil {
 				return err
 			}
@@ -112,13 +113,7 @@ func executeRestoreFile(
 	return err
 }
 
-func executeRestore(
-	cmd *cobra.Command,
-	manifestRepo snapshot.ManifestRepository,
-	objectRepo snapshot.ObjectRepository,
-	snapshotID string,
-	destination *string,
-) error {
+func executeRestore(cmd *cobra.Command, manifestRepo snapshot.ManifestRepository, objectRepo snapshot.ObjectRepository, snapshotID string, destination *string) error {
 	svc := snapshot.NewRestore(
 		manifestRepo,
 		objectRepo,

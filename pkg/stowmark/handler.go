@@ -1,9 +1,12 @@
 package stowmark
 
 import (
+	"context"
+
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/disk"
+	"github.com/bruli-lab/stowmark/internal/infra/repositories"
 )
 
 type Handler struct {
@@ -14,19 +17,22 @@ type Handler struct {
 	repositoryPath     string
 }
 
-func NewHandler(repositoryPath string) (*Handler, error) {
-	_, err := repository.ParseRepositoryType(repositoryPath)
+func NewHandler(ctx context.Context, repositoryPath string) (*Handler, error) {
+	repoHandler, err := repositories.NewHandler(ctx, repositoryPath)
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		_ = repoHandler.Close()
+	}()
 
-	folderRepo := disk.NewFolderRepositoryRepository()
+	folderRepo := repoHandler.FolderRepository()
 	sourceRepo := disk.NewSourceRepository()
-	manifestRepo, err := disk.NewManifestRepository(repositoryPath)
+	manifestRepo, err := repoHandler.ManifestRepository()
 	if err != nil {
 		return nil, err
 	}
-	objectRepo, err := disk.NewObjectRepository(repositoryPath)
+	objectRepo, err := repoHandler.ObjectRepository()
 	if err != nil {
 		return nil, err
 	}

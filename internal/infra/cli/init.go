@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
+	"github.com/bruli-lab/stowmark/internal/infra/repositories"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )
@@ -20,7 +21,7 @@ func newInitCommand() *cobra.Command {
 		Short: "Initialize a new Stowmark repository",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			repoHand, err := NewRepositoriesHandler(cmd.Context(), repositoryPath)
+			repoHand, err := repositories.NewHandler(cmd.Context(), repositoryPath)
 			if err != nil {
 				return err
 			}
