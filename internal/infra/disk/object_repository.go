@@ -139,7 +139,6 @@ func (o ObjectRepository) Save(ctx context.Context, filePath, hash string, comp 
 	return nil
 }
 
-
 func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Compression, obj *snapshot.File) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -224,7 +223,6 @@ func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Co
 
 	return nil
 }
-
 
 func (o ObjectRepository) restoreObjectPart(ctx context.Context, comp *repository.Compression, hash string, destination io.Writer) (int64, error) {
 	if err := ctx.Err(); err != nil {
@@ -382,7 +380,6 @@ func NewObjectRepository(repositoryPath string) (*ObjectRepository, error) {
 	repo := ObjectRepository{repositoryPath: absPath, handlersFactory: handlersFactory}
 	return &repo, nil
 }
-
 
 func objectHashes(obj *snapshot.File) ([]string, error) {
 	chunks := obj.Chunks()

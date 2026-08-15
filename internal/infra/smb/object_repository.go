@@ -3,8 +3,6 @@ package smb
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -17,7 +15,7 @@ import (
 	"github.com/bruli-lab/stowmark/internal/infra/chunkio"
 	"github.com/bruli-lab/stowmark/internal/infra/compression"
 	"github.com/bruli-lab/stowmark/internal/infra/model"
-	objectrestore "github.com/bruli-lab/stowmark/internal/infra/object_restore"
+	"github.com/bruli-lab/stowmark/internal/infra/object"
 	"github.com/cloudsoda/go-smb2"
 )
 
@@ -25,6 +23,7 @@ type ObjectRepository struct {
 	repositoryPath  string
 	share           *smb2.Share
 	handlersFactory *compression.HandlersFactory
+	encoder         *object.Encoder
 }
 
 func (o ObjectRepository) ReadObject(ctx context.Context, hash string) (io.ReadCloser, error) {
@@ -68,60 +67,9 @@ func (o ObjectRepository) SaveChunk(ctx context.Context, filePath, hash string, 
 		_ = source.Close()
 	}()
 
-	section := io.NewSectionReader(
-		source,
-		offset,
-		size,
-	)
-
-	var encoded bytes.Buffer
-
-	handler, err := o.handlersFactory.GetHandler(
-		comp.CompType(),
-	)
+	encoded, err := o.encoder.Encode(ctx, filePath, hash, offset, size, comp, source)
 	if err != nil {
 		return err
-	}
-
-	encoder, err := handler.Encode(
-		&encoded,
-		comp.Level(),
-	)
-	if err != nil {
-		return fmt.Errorf("create compression encoder for chunk %q: %w", hash, err)
-	}
-
-	_, copyErr := io.Copy(
-		encoder.Writer,
-		model.ContextReader{
-			Ctx:    ctx,
-			Reader: section,
-		},
-	)
-	if copyErr != nil {
-		if encoder.Closer != nil {
-			_ = encoder.Closer()
-		}
-
-		return fmt.Errorf("compress chunk %q from %q at offset %d: %w", hash, filePath, offset, copyErr)
-	}
-
-	if encoder.Closer != nil {
-		if err := encoder.Closer(); err != nil {
-			return fmt.Errorf("finish compression for chunk %q: %w", hash, err)
-		}
-	}
-
-	calculatedHashBytes := sha256.Sum256(
-		encoded.Bytes(),
-	)
-
-	calculatedHash := hex.EncodeToString(
-		calculatedHashBytes[:],
-	)
-
-	if calculatedHash != hash {
-		return fmt.Errorf("chunk hash mismatch: expected %s, calculated %s", hash, calculatedHash)
 	}
 
 	objectDirectory := path.Join(
@@ -293,7 +241,7 @@ func (o ObjectRepository) AlreadyExists(ctx context.Context, hash string) (bool,
 }
 
 func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Compression, obj *snapshot.File) error {
-	sourcePath, err := objectrestore.ObjectPath(ctx, o.repositoryPath, comp, obj)
+	sourcePath, err := object.GetPath(ctx, o.repositoryPath, comp, obj)
 	if err != nil {
 		return err
 	}
@@ -383,5 +331,7 @@ func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Co
 }
 
 func NewObjectRepository(repositoryPath string, share *smb2.Share) *ObjectRepository {
-	return &ObjectRepository{repositoryPath: repositoryPath, share: share, handlersFactory: compression.NewHandlersFactory()}
+	handlersFactory := compression.NewHandlersFactory()
+	encoder := object.NewEncoder(handlersFactory)
+	return &ObjectRepository{repositoryPath: repositoryPath, share: share, handlersFactory: handlersFactory, encoder: encoder}
 }

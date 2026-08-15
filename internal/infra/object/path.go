@@ -1,4 +1,4 @@
-package objectrestore
+package object
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 )
 
-func ObjectPath(ctx context.Context, repositoryPath string, comp *repository.Compression, obj *snapshot.File) (string, error) {
+func GetPath(ctx context.Context, repositoryPath string, comp *repository.Compression, obj *snapshot.File) (string, error) {
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}

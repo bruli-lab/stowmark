@@ -8,7 +8,7 @@ import (
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 )
 
-func printResult(output io. Writer, result *snapshot.Result) error {
+func printResult(output io.Writer, result *snapshot.Result) error {
 	writer := tabwriter.NewWriter(
 		output,
 		0,

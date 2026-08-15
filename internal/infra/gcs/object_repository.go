@@ -18,7 +18,7 @@ import (
 	"github.com/bruli-lab/stowmark/internal/infra/chunkio"
 	"github.com/bruli-lab/stowmark/internal/infra/compression"
 	"github.com/bruli-lab/stowmark/internal/infra/model"
-	objectrestore "github.com/bruli-lab/stowmark/internal/infra/object_restore"
+	"github.com/bruli-lab/stowmark/internal/infra/object"
 	"google.golang.org/api/googleapi"
 )
 
@@ -180,11 +180,11 @@ func (o ObjectRepository) Save(ctx context.Context, filePath, hash string, comp 
 		hash[2:],
 	)
 
-	object := o.client.
+	obj := o.client.
 		Bucket(o.bucket).
 		Object(objectPath)
 
-	if _, err := object.Attrs(ctx); err == nil {
+	if _, err := obj.Attrs(ctx); err == nil {
 		return nil
 	} else if !errors.Is(err, storage.ErrObjectNotExist) {
 		return fmt.Errorf("get attributes for object %q in bucket %q: %w", objectPath, o.bucket, err)
@@ -206,7 +206,7 @@ func (o ObjectRepository) Save(ctx context.Context, filePath, hash string, comp 
 	writeCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	destination := object.
+	destination := obj.
 		If(storage.Conditions{
 			DoesNotExist: true,
 		}).
@@ -327,7 +327,7 @@ func (o ObjectRepository) ReadObject(ctx context.Context, hash string) (io.ReadC
 }
 
 func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Compression, obj *snapshot.File) error {
-	objectPath, err := objectrestore.ObjectPath(ctx, o.repositoryPath, comp, obj)
+	objectPath, err := object.GetPath(ctx, o.repositoryPath, comp, obj)
 	if err != nil {
 		return err
 	}
