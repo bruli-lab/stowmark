@@ -24,6 +24,7 @@ type FileBuilder struct {
 	Path *string
 	Size *int64
 	Hash *string
+	Chunks []snapshot.Chunk
 }
 
 func (b FileBuilder) Build() snapshot.File {
@@ -31,7 +32,7 @@ func (b FileBuilder) Build() snapshot.File {
 	size := fixtures.SetData(20, b.Size)
 	hash := fixtures.SetData(uuid.NewString(), b.Hash)
 	fi := snapshot.File{}
-	fi.Hydrate(path, hash, size)
+	fi.Hydrate(path, hash, size, b.Chunks)
 	return fi
 }
 

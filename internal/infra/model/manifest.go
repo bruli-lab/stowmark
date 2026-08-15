@@ -9,10 +9,17 @@ import (
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 )
 
+type Chunk struct {
+	Hash   string `json:"hash"`
+	Size   int64  `json:"size"`
+	Offset int64  `json:"offset"`
+}
+
 type File struct {
-	Path string `json:"path"`
-	Hash string `json:"hash"`
-	Size int64  `json:"size"`
+	Path   string  `json:"path"`
+	Hash   string  `json:"hash,omitempty"`
+	Size   int64   `json:"size"`
+	Chunks []Chunk `json:"chunks,omitempty"`
 }
 
 type Manifest struct {
@@ -38,7 +45,11 @@ func BuildManifestDomain(data []byte, manifestPath string) (*snapshot.Manifest, 
 	)
 	for i, modelFile := range mo.Files {
 		file := snapshot.File{}
-		file.Hydrate(modelFile.Path, modelFile.Hash, modelFile.Size)
+		chunks := make([]snapshot.Chunk, len(modelFile.Chunks))
+		for j, chunk := range modelFile.Chunks {
+			chunks[j] = *snapshot.NewChunk(chunk.Hash, chunk.Offset, chunk.Size)
+		}
+		file.Hydrate(modelFile.Path, modelFile.Hash, modelFile.Size, chunks)
 		snapshotFiles[i] = file
 	}
 	compType, err := repository.ParseCompressionType(mo.Compression.Type)
@@ -57,4 +68,35 @@ func BuildManifestDomain(data []byte, manifestPath string) (*snapshot.Manifest, 
 		comp,
 	)
 	return man, nil
+}
+
+func NewManifest(m *snapshot.Manifest) Manifest {
+	files := make([]File, len(m.Files()))
+	for i, f := range m.Files() {
+		chunks := make([]Chunk, len(f.Chunks()))
+		for j, chunk := range f.Chunks() {
+			chunks[j] = Chunk{
+				Hash:   chunk.Hash(),
+				Size:   chunk.Size(),
+				Offset: chunk.Offset(),
+			}
+		}
+		files[i] = File{
+			Path:   f.Path(),
+			Hash:   f.Hash(),
+			Size:   f.Size(),
+			Chunks: chunks,
+		}
+	}
+	man := Manifest{
+		ID:        m.Id(),
+		Files:     files,
+		CreatedAt: m.CreatedAt().In(time.Local),
+		Source:    m.Source(),
+		Compression: Compression{
+			Type:  m.Compression().CompType().String(),
+			Level: m.Compression().Level(),
+		},
+	}
+	return man
 }

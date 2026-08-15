@@ -3,6 +3,7 @@ package snapshot_test
 import (
 	"context"
 	"errors"
+	"io"
 	"testing"
 
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
@@ -67,8 +68,8 @@ func TestVerifier_Verify(t *testing.T) {
 		when Verify method is called `+tt.name, func(t *testing.T) {
 			t.Parallel()
 			objectRepo := &snapshot.ObjectRepositoryMock{}
-			objectRepo.ReadObjectFunc = func(_ context.Context, _ string, _ string) (*snapshot.File, error) {
-				return tt.file, tt.readObjectErr
+			objectRepo.ReadObjectFunc = func(_ context.Context, _ string, ) (io.ReadCloser, error) {
+				return nil, tt.readObjectErr
 			}
 			manifestRepo := &snapshot.ManifestRepositoryMock{}
 			manifestRepo.GetFunc = func(_ context.Context, _ string) (*snapshot.Manifest, error) {

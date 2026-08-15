@@ -27,20 +27,146 @@ type ObjectRepository struct {
 	handlersFactory *compression.HandlersFactory
 }
 
-func (o ObjectRepository) Save(ctx context.Context, obj *snapshot.File, comp *repository.Compression) error {
-	if err := ctx.Err(); err != nil {
+func (o ObjectRepository) SaveChunk(ctx context.Context, filePath, hash string, offset, size int64, comp *repository.Compression) error {
+	if comp == nil {
+		return errors.New("compression configuration is required")
+	}
+
+	if len(hash) < 3 {
+		return fmt.Errorf("invalid object hash %q", hash)
+	}
+
+	if offset < 0 {
+		return fmt.Errorf("invalid chunk offset: %d", offset)
+	}
+
+	if size <= 0 {
+		return fmt.Errorf("invalid chunk size: %d", size)
+	}
+
+	source, err := os.Open(filePath)
+	if err != nil {
+		return fmt.Errorf("open source file %q: %w", filePath, err)
+	}
+	defer func() {
+		_ = source.Close()
+	}()
+
+	info, err := source.Stat()
+	if err != nil {
+		return fmt.Errorf("stat source file %q: %w", filePath, err)
+	}
+
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("%q is not a regular file", filePath)
+	}
+
+	if offset > info.Size() || size > info.Size()-offset {
+		return fmt.Errorf("chunk range [%d,%d) exceeds file size %d for %q", offset, offset+size, info.Size(), filePath)
+	}
+
+	objectPath := path.Join(
+		o.repositoryPath,
+		repository.ObjectsFolder,
+		hash[:2],
+		hash[2:],
+	)
+
+	uploadCtx, cancelUpload := context.WithCancel(ctx)
+	defer cancelUpload()
+
+	writer := o.client.
+		Bucket(o.bucket).
+		Object(objectPath).
+		NewWriter(uploadCtx)
+
+	abortUpload := func() {
+		cancelUpload()
+		_ = writer.Close()
+	}
+
+	hasher := sha256.New()
+
+	destination := io.MultiWriter(
+		writer,
+		hasher,
+	)
+
+	handler, err := o.handlersFactory.GetHandler(
+		comp.CompType(),
+	)
+	if err != nil {
+		abortUpload()
 		return err
 	}
 
-	if obj == nil {
-		return errors.New("snapshot object is required")
+	encoder, err := handler.Encode(
+		destination,
+		comp.Level(),
+	)
+	if err != nil {
+		abortUpload()
+
+		return fmt.Errorf("create compression encoder for chunk %q: %w", hash, err)
+	}
+
+	section := io.NewSectionReader(
+		source,
+		offset,
+		size,
+	)
+
+	_, copyErr := io.Copy(
+		encoder.Writer,
+		model.ContextReader{
+			Ctx:    uploadCtx,
+			Reader: section,
+		},
+	)
+	if copyErr != nil {
+		cancelUpload()
+		if encoder.Closer != nil {
+			_ = encoder.Closer()
+		}
+
+		_ = writer.Close()
+
+		return fmt.Errorf("write chunk %q from %q at offset %d: %w", hash, filePath, offset, copyErr)
+	}
+	if encoder.Closer != nil {
+		if err := encoder.Closer(); err != nil {
+			abortUpload()
+
+			return fmt.Errorf("finish compression for chunk %q: %w", hash, err)
+		}
+	}
+
+	calculatedHash := hex.EncodeToString(
+		hasher.Sum(nil),
+	)
+
+	if calculatedHash != hash {
+		abortUpload()
+
+		return fmt.Errorf("chunk hash mismatch: expected %s, calculated %s", hash, calculatedHash)
+	}
+
+	if err := writer.Close(); err != nil {
+		return fmt.Errorf("close object %q in bucket %q: %w", objectPath, o.bucket, err)
+	}
+
+	return nil
+}
+
+func (o ObjectRepository) Save(ctx context.Context, filePath, hash string, comp *repository.Compression) error {
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 
 	if comp == nil {
 		return errors.New("compression configuration is required")
 	}
 
-	hash := obj.Hash()
 	if len(hash) < 3 {
 		return fmt.Errorf("invalid object hash %q", hash)
 	}
@@ -59,17 +185,12 @@ func (o ObjectRepository) Save(ctx context.Context, obj *snapshot.File, comp *re
 	if _, err := object.Attrs(ctx); err == nil {
 		return nil
 	} else if !errors.Is(err, storage.ErrObjectNotExist) {
-		return fmt.Errorf(
-			"get attributes for object %q in bucket %q: %w",
-			objectPath,
-			o.bucket,
-			err,
-		)
+		return fmt.Errorf("get attributes for object %q in bucket %q: %w", objectPath, o.bucket, err)
 	}
 
-	source, err := os.Open(obj.Path())
+	source, err := os.Open(filePath)
 	if err != nil {
-		return fmt.Errorf("open source file %q: %w", obj.Path(), err)
+		return fmt.Errorf("open source file %q: %w", filePath, err)
 	}
 	defer func() {
 		_ = source.Close()
@@ -95,11 +216,7 @@ func (o ObjectRepository) Save(ctx context.Context, obj *snapshot.File, comp *re
 	if err != nil {
 		cancel()
 
-		return fmt.Errorf(
-			"create encoder for object %q: %w",
-			objectPath,
-			err,
-		)
+		return fmt.Errorf("create encoder for object %q: %w", objectPath, err)
 	}
 
 	if _, err := io.Copy(encoded.Writer, source); err != nil {
@@ -120,11 +237,7 @@ func (o ObjectRepository) Save(ctx context.Context, obj *snapshot.File, comp *re
 		if err := encoded.Closer(); err != nil {
 			cancel()
 
-			return fmt.Errorf(
-				"close encoder for object %q: %w",
-				objectPath,
-				err,
-			)
+			return fmt.Errorf("close encoder for object %q: %w", objectPath, err)
 		}
 	}
 
@@ -133,27 +246,17 @@ func (o ObjectRepository) Save(ctx context.Context, obj *snapshot.File, comp *re
 			return nil
 		}
 
-		return fmt.Errorf(
-			"close object %q in bucket %q: %w",
-			objectPath,
-			o.bucket,
-			err,
-		)
+		return fmt.Errorf("close object %q in bucket %q: %w", objectPath, o.bucket, err)
 	}
 
 	return nil
 }
 
-func (o ObjectRepository) AlreadyExists(ctx context.Context, obj *snapshot.File) (bool, error) {
+func (o ObjectRepository) AlreadyExists(ctx context.Context, hash string) (bool, error) {
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}
 
-	if obj == nil {
-		return false, errors.New("snapshot object is required")
-	}
-
-	hash := obj.Hash()
 	if len(hash) < 3 {
 		return false, fmt.Errorf("invalid object hash %q", hash)
 	}
@@ -182,13 +285,16 @@ func (o ObjectRepository) AlreadyExists(ctx context.Context, obj *snapshot.File)
 	}
 }
 
-func (o ObjectRepository) ReadObject(ctx context.Context, originalPath, hash string) (*snapshot.File, error) {
+func (o ObjectRepository) ReadObject(ctx context.Context, hash string) (io.ReadCloser, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 
 	if len(hash) < 3 {
-		return nil, fmt.Errorf("invalid object hash %q", hash)
+		return nil, fmt.Errorf(
+			"invalid object hash %q",
+			hash,
+		)
 	}
 
 	objectPath := path.Join(
@@ -204,42 +310,18 @@ func (o ObjectRepository) ReadObject(ctx context.Context, originalPath, hash str
 		NewReader(ctx)
 	if err != nil {
 		if errors.Is(err, storage.ErrObjectNotExist) {
-			return nil, snapshot.NewNotFoundError(originalPath)
+			return nil, snapshot.NewNotFoundError(hash)
 		}
 
-		return nil, fmt.Errorf("open object %q in bucket %q: %w", objectPath, o.bucket, err)
+		return nil, fmt.Errorf(
+			"open object %q in bucket %q: %w",
+			objectPath,
+			o.bucket,
+			err,
+		)
 	}
 
-	hasher := sha256.New()
-
-	storedSize, readErr := io.Copy(
-		hasher,
-		model.ContextReader{
-			Ctx:    ctx,
-			Reader: reader,
-		},
-	)
-
-	closeErr := reader.Close()
-
-	if readErr != nil {
-		return nil, fmt.Errorf("read object %q in bucket %q: %w", objectPath, o.bucket, readErr)
-	}
-
-	if closeErr != nil {
-		return nil, fmt.Errorf("close object %q in bucket %q: %w", objectPath, o.bucket, closeErr)
-	}
-
-	calculatedHash := hex.EncodeToString(hasher.Sum(nil))
-
-	result := snapshot.File{}
-	result.Hydrate(
-		originalPath,
-		calculatedHash,
-		storedSize,
-	)
-
-	return &result, nil
+	return reader, nil
 }
 
 func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Compression, obj *snapshot.File) error {

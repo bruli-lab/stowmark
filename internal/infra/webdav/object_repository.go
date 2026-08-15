@@ -1,6 +1,7 @@
 package webdav
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -25,12 +26,157 @@ type ObjectRepository struct {
 	handlersFactory *compression.HandlersFactory
 }
 
-func (o ObjectRepository) Save(ctx context.Context, obj *snapshot.File, comp *repository.Compression) error {
+func (o ObjectRepository) ReadObject(ctx context.Context, hash string) (io.ReadCloser, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	if len(hash) < 3 {
+		return nil, fmt.Errorf("invalid object hash %q", hash)
+	}
+
+	objectPath := path.Join(
+		o.repositoryPath,
+		repository.ObjectsFolder,
+		hash[:2],
+		hash[2:],
+	)
+
+	reader, err := o.client.ReadStream(objectPath)
+	if err != nil {
+		if gowebdav.IsErrNotFound(err) {
+			return nil, snapshot.NewNotFoundError(hash)
+		}
+
+		return nil, fmt.Errorf("open WebDAV object %q: %w", objectPath, err)
+	}
+
+	return reader, nil
+}
+
+func (o ObjectRepository) SaveChunk(ctx context.Context, filePath, hash string, offset, size int64, comp *repository.Compression) error {
+	if comp == nil {
+		return errors.New("compression configuration is required")
+	}
+
+	if len(hash) < 3 {
+		return fmt.Errorf("invalid object hash %q", hash)
+	}
+
+	if offset < 0 {
+		return fmt.Errorf("invalid chunk offset: %d", offset)
+	}
+
+	if size <= 0 {
+		return fmt.Errorf("invalid chunk size: %d", size)
+	}
+
+	source, err := os.Open(filePath)
+	if err != nil {
+		return fmt.Errorf("open source file %q: %w", filePath, err)
+	}
+	defer func() {
+		_ = source.Close()
+	}()
+
+	info, err := source.Stat()
+	if err != nil {
+		return fmt.Errorf("stat source file %q: %w", filePath, err)
+	}
+
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("%q is not a regular file", filePath)
+	}
+
+	if offset > info.Size() || size > info.Size()-offset {
+		return fmt.Errorf("chunk range [%d,%d) exceeds file size %d for %q", offset, offset+size, info.Size(), filePath)
+	}
+
+	section := io.NewSectionReader(
+		source,
+		offset,
+		size,
+	)
+
+	var encoded bytes.Buffer
+
+	handler, err := o.handlersFactory.GetHandler(
+		comp.CompType(),
+	)
+	if err != nil {
+		return err
+	}
+
+	encoder, err := handler.Encode(
+		&encoded,
+		comp.Level(),
+	)
+	if err != nil {
+		return fmt.Errorf("create compression encoder for chunk %q: %w", hash, err)
+	}
+
+	_, copyErr := io.Copy(
+		encoder.Writer,
+		model.ContextReader{
+			Ctx:    ctx,
+			Reader: section,
+		},
+	)
+	if copyErr != nil {
+		if encoder.Closer != nil {
+			_ = encoder.Closer()
+		}
+
+		return fmt.Errorf("compress chunk %q from %q at offset %d: %w", hash, filePath, offset, copyErr)
+	}
+
+	if encoder.Closer != nil {
+		if err := encoder.Closer(); err != nil {
+			return fmt.Errorf("finish compression for chunk %q: %w", hash, err)
+		}
+	}
+
+	calculatedHashBytes := sha256.Sum256(
+		encoded.Bytes(),
+	)
+
+	calculatedHash := hex.EncodeToString(
+		calculatedHashBytes[:],
+	)
+
+	if calculatedHash != hash {
+		return fmt.Errorf("chunk hash mismatch: expected %s, calculated %s", hash, calculatedHash)
+	}
+
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 
-	hash := obj.Hash()
+	objectPath := path.Join(
+		o.repositoryPath,
+		repository.ObjectsFolder,
+		hash[:2],
+		hash[2:],
+	)
+
+	reader := bytes.NewReader(encoded.Bytes())
+
+	if err := o.client.WriteStream(
+		objectPath,
+		reader,
+		0o644,
+	); err != nil {
+		return fmt.Errorf("write WebDAV object %q: %w", objectPath, err)
+	}
+
+	return nil
+}
+
+func (o ObjectRepository) Save(ctx context.Context, filePath, hash string, comp *repository.Compression) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	if len(hash) < 3 {
 		return fmt.Errorf("invalid object hash %q", hash)
 	}
@@ -53,9 +199,9 @@ func (o ObjectRepository) Save(ctx context.Context, obj *snapshot.File, comp *re
 		return fmt.Errorf("create WebDAV object directory %q: %w", destinationDir, err)
 	}
 
-	source, err := os.Open(obj.Path())
+	source, err := os.Open(filePath)
 	if err != nil {
-		return fmt.Errorf("open source file %q: %w", obj.Path(), err)
+		return fmt.Errorf("open source file %q: %w", filePath, err)
 	}
 	defer func() {
 		_ = source.Close()
@@ -81,7 +227,7 @@ func (o ObjectRepository) Save(ctx context.Context, obj *snapshot.File, comp *re
 	}
 
 	if _, err := io.Copy(writer.Writer, source); err != nil {
-		return fmt.Errorf("encode object %q: %w", obj.Path(), err)
+		return fmt.Errorf("encode object %q: %w", filePath, err)
 	}
 
 	if writer.Closer != nil {
@@ -151,12 +297,11 @@ func (o ObjectRepository) Save(ctx context.Context, obj *snapshot.File, comp *re
 	return nil
 }
 
-func (o ObjectRepository) AlreadyExists(ctx context.Context, obj *snapshot.File) (bool, error) {
+func (o ObjectRepository) AlreadyExists(ctx context.Context, hash string) (bool, error) {
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}
 
-	hash := obj.Hash()
 	if len(hash) < 3 {
 		return false, fmt.Errorf("invalid object hash %q", hash)
 	}
@@ -184,63 +329,6 @@ func (o ObjectRepository) AlreadyExists(ctx context.Context, obj *snapshot.File)
 	default:
 		return false, fmt.Errorf("check WebDAV object %q: %w", destinationPath, err)
 	}
-}
-
-func (o ObjectRepository) ReadObject(ctx context.Context, originalPath, hash string) (*snapshot.File, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-
-	if len(hash) < 3 {
-		return nil, fmt.Errorf("invalid object hash %q", hash)
-	}
-
-	remotePath := path.Join(
-		o.repositoryPath,
-		repository.ObjectsFolder,
-		hash[:2],
-		hash[2:],
-	)
-
-	objectReader, err := o.client.ReadStream(remotePath)
-	if err != nil {
-		if gowebdav.IsErrNotFound(err) {
-			return nil, snapshot.NewNotFoundError(originalPath)
-		}
-
-		return nil, fmt.Errorf("open WebDAV object %q: %w", remotePath, err)
-	}
-	defer func() {
-		_ = objectReader.Close()
-	}()
-
-	hasher := sha256.New()
-
-	storedSize, err := io.Copy(
-		hasher,
-		model.ContextReader{
-			Ctx:    ctx,
-			Reader: objectReader,
-		},
-	)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"read WebDAV object %q: %w",
-			remotePath,
-			err,
-		)
-	}
-
-	calculatedHash := hex.EncodeToString(hasher.Sum(nil))
-
-	result := snapshot.File{}
-	result.Hydrate(
-		originalPath,
-		calculatedHash,
-		storedSize,
-	)
-
-	return &result, nil
 }
 
 func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Compression, obj *snapshot.File) error {

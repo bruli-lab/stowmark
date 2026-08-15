@@ -109,10 +109,10 @@ func TestCreate_Do(t *testing.T) {
 				return tt.saveManifestErr
 			}
 			objRepo := &snapshot.ObjectRepositoryMock{}
-			objRepo.SaveFunc = func(_ context.Context, _ *snapshot.File, _ *repository.Compression) error {
+			objRepo.SaveFunc = func(_ context.Context, _, _ string, _ *repository.Compression) error {
 				return tt.saveObjErr
 			}
-			objRepo.AlreadyExistsFunc = func(_ context.Context, _ *snapshot.File) (bool, error) {
+			objRepo.AlreadyExistsFunc = func(_ context.Context, _ string) (bool, error) {
 				return tt.exists, tt.alreadyExistsErr
 			}
 			folderRepositoryRep := &repository.FolderRepositoryMock{}

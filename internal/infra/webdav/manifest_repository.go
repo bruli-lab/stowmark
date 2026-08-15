@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"path"
 	"slices"
-	"time"
 
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
@@ -24,25 +23,7 @@ func (r ManifestRepository) Save(ctx context.Context, m *snapshot.Manifest) erro
 		return err
 	}
 
-	files := make([]model.File, len(m.Files()))
-	for i, file := range m.Files() {
-		files[i] = model.File{
-			Path: file.Path(),
-			Hash: file.Hash(),
-			Size: file.Size(),
-		}
-	}
-
-	manifest := model.Manifest{
-		ID:        m.Id(),
-		Files:     files,
-		CreatedAt: m.CreatedAt().In(time.Local),
-		Source:    m.Source(),
-		Compression: model.Compression{
-			Type:  m.Compression().CompType().String(),
-			Level: m.Compression().Level(),
-		},
-	}
+	manifest := model.NewManifest(m)
 
 	data, err := json.MarshalIndent(manifest, "", " ")
 	if err != nil {

@@ -8,8 +8,8 @@ import (
 
 const (
 	OneFormatVersion = iota + 1
-
-	CurrentFormatVersion = OneFormatVersion
+	TwoFormatVersion
+	CurrentFormatVersion = TwoFormatVersion
 )
 
 type Config struct {
