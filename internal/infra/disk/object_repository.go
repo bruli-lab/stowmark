@@ -12,13 +12,13 @@ import (
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/compression"
 	"github.com/bruli-lab/stowmark/internal/infra/model"
-	restoreobject "github.com/bruli-lab/stowmark/internal/infra/restore_object"
+	objectrestore "github.com/bruli-lab/stowmark/internal/infra/object_restore"
 )
 
 type ObjectRepository struct {
 	repositoryPath  string
 	handlersFactory *compression.HandlersFactory
-	*restoreobject.Restorer
+	*objectrestore.Restorer
 }
 
 func (o ObjectRepository) ReadObject(ctx context.Context, hash string) (io.ReadCloser, error) {
@@ -260,7 +260,7 @@ func NewObjectRepository(repositoryPath string) (*ObjectRepository, error) {
 		return nil, err
 	}
 	handlersFactory := compression.NewHandlersFactory()
-	restorer := restoreobject.NewRestorer(absPath, handlersFactory)
+	restorer := objectrestore.NewRestorer(absPath, handlersFactory)
 	repo := ObjectRepository{repositoryPath: absPath, handlersFactory: handlersFactory, Restorer: restorer}
 	return &repo, nil
 }

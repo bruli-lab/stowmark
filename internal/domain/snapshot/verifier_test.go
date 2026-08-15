@@ -68,7 +68,7 @@ func TestVerifier_Verify(t *testing.T) {
 		when Verify method is called `+tt.name, func(t *testing.T) {
 			t.Parallel()
 			objectRepo := &snapshot.ObjectRepositoryMock{}
-			objectRepo.ReadObjectFunc = func(_ context.Context, _ string, ) (io.ReadCloser, error) {
+			objectRepo.ReadObjectFunc = func(_ context.Context, _ string) (io.ReadCloser, error) {
 				return nil, tt.readObjectErr
 			}
 			manifestRepo := &snapshot.ManifestRepositoryMock{}

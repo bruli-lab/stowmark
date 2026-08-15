@@ -1,4 +1,4 @@
-package restoreobject
+package objectrestore
 
 import (
 	"context"

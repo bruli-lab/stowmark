@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
+	"github.com/bruli-lab/stowmark/internal/infra/codec"
 	"github.com/bruli-lab/stowmark/internal/infra/model"
 	"github.com/google/uuid"
 )
@@ -75,26 +75,10 @@ func (f FolderRepositoryRepository) CreateFolder(ctx context.Context, path strin
 }
 
 func (f FolderRepositoryRepository) CreateConfig(ctx context.Context, path string, c *repository.Config) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-
-	co := model.Config{
-		ID:            c.Id().String(),
-		FormatVersion: c.FormatVersion(),
-		CreatedAt:     c.CreatedAt().In(time.Local).Format(time.RFC3339),
-		Compression: model.Compression{
-			Type:  c.Compression().CompType().String(),
-			Level: c.Compression().Level(),
-		},
-	}
-
-	data, err := json.MarshalIndent(co, "", "  ")
+	data, err := codec.MarshalConfig(ctx, c)
 	if err != nil {
 		return fmt.Errorf("marshal config: %w", err)
 	}
-
-	data = append(data, '\n')
 
 	configPath := filepath.Join(path, model.ConfigFile)
 	if err := os.WriteFile(configPath, data, 0o644); err != nil {

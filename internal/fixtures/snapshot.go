@@ -21,9 +21,9 @@ func (b SourceBuilder) Build() snapshot.Source {
 }
 
 type FileBuilder struct {
-	Path *string
-	Size *int64
-	Hash *string
+	Path   *string
+	Size   *int64
+	Hash   *string
 	Chunks []snapshot.Chunk
 }
 

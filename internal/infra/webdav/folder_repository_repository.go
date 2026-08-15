@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"path"
 	"strings"
-	"time"
 
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
+	"github.com/bruli-lab/stowmark/internal/infra/codec"
 	"github.com/bruli-lab/stowmark/internal/infra/model"
 	"github.com/google/uuid"
 	"github.com/studio-b12/gowebdav"
@@ -48,26 +48,10 @@ func (f FolderRepositoryRepository) CreateFolder(ctx context.Context, repository
 }
 
 func (f FolderRepositoryRepository) CreateConfig(ctx context.Context, repositoryPath string, c *repository.Config) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-
-	co := model.Config{
-		ID:            c.Id().String(),
-		FormatVersion: c.FormatVersion(),
-		CreatedAt:     c.CreatedAt().In(time.Local).Format(time.RFC3339),
-		Compression: model.Compression{
-			Type:  c.Compression().CompType().String(),
-			Level: c.Compression().Level(),
-		},
-	}
-
-	data, err := json.MarshalIndent(co, "", "  ")
+	data, err := codec.MarshalConfig(ctx, c)
 	if err != nil {
 		return fmt.Errorf("marshal config: %w", err)
 	}
-
-	data = append(data, '\n')
 
 	configPath := path.Join(repositoryPath, model.ConfigFile)
 	if err := f.client.Write(configPath, data, 0o644); err != nil {
