@@ -15,6 +15,7 @@ import (
 	"cloud.google.com/go/storage"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
+	"github.com/bruli-lab/stowmark/internal/infra/chunkio"
 	"github.com/bruli-lab/stowmark/internal/infra/compression"
 	"github.com/bruli-lab/stowmark/internal/infra/model"
 	"google.golang.org/api/googleapi"
@@ -28,42 +29,17 @@ type ObjectRepository struct {
 }
 
 func (o ObjectRepository) SaveChunk(ctx context.Context, filePath, hash string, offset, size int64, comp *repository.Compression) error {
-	if comp == nil {
-		return errors.New("compression configuration is required")
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 
-	if len(hash) < 3 {
-		return fmt.Errorf("invalid object hash %q", hash)
-	}
-
-	if offset < 0 {
-		return fmt.Errorf("invalid chunk offset: %d", offset)
-	}
-
-	if size <= 0 {
-		return fmt.Errorf("invalid chunk size: %d", size)
-	}
-
-	source, err := os.Open(filePath)
+	source, err := chunkio.OpenSource(filePath, hash, offset, size, comp)
 	if err != nil {
-		return fmt.Errorf("open source file %q: %w", filePath, err)
+		return err
 	}
 	defer func() {
 		_ = source.Close()
 	}()
-
-	info, err := source.Stat()
-	if err != nil {
-		return fmt.Errorf("stat source file %q: %w", filePath, err)
-	}
-
-	if !info.Mode().IsRegular() {
-		return fmt.Errorf("%q is not a regular file", filePath)
-	}
-
-	if offset > info.Size() || size > info.Size()-offset {
-		return fmt.Errorf("chunk range [%d,%d) exceeds file size %d for %q", offset, offset+size, info.Size(), filePath)
-	}
 
 	objectPath := path.Join(
 		o.repositoryPath,
@@ -107,7 +83,11 @@ func (o ObjectRepository) SaveChunk(ctx context.Context, filePath, hash string, 
 	if err != nil {
 		abortUpload()
 
-		return fmt.Errorf("create compression encoder for chunk %q: %w", hash, err)
+		return fmt.Errorf(
+			"create compression encoder for chunk %q: %w",
+			hash,
+			err,
+		)
 	}
 
 	section := io.NewSectionReader(
@@ -125,19 +105,31 @@ func (o ObjectRepository) SaveChunk(ctx context.Context, filePath, hash string, 
 	)
 	if copyErr != nil {
 		cancelUpload()
+
 		if encoder.Closer != nil {
 			_ = encoder.Closer()
 		}
 
 		_ = writer.Close()
 
-		return fmt.Errorf("write chunk %q from %q at offset %d: %w", hash, filePath, offset, copyErr)
+		return fmt.Errorf(
+			"write chunk %q from %q at offset %d: %w",
+			hash,
+			filePath,
+			offset,
+			copyErr,
+		)
 	}
+
 	if encoder.Closer != nil {
 		if err := encoder.Closer(); err != nil {
 			abortUpload()
 
-			return fmt.Errorf("finish compression for chunk %q: %w", hash, err)
+			return fmt.Errorf(
+				"finish compression for chunk %q: %w",
+				hash,
+				err,
+			)
 		}
 	}
 
@@ -148,11 +140,20 @@ func (o ObjectRepository) SaveChunk(ctx context.Context, filePath, hash string, 
 	if calculatedHash != hash {
 		abortUpload()
 
-		return fmt.Errorf("chunk hash mismatch: expected %s, calculated %s", hash, calculatedHash)
+		return fmt.Errorf(
+			"chunk hash mismatch: expected %s, calculated %s",
+			hash,
+			calculatedHash,
+		)
 	}
 
 	if err := writer.Close(); err != nil {
-		return fmt.Errorf("close object %q in bucket %q: %w", objectPath, o.bucket, err)
+		return fmt.Errorf(
+			"close object %q in bucket %q: %w",
+			objectPath,
+			o.bucket,
+			err,
+		)
 	}
 
 	return nil

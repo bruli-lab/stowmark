@@ -14,6 +14,7 @@ import (
 
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
+	"github.com/bruli-lab/stowmark/internal/infra/chunkio"
 	"github.com/bruli-lab/stowmark/internal/infra/compression"
 	"github.com/bruli-lab/stowmark/internal/infra/model"
 	"github.com/cloudsoda/go-smb2"
@@ -55,42 +56,16 @@ func (o ObjectRepository) ReadObject(ctx context.Context, hash string) (io.ReadC
 }
 
 func (o ObjectRepository) SaveChunk(ctx context.Context, filePath, hash string, offset, size int64, comp *repository.Compression) error {
-	if comp == nil {
-		return errors.New("compression configuration is required")
+	if err := ctx.Err(); err != nil {
+		return err
 	}
-
-	if len(hash) < 3 {
-		return fmt.Errorf("invalid object hash %q", hash)
-	}
-
-	if offset < 0 {
-		return fmt.Errorf("invalid chunk offset: %d", offset)
-	}
-
-	if size <= 0 {
-		return fmt.Errorf("invalid chunk size: %d", size)
-	}
-
-	source, err := os.Open(filePath)
+	source, err := chunkio.OpenSource(filePath, hash, offset, size, comp)
 	if err != nil {
-		return fmt.Errorf("open source file %q: %w", filePath, err)
+		return err
 	}
 	defer func() {
 		_ = source.Close()
 	}()
-
-	info, err := source.Stat()
-	if err != nil {
-		return fmt.Errorf("stat source file %q: %w", filePath, err)
-	}
-
-	if !info.Mode().IsRegular() {
-		return fmt.Errorf("%q is not a regular file", filePath)
-	}
-
-	if offset > info.Size() || size > info.Size()-offset {
-		return fmt.Errorf("chunk range [%d,%d) exceeds file size %d for %q", offset, offset+size, info.Size(), filePath)
-	}
 
 	section := io.NewSectionReader(
 		source,
