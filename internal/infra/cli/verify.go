@@ -3,8 +3,6 @@ package cli
 import (
 	"errors"
 	"fmt"
-	"io"
-	"text/tabwriter"
 
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/spf13/cobra"
@@ -60,7 +58,7 @@ func newSnapshotVerifyCommand() *cobra.Command {
 				return err
 			}
 
-			if err := printVerifyResult(
+			if err := printResult(
 				cmd.OutOrStdout(),
 				result,
 			); err != nil {
@@ -68,10 +66,7 @@ func newSnapshotVerifyCommand() *cobra.Command {
 			}
 
 			if !result.IsSuccess() {
-				return fmt.Errorf(
-					"snapshot %q failed verification",
-					snapshotID,
-				)
+				return fmt.Errorf("snapshot %q failed verification", snapshotID)
 			}
 
 			return nil
@@ -93,66 +88,4 @@ func newSnapshotVerifyCommand() *cobra.Command {
 	)
 
 	return cmd
-}
-
-func printVerifyResult(
-	output io.Writer,
-	result *snapshot.Result,
-) error {
-	writer := tabwriter.NewWriter(
-		output,
-		0,
-		4,
-		2,
-		' ',
-		0,
-	)
-
-	status := "OK"
-	if !result.IsSuccess() {
-		status = "FAILED"
-	}
-
-	failedFiles := len(result.Failed())
-	validFiles := result.TotalFiles() - failedFiles
-
-	if _, err := fmt.Fprintf(
-		writer,
-		"SNAPSHOT:\t%s\n"+
-			"STATUS:\t%s\n"+
-			"CHECKED:\t%d\n"+
-			"VALID:\t%d\n"+
-			"INVALID:\t%d\n",
-		result.SnapshotID(),
-		status,
-		result.TotalFiles(),
-		validFiles,
-		failedFiles,
-	); err != nil {
-		return err
-	}
-
-	if failedFiles == 0 {
-		return writer.Flush()
-	}
-
-	if _, err := fmt.Fprintln(
-		writer,
-		"\nPATH\tSTATUS\tREASON",
-	); err != nil {
-		return err
-	}
-
-	for _, check := range result.Failed() {
-		if _, err := fmt.Fprintf(
-			writer,
-			"%s\tINVALID\t%s\n",
-			check.Path(),
-			check.Reason(),
-		); err != nil {
-			return err
-		}
-	}
-
-	return writer.Flush()
 }
