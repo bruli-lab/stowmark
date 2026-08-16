@@ -42,16 +42,16 @@ func (c Create) Do(ctx context.Context, repoPath, sourcePath string) (*CreateRes
 	for i := range files {
 		totalSize += files[i].Size()
 
-		calculated, err := calculator.Calculate(ctx, &files[i], conf.Compression())
+		calculatedFile, err := calculator.Calculate(ctx, &files[i], conf.Compression())
 		if err != nil {
 			return nil, err
 		}
 
-		if err := c.saveFileObjects(ctx, calculated, conf.Compression()); err != nil {
+		if err := c.saveFileObjects(ctx, calculatedFile, conf.Compression()); err != nil {
 			return nil, err
 		}
 
-		files[i] = *calculated
+		files[i] = *calculatedFile
 	}
 
 	manifest := NewManifest(newID(), files, time.Now().UTC(), source.AbsolutePath(), conf.Compression())

@@ -117,33 +117,29 @@ func (o ObjectRepository) SaveChunk(ctx context.Context, filePath, hash string, 
 }
 
 func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Compression, obj *snapshot.File) error {
-	sourcePath, err := object.GetPath(ctx, o.repositoryPath, comp, obj)
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	if comp == nil {
+		return errors.New("compression configuration is required")
+	}
+
+	if obj == nil {
+		return errors.New("snapshot object is required")
+	}
+
+	hashes, err := object.GetHashes(obj)
 	if err != nil {
 		return err
 	}
 
-	source, err := o.client.Open(sourcePath)
-	if err != nil {
-		return fmt.Errorf("open remote object %q: %w", sourcePath, err)
-	}
-	defer func() {
-		_ = source.Close()
-	}()
-
-	handler, err := o.handlersFactory.GetHandler(comp.CompType())
-	if err != nil {
-		return fmt.Errorf("get compression handler %q: %w", comp.CompType(), err)
-	}
-
-	decoded, err := handler.Decode(source)
-	if err != nil {
-		return fmt.Errorf("decode remote object %q using %q: %w", sourcePath, comp.CompType(), err)
-	}
-	defer decoded.Closer()
-
 	destinationPath := obj.Path()
 
-	if err := os.MkdirAll(filepath.Dir(destinationPath), 0o755); err != nil {
+	if err := os.MkdirAll(
+		filepath.Dir(destinationPath),
+		0o755,
+	); err != nil {
 		return fmt.Errorf("create local destination directory for %q: %w", destinationPath, err)
 	}
 
@@ -167,14 +163,28 @@ func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Co
 		_ = os.Remove(destinationPath)
 	}()
 
-	if _, err := io.Copy(
-		destination,
-		model.ContextReader{
-			Ctx:    ctx,
-			Reader: decoded.Reader,
-		},
-	); err != nil {
-		return fmt.Errorf("restore remote object %q to local file %q: %w", sourcePath, destinationPath, err)
+	var restoredSize int64
+
+	for index, hash := range hashes {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
+		written, err := o.restoreObjectPart(
+			ctx,
+			comp,
+			hash,
+			destination,
+		)
+		if err != nil {
+			return fmt.Errorf("restore remote part %d/%d of %q: %w", index+1, len(hashes), destinationPath, err)
+		}
+
+		restoredSize += written
+	}
+
+	if restoredSize != obj.Size() {
+		return fmt.Errorf("restored size mismatch for %q: expected %d, restored %d", destinationPath, obj.Size(), restoredSize)
 	}
 
 	if err := destination.Close(); err != nil {
@@ -184,6 +194,59 @@ func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Co
 	restoreCompleted = true
 
 	return nil
+}
+
+func (o ObjectRepository) restoreObjectPart(ctx context.Context, comp *repository.Compression, hash string, destination io.Writer) (int64, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+
+	if len(hash) < 3 {
+		return 0, fmt.Errorf("invalid object hash %q", hash)
+	}
+
+	sourcePath := path.Join(
+		o.repositoryPath,
+		repository.ObjectsFolder,
+		hash[:2],
+		hash[2:],
+	)
+
+	source, err := o.client.Open(sourcePath)
+	if err != nil {
+		return 0, fmt.Errorf("open remote object %q: %w", sourcePath, err)
+	}
+	defer func() {
+		_ = source.Close()
+	}()
+
+	handler, err := o.handlersFactory.GetHandler(comp.CompType())
+	if err != nil {
+		return 0, fmt.Errorf("get compression handler %q: %w", comp.CompType(), err)
+	}
+
+	decoded, err := handler.Decode(source)
+	if err != nil {
+		return 0, fmt.Errorf("decode remote object %q using %q: %w", sourcePath, comp.CompType(), err)
+	}
+	defer decoded.Closer()
+
+	written, err := io.Copy(
+		destination,
+		model.ContextReader{
+			Ctx:    ctx,
+			Reader: decoded.Reader,
+		},
+	)
+	if err != nil {
+		return written, fmt.Errorf(
+			"copy decoded remote object %q: %w",
+			sourcePath,
+			err,
+		)
+	}
+
+	return written, nil
 }
 
 func (o ObjectRepository) AlreadyExists(ctx context.Context, hash string) (bool, error) {
