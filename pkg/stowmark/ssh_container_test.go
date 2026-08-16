@@ -16,6 +16,7 @@ import (
 	"github.com/moby/moby/api/types/mount"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
+	testcontainerslog "github.com/testcontainers/testcontainers-go/log"
 	"github.com/testcontainers/testcontainers-go/wait"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
@@ -74,6 +75,7 @@ func startSSHContainer(t *testing.T, ctx context.Context, publicKey []byte) test
 					WithStartupTimeout(60 * time.Second),
 			},
 			Started: true,
+			Logger:  testcontainerslog.TestLogger(t),
 		},
 	)
 	require.NoError(t, err)

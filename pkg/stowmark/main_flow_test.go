@@ -27,37 +27,53 @@ func mainFlow(t *testing.T, ctx context.Context, folders Folders) {
 		require.NoError(t, err)
 	}()
 
-	compressionLevel := 3
-	err = handler.Init(ctx, &stowmark.Compression{
-		Type:  "zstd",
-		Level: &compressionLevel,
+	var created *stowmark.CreateResult
+	
+	t.Run("init repository", func(t *testing.T) {
+		compressionLevel := 3
+		err = handler.Init(ctx, &stowmark.Compression{
+			Type:  "zstd",
+			Level: &compressionLevel,
+		})
+		require.NoError(t, err)
 	})
-	require.NoError(t, err)
 
-	created, err := handler.CreateSnapshot(ctx, folders.Source)
-	require.NoError(t, err)
-	require.NotEmpty(t, created.ID)
-	require.Equal(t, 3, created.FileCount)
+	t.Run("create snapshot", func(t *testing.T) {
+		result, err := handler.CreateSnapshot(ctx, folders.Source)
+		require.NoError(t, err)
+		require.NotEmpty(t, result.ID)
+		require.Equal(t, 3, result.FileCount)
+		created = result
+	})
 
-	snapshots, err := handler.ListSnapshots(ctx)
-	require.NoError(t, err)
-	require.Len(t, snapshots, 1)
-	require.Equal(t, created.ID, snapshots[0].ID)
+	t.Run("list snapshots", func(t *testing.T) {
+		snapshots, err := handler.ListSnapshots(ctx)
+		require.NoError(t, err)
+		require.Len(t, snapshots, 1)
+		require.Equal(t, created.ID, snapshots[0].ID)
+	})
 
-	snapshot, err := handler.GetSnapshot(ctx, created.ID)
-	require.NoError(t, err)
-	require.Equal(t, created.ID, snapshot.ID)
-	require.Len(t, snapshot.Files, created.FileCount)
+	t.Run("get snapshot", func(t *testing.T) {
+		snapshot, err := handler.GetSnapshot(ctx, created.ID)
+		require.NoError(t, err)
+		require.Equal(t, created.ID, snapshot.ID)
+		require.Len(t, snapshot.Files, created.FileCount)
 
-	verification, err := handler.VerifySnapshot(ctx, created.ID)
-	require.NoError(t, err)
-	require.True(t, verification.IsSuccess)
-	require.Empty(t, verification.Failed)
+	})
 
-	restored, err := handler.RestoreSnapshot(ctx, created.ID, folders.Restore)
-	require.NoError(t, err)
-	require.True(t, restored.IsSuccess)
-	require.Empty(t, restored.Failed)
+	t.Run("verify snapshot", func(t *testing.T) {
+		verification, err := handler.VerifySnapshot(ctx, created.ID)
+		require.NoError(t, err)
+		require.True(t, verification.IsSuccess)
+		require.Empty(t, verification.Failed)
+	})
+
+	t.Run("restore snapshot", func(t *testing.T) {
+		restored, err := handler.RestoreSnapshot(ctx, created.ID, folders.Restore)
+		require.NoError(t, err)
+		require.True(t, restored.IsSuccess)
+		require.Empty(t, restored.Failed)
+	})
 
 	requireDirectoriesEqual(t, folders.Source, *folders.Restore)
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
+	testcontainerslog "github.com/testcontainers/testcontainers-go/log"
 )
 
 func startSMBContainer(
@@ -74,6 +75,7 @@ func startSMBContainer(
 					WithStartupTimeout(60 * time.Second),
 			},
 			Started: true,
+			Logger:  testcontainerslog.TestLogger(t),
 		},
 	)
 	require.NoError(t, err)
