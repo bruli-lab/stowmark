@@ -20,9 +20,13 @@ func mainFlow(t *testing.T, folders Folders) {
 
 	handler, err := stowmark.NewHandler(ctx, folders.Repository)
 	require.NoError(t, err)
+	defer func() {
+		err := handler.Close()
+		require.NoError(t, err)
+	}()
 
 	compressionLevel := 3
-	err = handler.Init(ctx, folders.Repository, &stowmark.Compression{
+	err = handler.Init(ctx, &stowmark.Compression{
 		Type:  "zstd",
 		Level: &compressionLevel,
 	})

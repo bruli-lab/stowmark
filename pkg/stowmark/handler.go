@@ -15,6 +15,11 @@ type Handler struct {
 	manifestRepository snapshot.ManifestRepository
 	objectRepository   snapshot.ObjectRepository
 	repositoryPath     string
+	repositoriesHandler repositories.Repositories
+}
+
+func (h *Handler) Close() error {
+	return h.repositoriesHandler.Close()
 }
 
 func NewHandler(ctx context.Context, repositoryPath string) (*Handler, error) {
@@ -22,9 +27,6 @@ func NewHandler(ctx context.Context, repositoryPath string) (*Handler, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		_ = repoHandler.Close()
-	}()
 
 	folderRepo := repoHandler.FolderRepository()
 	sourceRepo := disk.NewSourceRepository()
@@ -42,6 +44,7 @@ func NewHandler(ctx context.Context, repositoryPath string) (*Handler, error) {
 		sourceRepository:   sourceRepo,
 		manifestRepository: manifestRepo,
 		objectRepository:   objectRepo,
-		repositoryPath:     repositoryPath,
+		repositoryPath:     repoHandler.RepositoryPath(),
+		repositoriesHandler: repoHandler,
 	}, nil
 }
