@@ -327,86 +327,134 @@ func (o ObjectRepository) ReadObject(ctx context.Context, hash string) (io.ReadC
 }
 
 func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Compression, obj *snapshot.File) error {
-	objectPath, err := object.GetPath(ctx, o.repositoryPath, comp, obj)
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	if comp == nil {
+		return errors.New("compression configuration is required")
+	}
+
+	if obj == nil {
+		return errors.New("snapshot object is required")
+	}
+
+	hashes, err := object.GetHashes(obj)
 	if err != nil {
 		return err
 	}
-	source, err := o.client.
-		Bucket(o.bucket).
-		Object(objectPath).
-		NewReader(ctx)
-	if err != nil {
-		if errors.Is(err, storage.ErrObjectNotExist) {
-			return snapshot.NewNotFoundError(obj.Path())
-		}
 
-		return fmt.Errorf("open object %q in bucket %q: %w", objectPath, o.bucket, err)
+	destinationPath := obj.Path()
+
+	if err := os.MkdirAll(filepath.Dir(destinationPath), 0o755); err != nil {
+		return fmt.Errorf("create destination directory for %q: %w", destinationPath, err)
 	}
 
+	destination, err := os.OpenFile(destinationPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
+	if err != nil {
+		return fmt.Errorf("create restored file %q: %w", destinationPath, err)
+	}
+
+	restoreCompleted := false
+	destinationClosed := false
+
+	defer func() {
+		if !destinationClosed {
+			_ = destination.Close()
+		}
+
+		if !restoreCompleted {
+			_ = os.Remove(destinationPath)
+		}
+	}()
+
+	var restoredSize int64
+
+	for index, hash := range hashes {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
+		written, err := o.restoreObjectPart(ctx, comp, hash, destination)
+		if err != nil {
+			return fmt.Errorf(
+				"restore GCS part %d/%d of %q: %w",
+				index+1,
+				len(hashes),
+				destinationPath,
+				err,
+			)
+		}
+
+		restoredSize += written
+	}
+
+	if restoredSize != obj.Size() {
+		return fmt.Errorf(
+			"restored size mismatch for %q: expected %d, restored %d",
+			destinationPath,
+			obj.Size(),
+			restoredSize,
+		)
+	}
+
+	if err := destination.Close(); err != nil {
+		destinationClosed = true
+		return fmt.Errorf("close restored file %q: %w", destinationPath, err)
+	}
+
+	destinationClosed = true
+	restoreCompleted = true
+
+	return nil
+}
+
+func (o ObjectRepository) restoreObjectPart(ctx context.Context, comp *repository.Compression, hash string, destination io.Writer) (int64, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+
+	if len(hash) < 3 {
+		return 0, fmt.Errorf("invalid object hash %q", hash)
+	}
+
+	objectPath := path.Join(o.repositoryPath, repository.ObjectsFolder, hash[:2], hash[2:])
+
+	source, err := o.client.Bucket(o.bucket).Object(objectPath).NewReader(ctx)
+	if err != nil {
+		if errors.Is(err, storage.ErrObjectNotExist) {
+			return 0, snapshot.NewNotFoundError(hash)
+		}
+
+		return 0, fmt.Errorf("open object %q in bucket %q: %w", objectPath, o.bucket, err)
+	}
 	defer func() {
 		_ = source.Close()
 	}()
 
 	handler, err := o.handlersFactory.GetHandler(comp.CompType())
 	if err != nil {
-		return err
+		return 0, fmt.Errorf("get compression handler %q: %w", comp.CompType(), err)
 	}
 
 	decoded, err := handler.Decode(source)
 	if err != nil {
-		return fmt.Errorf("decode object %q using %q: %w", objectPath, comp.CompType(), err)
+		return 0, fmt.Errorf("decode object %q using %q: %w", objectPath, comp.CompType(), err)
 	}
 
 	if decoded.Closer != nil {
 		defer decoded.Closer()
 	}
 
-	destinationPath := obj.Path()
-
-	if err := os.MkdirAll(
-		filepath.Dir(destinationPath),
-		0o755,
-	); err != nil {
-		return fmt.Errorf("create destination directory for %q: %w", destinationPath, err)
-	}
-
-	destination, err := os.OpenFile(
-		destinationPath,
-		os.O_WRONLY|os.O_CREATE|os.O_TRUNC,
-		0o644,
-	)
+	written, err := io.Copy(destination, model.ContextReader{
+		Ctx:    ctx,
+		Reader: decoded.Reader,
+	})
 	if err != nil {
-		return fmt.Errorf("create restored file %q: %w", destinationPath, err)
+		return written, fmt.Errorf("copy decoded object %q from bucket %q: %w", objectPath, o.bucket, err)
 	}
 
-	restoreCompleted := false
-
-	defer func() {
-		if restoreCompleted {
-			return
-		}
-
-		_ = destination.Close()
-		_ = os.Remove(destinationPath)
-	}()
-
-	if _, err := io.Copy(
-		destination,
-		model.ContextReader{
-			Ctx:    ctx,
-			Reader: decoded.Reader,
-		},
-	); err != nil {
-		return fmt.Errorf("restore object %q from bucket %q to %q: %w", objectPath, o.bucket, destinationPath, err)
-	}
-
-	if err := destination.Close(); err != nil {
-		return fmt.Errorf("close restored file %q: %w", destinationPath, err)
-	}
-
-	restoreCompleted = true
-
-	return nil
+	return written, nil
 }
 
 func NewObjectRepository(repositoryPath, bucket string, client *storage.Client) *ObjectRepository {

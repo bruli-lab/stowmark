@@ -10,11 +10,11 @@ import (
 )
 
 type Handler struct {
-	folderRepository   repository.FolderRepository
-	sourceRepository   snapshot.SourceRepository
-	manifestRepository snapshot.ManifestRepository
-	objectRepository   snapshot.ObjectRepository
-	repositoryPath     string
+	folderRepository    repository.FolderRepository
+	sourceRepository    snapshot.SourceRepository
+	manifestRepository  snapshot.ManifestRepository
+	objectRepository    snapshot.ObjectRepository
+	repositoryPath      string
 	repositoriesHandler repositories.Repositories
 }
 
@@ -40,11 +40,11 @@ func NewHandler(ctx context.Context, repositoryPath string) (*Handler, error) {
 	}
 
 	return &Handler{
-		folderRepository:   folderRepo,
-		sourceRepository:   sourceRepo,
-		manifestRepository: manifestRepo,
-		objectRepository:   objectRepo,
-		repositoryPath:     repoHandler.RepositoryPath(),
+		folderRepository:    folderRepo,
+		sourceRepository:    sourceRepo,
+		manifestRepository:  manifestRepo,
+		objectRepository:    objectRepo,
+		repositoryPath:      repoHandler.RepositoryPath(),
 		repositoriesHandler: repoHandler,
 	}, nil
 }

@@ -28,7 +28,7 @@ func mainFlow(t *testing.T, ctx context.Context, folders Folders) {
 	}()
 
 	var created *stowmark.CreateResult
-	
+
 	t.Run("init repository", func(t *testing.T) {
 		compressionLevel := 3
 		err = handler.Init(ctx, &stowmark.Compression{
@@ -58,7 +58,6 @@ func mainFlow(t *testing.T, ctx context.Context, folders Folders) {
 		require.NoError(t, err)
 		require.Equal(t, created.ID, snapshot.ID)
 		require.Len(t, snapshot.Files, created.FileCount)
-
 	})
 
 	t.Run("verify snapshot", func(t *testing.T) {

@@ -10,21 +10,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestS3RepositoryFlow(t *testing.T) {
+func TestGCSRepositoryFlow(t *testing.T) {
 	ctx := t.Context()
 
-	s3Container := startS3Container(t, ctx)
-	endpoint := s3ContainerEndpoint(t, ctx, s3Container)
+	gcsContainer := startGCSContainer(t, ctx)
+	endpoint := gcsContainerEndpoint(t, ctx, gcsContainer)
 
-	t.Setenv("AWS_ACCESS_KEY", "stowmark")
-	t.Setenv("AWS_SECRET_ACCESS_KEY", "stowmark-secret")
-	t.Setenv("AWS_REGION", "us-east-1")
-	t.Setenv("STOWMARK_S3_ENDPOINT", endpoint)
-	t.Setenv("STOWMARK_S3_PATH_STYLE", "true")
+	createGCSBucket(t, ctx, endpoint, "stowmark")
 
-	createS3Bucket(t, ctx, endpoint, "stowmark")
+	t.Setenv("STOWMARK_GCS_ENDPOINT", endpoint)
 
-	repositoryURL := "s3://stowmark/backups"
+	repositoryURL := "gcs://stowmark/backups"
 
 	testRoot := t.TempDir()
 	sourcePath := filepath.Join(testRoot, "source")

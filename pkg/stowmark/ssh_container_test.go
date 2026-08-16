@@ -89,6 +89,7 @@ func startSSHContainer(t *testing.T, ctx context.Context, publicKey []byte) test
 
 	return containerSSH
 }
+
 func sshContainerAddress(t *testing.T, ctx context.Context, container testcontainers.Container) string {
 	t.Helper()
 

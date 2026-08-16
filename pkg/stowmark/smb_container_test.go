@@ -15,8 +15,8 @@ import (
 	"github.com/moby/moby/api/types/mount"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/wait"
 	testcontainerslog "github.com/testcontainers/testcontainers-go/log"
+	"github.com/testcontainers/testcontainers-go/wait"
 )
 
 func startSMBContainer(
@@ -89,6 +89,7 @@ func startSMBContainer(
 
 	return smbContainer
 }
+
 func smbContainerAddress(t *testing.T, ctx context.Context, container testcontainers.Container) string {
 	t.Helper()
 
