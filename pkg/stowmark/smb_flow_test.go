@@ -3,6 +3,7 @@
 package stowmark_test
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,21 +12,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSSHRepositoryFlow(t *testing.T) {
-	ctx := t.Context()
+func TestSMBRepositoryFlow(t *testing.T) {
+	ctx := context.Background()
 
-	keyPair := createSSHKeyPair(t)
-	container := startSSHContainer(t, ctx, keyPair.publicKey)
+	container := startSMBContainer(t, ctx)
 
-	address := sshContainerAddress(t, ctx, container)
+	address := smbContainerAddress(t, ctx, container)
 
-	createKnownHosts(t, address)
-	t.Setenv(
-		"STOWMARK_SSH_PRIVATE_KEY",
-		keyPair.privateKeyPath,
-	)
+	t.Setenv("STOWMARK_SMB_PASSWORD", "stowmark")
 
-	repositoryURL := fmt.Sprintf("ssh://stowmark@%s/repositories/backups", address)
+	repositoryURL := fmt.Sprintf("smb://stowmark@%s/stowmark/backups", address)
 
 	testRoot := t.TempDir()
 	sourcePath := filepath.Join(testRoot, "source")

@@ -1,3 +1,5 @@
+//go:build integration
+
 package stowmark_test
 
 import (
@@ -10,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/api/types/mount"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -20,17 +24,21 @@ import (
 func startSSHContainer(t *testing.T, ctx context.Context, publicKey []byte) testcontainers.Container {
 	t.Helper()
 
-	container, err := testcontainers.GenericContainer(
+	repositoriesPath := t.TempDir()
+
+	containerSSH, err := testcontainers.GenericContainer(
 		ctx,
 		testcontainers.GenericContainerRequest{
 			ContainerRequest: testcontainers.ContainerRequest{
 				Image: "lscr.io/linuxserver/openssh-server:latest",
+
 				ExposedPorts: []string{
 					"2222/tcp",
 				},
+
 				Env: map[string]string{
 					"PUID":            strconv.Itoa(os.Getuid()),
-					"PGID":            strconv.Itoa(os.Getuid()),
+					"PGID":            strconv.Itoa(os.Getgid()),
 					"TZ":              "Europe/Madrid",
 					"USER_NAME":       "stowmark",
 					"PUBLIC_KEY_FILE": "/keys/stowmark.pub",
@@ -38,6 +46,7 @@ func startSSHContainer(t *testing.T, ctx context.Context, publicKey []byte) test
 					"SUDO_ACCESS":     "false",
 					"LOG_STDOUT":      "true",
 				},
+
 				Files: []testcontainers.ContainerFile{
 					{
 						Reader:            bytes.NewReader(publicKey),
@@ -45,12 +54,21 @@ func startSSHContainer(t *testing.T, ctx context.Context, publicKey []byte) test
 						FileMode:          0o644,
 					},
 				},
-				Mounts: testcontainers.ContainerMounts{
-					testcontainers.BindMount(
-						t.TempDir(),
-						"/repositories",
-					),
+
+				HostConfigModifier: func(
+					hostConfig *container.HostConfig,
+				) {
+					hostConfig.Mounts = append(
+						hostConfig.Mounts,
+						mount.Mount{
+							Type:     mount.TypeBind,
+							Source:   repositoriesPath,
+							Target:   "/repositories",
+							ReadOnly: false,
+						},
+					)
 				},
+
 				WaitingFor: wait.
 					ForListeningPort("2222/tcp").
 					WithStartupTimeout(60 * time.Second),
@@ -63,13 +81,12 @@ func startSSHContainer(t *testing.T, ctx context.Context, publicKey []byte) test
 	t.Cleanup(func() {
 		require.NoError(
 			t,
-			testcontainers.TerminateContainer(container),
+			testcontainers.TerminateContainer(containerSSH),
 		)
 	})
 
-	return container
+	return containerSSH
 }
-
 func sshContainerAddress(t *testing.T, ctx context.Context, container testcontainers.Container) string {
 	t.Helper()
 

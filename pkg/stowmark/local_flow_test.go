@@ -1,3 +1,5 @@
+//go:build integration
+
 package stowmark_test
 
 import (
@@ -15,5 +17,5 @@ func TestLocalRepositoryFlow(t *testing.T) {
 		Repository: repositoryPath,
 		Restore:    new(restorePath),
 	}
-	mainFlow(t, fold)
+	mainFlow(t, t.Context(), fold)
 }

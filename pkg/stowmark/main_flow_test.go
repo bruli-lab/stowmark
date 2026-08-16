@@ -1,6 +1,9 @@
+//go:build integration
+
 package stowmark_test
 
 import (
+	"context"
 	"os"
 	"testing"
 
@@ -13,8 +16,7 @@ type Folders struct {
 	Restore            *string
 }
 
-func mainFlow(t *testing.T, folders Folders) {
-	ctx := t.Context()
+func mainFlow(t *testing.T, ctx context.Context, folders Folders) {
 	require.NoError(t, os.MkdirAll(folders.Source, 0o755))
 	createSourceFixture(t, folders.Source)
 

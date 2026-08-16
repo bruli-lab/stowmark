@@ -241,40 +241,29 @@ func (o ObjectRepository) AlreadyExists(ctx context.Context, hash string) (bool,
 }
 
 func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Compression, obj *snapshot.File) error {
-	sourcePath, err := object.GetPath(ctx, o.repositoryPath, comp, obj)
-	if err != nil {
+	if err := ctx.Err(); err != nil {
 		return err
 	}
 
-	source, err := o.share.Open(sourcePath)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return snapshot.NewNotFoundError(obj.Path())
-		}
-
-		return fmt.Errorf("open object %q: %w", sourcePath, err)
+	if comp == nil {
+		return errors.New("compression configuration is required")
 	}
-	defer func() {
-		_ = source.Close()
-	}()
 
-	handler, err := o.handlersFactory.GetHandler(comp.CompType())
+	if obj == nil {
+		return errors.New("snapshot object is required")
+	}
+
+	hashes, err := object.GetHashes(obj)
 	if err != nil {
 		return err
-	}
-
-	decoded, err := handler.Decode(source)
-	if err != nil {
-		return fmt.Errorf("decode object %q using %q: %w", sourcePath, comp.CompType(), err)
-	}
-
-	if decoded.Closer != nil {
-		defer decoded.Closer()
 	}
 
 	destinationPath := obj.Path()
 
-	if err := os.MkdirAll(filepath.Dir(destinationPath), 0o755); err != nil {
+	if err := os.MkdirAll(
+		filepath.Dir(destinationPath),
+		0o755,
+	); err != nil {
 		return fmt.Errorf("create destination directory for %q: %w", destinationPath, err)
 	}
 
@@ -284,11 +273,7 @@ func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Co
 		0o644,
 	)
 	if err != nil {
-		return fmt.Errorf(
-			"create restored file %q: %w",
-			destinationPath,
-			err,
-		)
+		return fmt.Errorf("create restored file %q: %w", destinationPath, err)
 	}
 
 	restoreCompleted := false
@@ -304,30 +289,96 @@ func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Co
 		}
 	}()
 
-	if _, err := io.Copy(
-		destination,
-		model.ContextReader{
-			Ctx:    ctx,
-			Reader: decoded.Reader,
-		},
-	); err != nil {
-		return fmt.Errorf("restore object %q to %q: %w", sourcePath, destinationPath, err)
+	var restoredSize int64
+
+	for index, hash := range hashes {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
+		written, err := o.restoreObjectPart(
+			ctx,
+			comp,
+			hash,
+			destination,
+		)
+		if err != nil {
+			return fmt.Errorf("restore SMB part %d/%d of %q: %w", index+1, len(hashes), destinationPath, err)
+		}
+
+		restoredSize += written
+	}
+
+	if restoredSize != obj.Size() {
+		return fmt.Errorf("restored size mismatch for %q: expected %d, restored %d", destinationPath, obj.Size(), restoredSize)
 	}
 
 	if err := destination.Close(); err != nil {
 		destinationClosed = true
 
-		return fmt.Errorf(
-			"close restored file %q: %w",
-			destinationPath,
-			err,
-		)
+		return fmt.Errorf("close restored file %q: %w", destinationPath, err)
 	}
 
 	destinationClosed = true
 	restoreCompleted = true
 
 	return nil
+}
+
+func (o ObjectRepository) restoreObjectPart(ctx context.Context, comp *repository.Compression, hash string, destination io.Writer) (int64, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+
+	if len(hash) < 3 {
+		return 0, fmt.Errorf("invalid object hash %q", hash)
+	}
+
+	sourcePath := path.Join(
+		o.repositoryPath,
+		repository.ObjectsFolder,
+		hash[:2],
+		hash[2:],
+	)
+
+	source, err := o.share.Open(sourcePath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return 0, snapshot.NewNotFoundError(hash)
+		}
+
+		return 0, fmt.Errorf("open SMB object %q: %w", sourcePath, err)
+	}
+	defer func() {
+		_ = source.Close()
+	}()
+
+	handler, err := o.handlersFactory.GetHandler(comp.CompType())
+	if err != nil {
+		return 0, fmt.Errorf("get compression handler %q: %w", comp.CompType(), err)
+	}
+
+	decoded, err := handler.Decode(source)
+	if err != nil {
+		return 0, fmt.Errorf("decode SMB object %q using %q: %w", sourcePath, comp.CompType(), err)
+	}
+
+	if decoded.Closer != nil {
+		defer decoded.Closer()
+	}
+
+	written, err := io.Copy(
+		destination,
+		model.ContextReader{
+			Ctx:    ctx,
+			Reader: decoded.Reader,
+		},
+	)
+	if err != nil {
+		return written, fmt.Errorf("copy decoded SMB object %q: %w", sourcePath, err)
+	}
+
+	return written, nil
 }
 
 func NewObjectRepository(repositoryPath string, share *smb2.Share) *ObjectRepository {
