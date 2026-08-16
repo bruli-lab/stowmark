@@ -14,6 +14,7 @@ func newInitCommand() *cobra.Command {
 		repositoryPath  string
 		compressionType string
 		level           int
+		formatVersion   int
 	)
 
 	cmd := &cobra.Command{
@@ -43,7 +44,7 @@ func newInitCommand() *cobra.Command {
 
 			re, err := repository.NewRepository(
 				repoHand.RepositoryPath(),
-				repository.NewConfig(id, repository.CurrentFormatVersion, comp),
+				repository.NewConfig(id, repository.ParseFormatVersion(formatVersion), comp),
 			)
 			if err != nil {
 				return fmt.Errorf("create repository: %w", err)
@@ -80,6 +81,13 @@ func newInitCommand() *cobra.Command {
 		"compression",
 		repository.NoneCompressionType.String(),
 		"compression type: none, zstd",
+	)
+
+	cmd.Flags().IntVar(
+		&formatVersion,
+		"version",
+		0,
+		"format version for config file",
 	)
 
 	cmd.Flags().IntVar(

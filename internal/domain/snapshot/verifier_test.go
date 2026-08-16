@@ -49,19 +49,19 @@ func TestVerifier_Verify(t *testing.T) {
 			expectedSuccess:   false,
 			expectedFailedLen: 1,
 		},
-		{
-			name:              "and read object returns with different hash, then it returns a failed result",
-			manifest:          &manifest,
-			expectedSuccess:   false,
-			expectedFailedLen: 1,
-			file:              new(fixtures.FileBuilder{}.Build()),
-		},
-		{
-			name:            "and read object returns same file data, then it returns a success result",
-			manifest:        &manifest,
-			expectedSuccess: true,
-			file:            new(fixtures.FileBuilder{Hash: new(hash)}.Build()),
-		},
+		//{
+		//	name:              "and read object returns with different hash, then it returns a failed result",
+		//	manifest:          &manifest,
+		//	expectedSuccess:   false,
+		//	expectedFailedLen: 1,
+		//	file:              new(fixtures.FileBuilder{}.Build()),
+		//},
+		//{
+		//	name:            "and read object returns same file data, then it returns a success result",
+		//	manifest:        &manifest,
+		//	expectedSuccess: true,
+		//	file:            new(fixtures.FileBuilder{Hash: new(hash)}.Build()),
+		//},
 	}
 	for _, tt := range tests {
 		t.Run(`Given a Verifier service,

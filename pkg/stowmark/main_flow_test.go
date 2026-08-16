@@ -16,7 +16,7 @@ type Folders struct {
 	Restore            *string
 }
 
-func mainFlow(t *testing.T, ctx context.Context, folders Folders) {
+func mainFlow(t *testing.T, ctx context.Context, folders Folders, formatVersion int) {
 	require.NoError(t, os.MkdirAll(folders.Source, 0o755))
 	createSourceFixture(t, folders.Source)
 
@@ -31,10 +31,7 @@ func mainFlow(t *testing.T, ctx context.Context, folders Folders) {
 
 	t.Run("init repository", func(t *testing.T) {
 		compressionLevel := 3
-		err = handler.Init(ctx, &stowmark.Compression{
-			Type:  "zstd",
-			Level: &compressionLevel,
-		})
+		err = handler.Init(ctx, &stowmark.Compression{Type: "zstd", Level: &compressionLevel}, formatVersion)
 		require.NoError(t, err)
 	})
 

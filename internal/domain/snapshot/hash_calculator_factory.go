@@ -7,26 +7,28 @@ import (
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 )
 
+var ErrUnknownCalculator = errors.New("unknown calculator")
+
 type HashCalculator interface {
 	Calculate(ctx context.Context, file *File, comp *repository.Compression) (*File, error)
 }
 
 type HashCalculatorFactory struct {
-	calculators map[int]HashCalculator
+	calculators map[repository.FormatVersion]HashCalculator
 }
 
-func (h *HashCalculatorFactory) Handle(formatVersion int) (HashCalculator, error) {
+func (h *HashCalculatorFactory) Handle(formatVersion repository.FormatVersion) (HashCalculator, error) {
 	cal, ok := h.calculators[formatVersion]
 	if !ok {
-		return nil, errors.New("unknown format version")
+		return nil, ErrUnknownCalculator
 	}
 	return cal, nil
 }
 
 func NewHashCalculatorFactory(sourceRepo SourceRepository) *HashCalculatorFactory {
-	calculators := map[int]HashCalculator{
-		repository.OneFormatVersion: NewOneFormatVersionHashCalculator(sourceRepo),
-		repository.TwoFormatVersion: NewTwoFormatVersionHashCalculator(sourceRepo),
+	calculators := map[repository.FormatVersion]HashCalculator{
+		repository.FormatVersionOne: NewOneFormatVersionHashCalculator(sourceRepo),
+		repository.FormatVersionTwo: NewTwoFormatVersionHashCalculator(sourceRepo),
 	}
 	return &HashCalculatorFactory{
 		calculators: calculators,

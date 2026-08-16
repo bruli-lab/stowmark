@@ -16,10 +16,6 @@ type Create struct {
 }
 
 func (c Create) Do(ctx context.Context, repoPath, sourcePath string) (*CreateResult, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-
 	conf, err := c.getConfigSvc.Get(ctx, repoPath)
 	if err != nil {
 		return nil, err

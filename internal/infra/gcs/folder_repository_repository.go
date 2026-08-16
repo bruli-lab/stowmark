@@ -143,7 +143,7 @@ func (f FolderRepositoryRepository) GetConfig(ctx context.Context, repositoryPat
 		return nil, fmt.Errorf("create compression: %w", err)
 	}
 
-	return repository.NewConfig(id, conf.FormatVersion, comp), nil
+	return repository.NewConfig(id, repository.FormatVersion(conf.FormatVersion), comp), nil
 }
 
 func NewFolderRepositoryRepository(client *storage.Client, bucket string) *FolderRepositoryRepository {

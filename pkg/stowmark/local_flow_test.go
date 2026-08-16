@@ -8,14 +8,18 @@ import (
 )
 
 func TestLocalRepositoryFlow(t *testing.T) {
-	testRoot := t.TempDir()
-	sourcePath := filepath.Join(testRoot, "source")
-	repositoryPath := filepath.Join(testRoot, "repository")
-	restorePath := filepath.Join(testRoot, "restore")
-	fold := Folders{
-		Source:     sourcePath,
-		Repository: repositoryPath,
-		Restore:    new(restorePath),
+	for k, version := range Versions() {
+		t.Run(`Running local workflow, with format version `+k, func(t *testing.T) {
+			testRoot := t.TempDir()
+			sourcePath := filepath.Join(testRoot, "source-one")
+			repositoryPath := filepath.Join(testRoot, "repository-"+k)
+			restorePath := filepath.Join(testRoot, "restore-"+k)
+			fold := Folders{
+				Source:     sourcePath,
+				Repository: repositoryPath,
+				Restore:    new(restorePath),
+			}
+			mainFlow(t, t.Context(), fold, version)
+		})
 	}
-	mainFlow(t, t.Context(), fold)
 }

@@ -133,7 +133,7 @@ func (f FolderRepositoryRepository) GetConfig(ctx context.Context, repositoryPat
 	if err != nil {
 		return nil, fmt.Errorf("failed to create compression: %w", err)
 	}
-	return repository.NewConfig(id, conf.FormatVersion, comp), nil
+	return repository.NewConfig(id, repository.FormatVersion(conf.FormatVersion), comp), nil
 }
 
 func (f FolderRepositoryRepository) writeFile(ctx context.Context, filePath string, data []byte) error {

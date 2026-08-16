@@ -73,7 +73,7 @@ tasks:
         echo "🚀 Executing golangci-lint..."
         golangci-lint run ./...
 
-  test-unit:
+  unit-test:
     desc: Executing unit tests amb race, coverage i tparse
     cmds:
       - |
@@ -81,7 +81,7 @@ tasks:
         echo "🧪 Running unit tests (race, JSON → tparse)..."
         go test -race ./... -json -cover -coverprofile=coverage.out | go tool tparse -all
 
-  test-integration:
+  integration-test:
     desc: Run integration tests
     cmds:
       - |
@@ -101,4 +101,4 @@ tasks:
       - fix
       - security
       - lint
-      - test-unit
+      - unit-test
