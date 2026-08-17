@@ -6,6 +6,7 @@ package snapshot
 import (
 	"context"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
+	"io"
 	"sync"
 )
 
@@ -19,6 +20,9 @@ var _ SourceRepository = &SourceRepositoryMock{}
 //
 //		// make and configure a mocked SourceRepository
 //		mockedSourceRepository := &SourceRepositoryMock{
+//			CalculateChunksFunc: func(ctx context.Context, filePath string, size int64, comp *repository.Compression) ([]Chunk, error) {
+//				panic("mock out the CalculateChunks method")
+//			},
 //			CalculateHashFunc: func(ctx context.Context, filePath string, comp *repository.Compression) (string, error) {
 //				panic("mock out the CalculateHash method")
 //			},
@@ -32,6 +36,9 @@ var _ SourceRepository = &SourceRepositoryMock{}
 //
 //	}
 type SourceRepositoryMock struct {
+	// CalculateChunksFunc mocks the CalculateChunks method.
+	CalculateChunksFunc func(ctx context.Context, filePath string, size int64, comp *repository.Compression) ([]Chunk, error)
+
 	// CalculateHashFunc mocks the CalculateHash method.
 	CalculateHashFunc func(ctx context.Context, filePath string, comp *repository.Compression) (string, error)
 
@@ -40,6 +47,17 @@ type SourceRepositoryMock struct {
 
 	// calls tracks calls to the methods.
 	calls struct {
+		// CalculateChunks holds details about calls to the CalculateChunks method.
+		CalculateChunks []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// FilePath is the filePath argument value.
+			FilePath string
+			// Size is the size argument value.
+			Size int64
+			// Comp is the comp argument value.
+			Comp *repository.Compression
+		}
 		// CalculateHash holds details about calls to the CalculateHash method.
 		CalculateHash []struct {
 			// Ctx is the ctx argument value.
@@ -57,8 +75,53 @@ type SourceRepositoryMock struct {
 			SourcePath string
 		}
 	}
-	lockCalculateHash sync.RWMutex
-	lockExplore       sync.RWMutex
+	lockCalculateChunks sync.RWMutex
+	lockCalculateHash   sync.RWMutex
+	lockExplore         sync.RWMutex
+}
+
+// CalculateChunks calls CalculateChunksFunc.
+func (mock *SourceRepositoryMock) CalculateChunks(ctx context.Context, filePath string, size int64, comp *repository.Compression) ([]Chunk, error) {
+	if mock.CalculateChunksFunc == nil {
+		panic("SourceRepositoryMock.CalculateChunksFunc: method is nil but SourceRepository.CalculateChunks was just called")
+	}
+	callInfo := struct {
+		Ctx      context.Context
+		FilePath string
+		Size     int64
+		Comp     *repository.Compression
+	}{
+		Ctx:      ctx,
+		FilePath: filePath,
+		Size:     size,
+		Comp:     comp,
+	}
+	mock.lockCalculateChunks.Lock()
+	mock.calls.CalculateChunks = append(mock.calls.CalculateChunks, callInfo)
+	mock.lockCalculateChunks.Unlock()
+	return mock.CalculateChunksFunc(ctx, filePath, size, comp)
+}
+
+// CalculateChunksCalls gets all the calls that were made to CalculateChunks.
+// Check the length with:
+//
+//	len(mockedSourceRepository.CalculateChunksCalls())
+func (mock *SourceRepositoryMock) CalculateChunksCalls() []struct {
+	Ctx      context.Context
+	FilePath string
+	Size     int64
+	Comp     *repository.Compression
+} {
+	var calls []struct {
+		Ctx      context.Context
+		FilePath string
+		Size     int64
+		Comp     *repository.Compression
+	}
+	mock.lockCalculateChunks.RLock()
+	calls = mock.calls.CalculateChunks
+	mock.lockCalculateChunks.RUnlock()
+	return calls
 }
 
 // CalculateHash calls CalculateHashFunc.
@@ -313,17 +376,20 @@ var _ ObjectRepository = &ObjectRepositoryMock{}
 //
 //		// make and configure a mocked ObjectRepository
 //		mockedObjectRepository := &ObjectRepositoryMock{
-//			AlreadyExistsFunc: func(ctx context.Context, obj *File) (bool, error) {
+//			AlreadyExistsFunc: func(ctx context.Context, hash string) (bool, error) {
 //				panic("mock out the AlreadyExists method")
 //			},
-//			ReadObjectFunc: func(ctx context.Context, originalPath string, hash string) (*File, error) {
+//			ReadObjectFunc: func(ctx context.Context, hash string) (io.ReadCloser, error) {
 //				panic("mock out the ReadObject method")
 //			},
 //			RestoreObjectFunc: func(ctx context.Context, comp *repository.Compression, obj *File) error {
 //				panic("mock out the RestoreObject method")
 //			},
-//			SaveFunc: func(ctx context.Context, obj *File, comp *repository.Compression) error {
+//			SaveFunc: func(ctx context.Context, filePath string, hash string, comp *repository.Compression) error {
 //				panic("mock out the Save method")
+//			},
+//			SaveChunkFunc: func(ctx context.Context, filePath string, hash string, offset int64, size int64, comp *repository.Compression) error {
+//				panic("mock out the SaveChunk method")
 //			},
 //		}
 //
@@ -333,16 +399,19 @@ var _ ObjectRepository = &ObjectRepositoryMock{}
 //	}
 type ObjectRepositoryMock struct {
 	// AlreadyExistsFunc mocks the AlreadyExists method.
-	AlreadyExistsFunc func(ctx context.Context, obj *File) (bool, error)
+	AlreadyExistsFunc func(ctx context.Context, hash string) (bool, error)
 
 	// ReadObjectFunc mocks the ReadObject method.
-	ReadObjectFunc func(ctx context.Context, originalPath string, hash string) (*File, error)
+	ReadObjectFunc func(ctx context.Context, hash string) (io.ReadCloser, error)
 
 	// RestoreObjectFunc mocks the RestoreObject method.
 	RestoreObjectFunc func(ctx context.Context, comp *repository.Compression, obj *File) error
 
 	// SaveFunc mocks the Save method.
-	SaveFunc func(ctx context.Context, obj *File, comp *repository.Compression) error
+	SaveFunc func(ctx context.Context, filePath string, hash string, comp *repository.Compression) error
+
+	// SaveChunkFunc mocks the SaveChunk method.
+	SaveChunkFunc func(ctx context.Context, filePath string, hash string, offset int64, size int64, comp *repository.Compression) error
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -350,15 +419,13 @@ type ObjectRepositoryMock struct {
 		AlreadyExists []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// Obj is the obj argument value.
-			Obj *File
+			// Hash is the hash argument value.
+			Hash string
 		}
 		// ReadObject holds details about calls to the ReadObject method.
 		ReadObject []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// OriginalPath is the originalPath argument value.
-			OriginalPath string
 			// Hash is the hash argument value.
 			Hash string
 		}
@@ -375,8 +442,25 @@ type ObjectRepositoryMock struct {
 		Save []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// Obj is the obj argument value.
-			Obj *File
+			// FilePath is the filePath argument value.
+			FilePath string
+			// Hash is the hash argument value.
+			Hash string
+			// Comp is the comp argument value.
+			Comp *repository.Compression
+		}
+		// SaveChunk holds details about calls to the SaveChunk method.
+		SaveChunk []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// FilePath is the filePath argument value.
+			FilePath string
+			// Hash is the hash argument value.
+			Hash string
+			// Offset is the offset argument value.
+			Offset int64
+			// Size is the size argument value.
+			Size int64
 			// Comp is the comp argument value.
 			Comp *repository.Compression
 		}
@@ -385,24 +469,25 @@ type ObjectRepositoryMock struct {
 	lockReadObject    sync.RWMutex
 	lockRestoreObject sync.RWMutex
 	lockSave          sync.RWMutex
+	lockSaveChunk     sync.RWMutex
 }
 
 // AlreadyExists calls AlreadyExistsFunc.
-func (mock *ObjectRepositoryMock) AlreadyExists(ctx context.Context, obj *File) (bool, error) {
+func (mock *ObjectRepositoryMock) AlreadyExists(ctx context.Context, hash string) (bool, error) {
 	if mock.AlreadyExistsFunc == nil {
 		panic("ObjectRepositoryMock.AlreadyExistsFunc: method is nil but ObjectRepository.AlreadyExists was just called")
 	}
 	callInfo := struct {
-		Ctx context.Context
-		Obj *File
+		Ctx  context.Context
+		Hash string
 	}{
-		Ctx: ctx,
-		Obj: obj,
+		Ctx:  ctx,
+		Hash: hash,
 	}
 	mock.lockAlreadyExists.Lock()
 	mock.calls.AlreadyExists = append(mock.calls.AlreadyExists, callInfo)
 	mock.lockAlreadyExists.Unlock()
-	return mock.AlreadyExistsFunc(ctx, obj)
+	return mock.AlreadyExistsFunc(ctx, hash)
 }
 
 // AlreadyExistsCalls gets all the calls that were made to AlreadyExists.
@@ -410,12 +495,12 @@ func (mock *ObjectRepositoryMock) AlreadyExists(ctx context.Context, obj *File) 
 //
 //	len(mockedObjectRepository.AlreadyExistsCalls())
 func (mock *ObjectRepositoryMock) AlreadyExistsCalls() []struct {
-	Ctx context.Context
-	Obj *File
+	Ctx  context.Context
+	Hash string
 } {
 	var calls []struct {
-		Ctx context.Context
-		Obj *File
+		Ctx  context.Context
+		Hash string
 	}
 	mock.lockAlreadyExists.RLock()
 	calls = mock.calls.AlreadyExists
@@ -424,23 +509,21 @@ func (mock *ObjectRepositoryMock) AlreadyExistsCalls() []struct {
 }
 
 // ReadObject calls ReadObjectFunc.
-func (mock *ObjectRepositoryMock) ReadObject(ctx context.Context, originalPath string, hash string) (*File, error) {
+func (mock *ObjectRepositoryMock) ReadObject(ctx context.Context, hash string) (io.ReadCloser, error) {
 	if mock.ReadObjectFunc == nil {
 		panic("ObjectRepositoryMock.ReadObjectFunc: method is nil but ObjectRepository.ReadObject was just called")
 	}
 	callInfo := struct {
-		Ctx          context.Context
-		OriginalPath string
-		Hash         string
+		Ctx  context.Context
+		Hash string
 	}{
-		Ctx:          ctx,
-		OriginalPath: originalPath,
-		Hash:         hash,
+		Ctx:  ctx,
+		Hash: hash,
 	}
 	mock.lockReadObject.Lock()
 	mock.calls.ReadObject = append(mock.calls.ReadObject, callInfo)
 	mock.lockReadObject.Unlock()
-	return mock.ReadObjectFunc(ctx, originalPath, hash)
+	return mock.ReadObjectFunc(ctx, hash)
 }
 
 // ReadObjectCalls gets all the calls that were made to ReadObject.
@@ -448,14 +531,12 @@ func (mock *ObjectRepositoryMock) ReadObject(ctx context.Context, originalPath s
 //
 //	len(mockedObjectRepository.ReadObjectCalls())
 func (mock *ObjectRepositoryMock) ReadObjectCalls() []struct {
-	Ctx          context.Context
-	OriginalPath string
-	Hash         string
+	Ctx  context.Context
+	Hash string
 } {
 	var calls []struct {
-		Ctx          context.Context
-		OriginalPath string
-		Hash         string
+		Ctx  context.Context
+		Hash string
 	}
 	mock.lockReadObject.RLock()
 	calls = mock.calls.ReadObject
@@ -504,23 +585,25 @@ func (mock *ObjectRepositoryMock) RestoreObjectCalls() []struct {
 }
 
 // Save calls SaveFunc.
-func (mock *ObjectRepositoryMock) Save(ctx context.Context, obj *File, comp *repository.Compression) error {
+func (mock *ObjectRepositoryMock) Save(ctx context.Context, filePath string, hash string, comp *repository.Compression) error {
 	if mock.SaveFunc == nil {
 		panic("ObjectRepositoryMock.SaveFunc: method is nil but ObjectRepository.Save was just called")
 	}
 	callInfo := struct {
-		Ctx  context.Context
-		Obj  *File
-		Comp *repository.Compression
+		Ctx      context.Context
+		FilePath string
+		Hash     string
+		Comp     *repository.Compression
 	}{
-		Ctx:  ctx,
-		Obj:  obj,
-		Comp: comp,
+		Ctx:      ctx,
+		FilePath: filePath,
+		Hash:     hash,
+		Comp:     comp,
 	}
 	mock.lockSave.Lock()
 	mock.calls.Save = append(mock.calls.Save, callInfo)
 	mock.lockSave.Unlock()
-	return mock.SaveFunc(ctx, obj, comp)
+	return mock.SaveFunc(ctx, filePath, hash, comp)
 }
 
 // SaveCalls gets all the calls that were made to Save.
@@ -528,17 +611,71 @@ func (mock *ObjectRepositoryMock) Save(ctx context.Context, obj *File, comp *rep
 //
 //	len(mockedObjectRepository.SaveCalls())
 func (mock *ObjectRepositoryMock) SaveCalls() []struct {
-	Ctx  context.Context
-	Obj  *File
-	Comp *repository.Compression
+	Ctx      context.Context
+	FilePath string
+	Hash     string
+	Comp     *repository.Compression
 } {
 	var calls []struct {
-		Ctx  context.Context
-		Obj  *File
-		Comp *repository.Compression
+		Ctx      context.Context
+		FilePath string
+		Hash     string
+		Comp     *repository.Compression
 	}
 	mock.lockSave.RLock()
 	calls = mock.calls.Save
 	mock.lockSave.RUnlock()
+	return calls
+}
+
+// SaveChunk calls SaveChunkFunc.
+func (mock *ObjectRepositoryMock) SaveChunk(ctx context.Context, filePath string, hash string, offset int64, size int64, comp *repository.Compression) error {
+	if mock.SaveChunkFunc == nil {
+		panic("ObjectRepositoryMock.SaveChunkFunc: method is nil but ObjectRepository.SaveChunk was just called")
+	}
+	callInfo := struct {
+		Ctx      context.Context
+		FilePath string
+		Hash     string
+		Offset   int64
+		Size     int64
+		Comp     *repository.Compression
+	}{
+		Ctx:      ctx,
+		FilePath: filePath,
+		Hash:     hash,
+		Offset:   offset,
+		Size:     size,
+		Comp:     comp,
+	}
+	mock.lockSaveChunk.Lock()
+	mock.calls.SaveChunk = append(mock.calls.SaveChunk, callInfo)
+	mock.lockSaveChunk.Unlock()
+	return mock.SaveChunkFunc(ctx, filePath, hash, offset, size, comp)
+}
+
+// SaveChunkCalls gets all the calls that were made to SaveChunk.
+// Check the length with:
+//
+//	len(mockedObjectRepository.SaveChunkCalls())
+func (mock *ObjectRepositoryMock) SaveChunkCalls() []struct {
+	Ctx      context.Context
+	FilePath string
+	Hash     string
+	Offset   int64
+	Size     int64
+	Comp     *repository.Compression
+} {
+	var calls []struct {
+		Ctx      context.Context
+		FilePath string
+		Hash     string
+		Offset   int64
+		Size     int64
+		Comp     *repository.Compression
+	}
+	mock.lockSaveChunk.RLock()
+	calls = mock.calls.SaveChunk
+	mock.lockSaveChunk.RUnlock()
 	return calls
 }

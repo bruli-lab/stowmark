@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"time"
 
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
+	"github.com/bruli-lab/stowmark/internal/infra/codec"
 	"github.com/bruli-lab/stowmark/internal/infra/model"
 	"github.com/cloudsoda/go-smb2"
 	"github.com/google/uuid"
@@ -48,26 +48,10 @@ func (f FolderRepositoryRepository) CreateFolder(ctx context.Context, folderPath
 }
 
 func (f FolderRepositoryRepository) CreateConfig(ctx context.Context, folderPath string, c *repository.Config) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-
-	co := model.Config{
-		ID:            c.Id().String(),
-		FormatVersion: c.FormatVersion(),
-		CreatedAt:     c.CreatedAt().In(time.Local).Format(time.RFC3339),
-		Compression: model.Compression{
-			Type:  c.Compression().CompType().String(),
-			Level: c.Compression().Level(),
-		},
-	}
-
-	data, err := json.MarshalIndent(co, "", "  ")
+	data, err := codec.MarshalConfig(ctx, c)
 	if err != nil {
 		return fmt.Errorf("marshal config: %w", err)
 	}
-
-	data = append(data, '\n')
 
 	configPath := path.Join(folderPath, model.ConfigFile)
 	share := f.share.WithContext(ctx)
@@ -140,7 +124,7 @@ func (f FolderRepositoryRepository) GetConfig(ctx context.Context, folderPath st
 		return nil, fmt.Errorf("create compression: %w", err)
 	}
 
-	return repository.NewConfig(id, conf.FormatVersion, comp), nil
+	return repository.NewConfig(id, repository.FormatVersion(conf.FormatVersion), comp), nil
 }
 
 func NewFolderRepositoryRepository(share *smb2.Share) *FolderRepositoryRepository {

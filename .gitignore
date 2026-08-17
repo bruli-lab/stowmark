@@ -30,7 +30,7 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
-/backup/
+/backup*
 /documents
 /docker/ssh-test/
 /docker/smb-test/

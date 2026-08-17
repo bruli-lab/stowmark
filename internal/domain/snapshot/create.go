@@ -8,10 +8,11 @@ import (
 )
 
 type Create struct {
-	sourceRepo   SourceRepository
-	manifestRepo ManifestRepository
-	objectRepo   ObjectRepository
-	getConfigSvc *repository.GetConfig
+	sourceRepo      SourceRepository
+	manifestRepo    ManifestRepository
+	objectRepo      ObjectRepository
+	getConfigSvc    *repository.GetConfig
+	hashCalculators *HashCalculatorFactory
 }
 
 func (c Create) Do(ctx context.Context, repoPath, sourcePath string) (*CreateResult, error) {
@@ -19,54 +20,100 @@ func (c Create) Do(ctx context.Context, repoPath, sourcePath string) (*CreateRes
 	if err != nil {
 		return nil, err
 	}
+
+	calculator, err := c.hashCalculators.Handle(conf.FormatVersion())
+	if err != nil {
+		return nil, err
+	}
+
 	source, err := c.sourceRepo.Explore(ctx, sourcePath)
 	if err != nil {
 		return nil, err
 	}
-	var size int64
-	for i := range source.Files() {
-		file := source.Files()[i]
-		size += file.Size()
-		hash, err := c.sourceRepo.CalculateHash(ctx, file.Path(), conf.Compression())
+
+	files := source.Files()
+
+	var totalSize int64
+
+	for i := range files {
+		totalSize += files[i].Size()
+
+		calculatedFile, err := calculator.Calculate(ctx, &files[i], conf.Compression())
 		if err != nil {
 			return nil, err
 		}
-		file.AddHash(hash)
-		if err := c.saveObject(ctx, file, conf.Compression()); err != nil {
+
+		if err := c.saveFileObjects(ctx, calculatedFile, conf.Compression()); err != nil {
 			return nil, err
 		}
-		source.Files()[i] = file
+
+		files[i] = *calculatedFile
 	}
-	man := NewManifest(newID(), source.Files(), time.Now().UTC(), source.AbsolutePath(), conf.Compression())
-	if err := c.manifestRepo.Save(ctx, man); err != nil {
+
+	manifest := NewManifest(newID(), files, time.Now().UTC(), source.AbsolutePath(), conf.Compression())
+
+	if err := c.manifestRepo.Save(ctx, manifest); err != nil {
 		return nil, err
 	}
-	return NewCreateResult(man.Id(), len(man.Files()), size), nil
+
+	return NewCreateResult(manifest.Id(), len(manifest.Files()), totalSize), nil
 }
 
-func (c Create) saveObject(ctx context.Context, file File, comp *repository.Compression) error {
-	exist, err := c.objectRepo.AlreadyExists(ctx, &file)
-	if err != nil {
-		return err
+func (c Create) saveFileObjects(
+	ctx context.Context,
+	file *File,
+	comp *repository.Compression,
+) error {
+	if len(file.Chunks()) == 0 {
+		return c.saveObject(ctx, file.Path(), file.Hash(), comp)
 	}
-	if !exist {
-		if err := c.objectRepo.Save(ctx, &file, comp); err != nil {
+
+	for _, chunk := range file.Chunks() {
+		if err := c.saveChunk(ctx, file.Path(), chunk, comp); err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
-func NewCreate(
-	sourceRepo SourceRepository,
-	manifestRepo ManifestRepository,
-	objRepo ObjectRepository,
-	getConfigSvc *repository.GetConfig,
-) *Create {
+func (c Create) saveObject(
+	ctx context.Context,
+	filePath string,
+	hash string,
+	comp *repository.Compression,
+) error {
+	exists, err := c.objectRepo.AlreadyExists(ctx, hash)
+	if err != nil {
+		return err
+	}
+
+	if exists {
+		return nil
+	}
+
+	return c.objectRepo.Save(ctx, filePath, hash, comp)
+}
+
+func (c Create) saveChunk(ctx context.Context, filePath string, chunk Chunk, comp *repository.Compression) error {
+	exists, err := c.objectRepo.AlreadyExists(ctx, chunk.Hash())
+	if err != nil {
+		return err
+	}
+
+	if exists {
+		return nil
+	}
+
+	return c.objectRepo.SaveChunk(ctx, filePath, chunk.Hash(), chunk.Offset(), chunk.Size(), comp)
+}
+
+func NewCreate(sourceRepo SourceRepository, manifestRepo ManifestRepository, objectRepo ObjectRepository, getConfigSvc *repository.GetConfig) *Create {
 	return &Create{
-		sourceRepo:   sourceRepo,
-		manifestRepo: manifestRepo,
-		objectRepo:   objRepo,
-		getConfigSvc: getConfigSvc,
+		sourceRepo:      sourceRepo,
+		manifestRepo:    manifestRepo,
+		objectRepo:      objectRepo,
+		getConfigSvc:    getConfigSvc,
+		hashCalculators: NewHashCalculatorFactory(sourceRepo),
 	}
 }

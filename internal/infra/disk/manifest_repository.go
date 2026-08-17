@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"time"
 
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
@@ -100,24 +99,7 @@ func (r ManifestRepository) Save(ctx context.Context, m *snapshot.Manifest) erro
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	files := make([]model.File, len(m.Files()))
-	for i, f := range m.Files() {
-		files[i] = model.File{
-			Path: f.Path(),
-			Hash: f.Hash(),
-			Size: f.Size(),
-		}
-	}
-	man := model.Manifest{
-		ID:        m.Id(),
-		Files:     files,
-		CreatedAt: m.CreatedAt().In(time.Local),
-		Source:    m.Source(),
-		Compression: model.Compression{
-			Type:  m.Compression().CompType().String(),
-			Level: m.Compression().Level(),
-		},
-	}
+	man := model.NewManifest(m)
 	data, err := json.MarshalIndent(man, "", " ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal manifest: %w", err)

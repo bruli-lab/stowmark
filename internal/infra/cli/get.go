@@ -7,6 +7,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
+	"github.com/bruli-lab/stowmark/internal/infra/repositories"
 	"github.com/spf13/cobra"
 )
 
@@ -27,7 +28,7 @@ func newSnapshotGetCommand() *cobra.Command {
 				return errors.New("--id is required")
 			}
 
-			repohand, err := NewRepositoriesHandler(cmd.Context(), repositoryPath)
+			repohand, err := repositories.NewHandler(cmd.Context(), repositoryPath)
 			if err != nil {
 				return err
 			}

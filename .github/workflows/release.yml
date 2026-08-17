@@ -43,8 +43,8 @@ jobs:
       - name: Security
         run: task security
 
-  test:
-    name: Tests
+  unit-tests:
+    name: Unit tests
     runs-on: ubuntu-latest
 
     steps:
@@ -54,8 +54,23 @@ jobs:
       - name: Setup Go and Task
         uses: ./.github/actions/setup-go-task
 
-      - name: Tests
-        run: task test
+      - name: Unit tests
+        run: task unit-test
+
+  integration-tests:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Go and Task
+        uses: ./.github/actions/setup-go-task
+
+      - name: Integration tests
+        run: task integration-test
 
   trivy-filesystem:
     name: Scan source and dependencies
@@ -128,7 +143,8 @@ jobs:
     needs:
       - lint
       - security
-      - test
+      - unit-tests
+      - integration-tests
       - trivy-filesystem
 
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'

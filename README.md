@@ -31,6 +31,7 @@ the source path, creation time and references to its files.
 
 - Content-addressed object storage using SHA-256.
 - Deduplication of unchanged files between snapshots.
+- Automatic chunking for files larger than 8 MiB.
 - Optional `gzip`, `zstd`, `lz4` and `xz` compression.
 - Separate JSON manifest for every snapshot.
 - Snapshot listing ordered from newest to oldest.
@@ -130,7 +131,9 @@ Restore a snapshot:
 stowmark snapshot restore \
   --id <snapshot-id> \
   --repo /srv/backups/stowmark
+  --destination /srv/backups/stowmark-restore //optional
 ```
+
 Restore a file from snapshot:
 
 ```bash
@@ -138,6 +141,7 @@ stowmark snapshot restore \
   --id <snapshot-id> \
   --file <path> \
   --repo /srv/backups/stowmark
+  --destination /srv/backups/stowmark-restore //optional
 ```
 
 ## SSH repositories
@@ -477,6 +481,19 @@ stowmark init /srv/backups/stowmark-xz --compression xz
 The selected compression is applied to every object in the snapshot and recorded in its manifest. Compression is
 transparent during restoration: Stowmark decodes each stored object before writing the original file.
 
+## Chunking
+
+Files larger than 8 MiB are split into ordered chunks before being stored. Smaller files are stored as a single object.
+Each chunk is compressed independently using the repository compression settings and identified by the SHA-256 hash
+of its encoded representation.
+
+Chunking avoids processing a large file as one object and improves deduplication when only part of the file changes.
+Chunks already present in the repository are reused by later snapshots, just like complete file objects.
+
+The snapshot manifest records the ordered list of chunk hashes and their sizes. During restoration, Stowmark retrieves,
+decodes and concatenates the chunks in the original order, then verifies that the restored size matches the file size
+stored in the manifest. If any chunk is missing or cannot be restored, the incomplete destination file is removed.
+
 ## Repository format
 
 A repository currently has the following structure:
@@ -498,15 +515,15 @@ by object key prefixes rather than physical folders.
 
 ### Objects
 
-Objects are stored using the SHA-256 hash of their encoded representation. The first two characters are used as the
-directory name and the remaining characters as the file name:
+Complete file objects and chunks are stored using the SHA-256 hash of their encoded representation. The first two
+characters are used as the directory name and the remaining characters as the file name:
 
 ```text
 objects/<first-two-hash-characters>/<remaining-hash-characters>
 ```
 
-When two snapshots contain the same file content encoded with the same compression settings, they both reference the
-same stored object. The same original content encoded differently produces a different object and hash.
+When two snapshots contain the same file or chunk content encoded with the same compression settings, they both
+reference the same stored object. The same original content encoded differently produces a different object and hash.
 
 ### Snapshot manifests
 
@@ -516,7 +533,9 @@ Each snapshot is stored as a JSON manifest containing:
 - The snapshot creation time.
 - The original source path.
 - The compression type and level used by the snapshot.
-- The path, SHA-256 hash and size of every file.
+- The path and original size of every file.
+- A single object hash for files stored without chunking, or an ordered list of chunk hashes and sizes for chunked
+  files.
 
 The manifest references objects but does not duplicate their contents.
 

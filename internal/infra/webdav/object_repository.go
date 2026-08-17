@@ -1,9 +1,8 @@
 package webdav
 
 import (
+	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -13,8 +12,11 @@ import (
 
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
+	"github.com/bruli-lab/stowmark/internal/infra/chunkio"
 	"github.com/bruli-lab/stowmark/internal/infra/compression"
 	"github.com/bruli-lab/stowmark/internal/infra/model"
+	"github.com/bruli-lab/stowmark/internal/infra/object"
+
 	"github.com/google/uuid"
 	"github.com/studio-b12/gowebdav"
 )
@@ -23,14 +25,79 @@ type ObjectRepository struct {
 	client          *gowebdav.Client
 	repositoryPath  string
 	handlersFactory *compression.HandlersFactory
+	encoder         *object.Encoder
 }
 
-func (o ObjectRepository) Save(ctx context.Context, obj *snapshot.File, comp *repository.Compression) error {
+func (o ObjectRepository) ReadObject(ctx context.Context, hash string) (io.ReadCloser, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	if len(hash) < 3 {
+		return nil, fmt.Errorf("invalid object hash %q", hash)
+	}
+
+	objectPath := path.Join(
+		o.repositoryPath,
+		repository.ObjectsFolder,
+		hash[:2],
+		hash[2:],
+	)
+
+	reader, err := o.client.ReadStream(objectPath)
+	if err != nil {
+		if gowebdav.IsErrNotFound(err) {
+			return nil, snapshot.NewNotFoundError(hash)
+		}
+
+		return nil, fmt.Errorf("open WebDAV object %q: %w", objectPath, err)
+	}
+
+	return reader, nil
+}
+
+func (o ObjectRepository) SaveChunk(ctx context.Context, filePath, hash string, offset, size int64, comp *repository.Compression) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	source, err := chunkio.OpenSource(filePath, hash, offset, size, comp)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = source.Close()
+	}()
+
+	encoded, err := o.encoder.Encode(ctx, filePath, hash, offset, size, comp, source)
+	if err != nil {
+		return err
+	}
+
+	objectPath := path.Join(
+		o.repositoryPath,
+		repository.ObjectsFolder,
+		hash[:2],
+		hash[2:],
+	)
+
+	reader := bytes.NewReader(encoded.Bytes())
+
+	if err := o.client.WriteStream(
+		objectPath,
+		reader,
+		0o644,
+	); err != nil {
+		return fmt.Errorf("write WebDAV object %q: %w", objectPath, err)
+	}
+
+	return nil
+}
+
+func (o ObjectRepository) Save(ctx context.Context, filePath, hash string, comp *repository.Compression) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 
-	hash := obj.Hash()
 	if len(hash) < 3 {
 		return fmt.Errorf("invalid object hash %q", hash)
 	}
@@ -53,9 +120,9 @@ func (o ObjectRepository) Save(ctx context.Context, obj *snapshot.File, comp *re
 		return fmt.Errorf("create WebDAV object directory %q: %w", destinationDir, err)
 	}
 
-	source, err := os.Open(obj.Path())
+	source, err := os.Open(filePath)
 	if err != nil {
-		return fmt.Errorf("open source file %q: %w", obj.Path(), err)
+		return fmt.Errorf("open source file %q: %w", filePath, err)
 	}
 	defer func() {
 		_ = source.Close()
@@ -81,7 +148,7 @@ func (o ObjectRepository) Save(ctx context.Context, obj *snapshot.File, comp *re
 	}
 
 	if _, err := io.Copy(writer.Writer, source); err != nil {
-		return fmt.Errorf("encode object %q: %w", obj.Path(), err)
+		return fmt.Errorf("encode object %q: %w", filePath, err)
 	}
 
 	if writer.Closer != nil {
@@ -151,12 +218,11 @@ func (o ObjectRepository) Save(ctx context.Context, obj *snapshot.File, comp *re
 	return nil
 }
 
-func (o ObjectRepository) AlreadyExists(ctx context.Context, obj *snapshot.File) (bool, error) {
+func (o ObjectRepository) AlreadyExists(ctx context.Context, hash string) (bool, error) {
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}
 
-	hash := obj.Hash()
 	if len(hash) < 3 {
 		return false, fmt.Errorf("invalid object hash %q", hash)
 	}
@@ -186,63 +252,6 @@ func (o ObjectRepository) AlreadyExists(ctx context.Context, obj *snapshot.File)
 	}
 }
 
-func (o ObjectRepository) ReadObject(ctx context.Context, originalPath, hash string) (*snapshot.File, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-
-	if len(hash) < 3 {
-		return nil, fmt.Errorf("invalid object hash %q", hash)
-	}
-
-	remotePath := path.Join(
-		o.repositoryPath,
-		repository.ObjectsFolder,
-		hash[:2],
-		hash[2:],
-	)
-
-	objectReader, err := o.client.ReadStream(remotePath)
-	if err != nil {
-		if gowebdav.IsErrNotFound(err) {
-			return nil, snapshot.NewNotFoundError(originalPath)
-		}
-
-		return nil, fmt.Errorf("open WebDAV object %q: %w", remotePath, err)
-	}
-	defer func() {
-		_ = objectReader.Close()
-	}()
-
-	hasher := sha256.New()
-
-	storedSize, err := io.Copy(
-		hasher,
-		model.ContextReader{
-			Ctx:    ctx,
-			Reader: objectReader,
-		},
-	)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"read WebDAV object %q: %w",
-			remotePath,
-			err,
-		)
-	}
-
-	calculatedHash := hex.EncodeToString(hasher.Sum(nil))
-
-	result := snapshot.File{}
-	result.Hydrate(
-		originalPath,
-		calculatedHash,
-		storedSize,
-	)
-
-	return &result, nil
-}
-
 func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Compression, obj *snapshot.File) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -256,9 +265,83 @@ func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Co
 		return errors.New("snapshot object is required")
 	}
 
-	hash := obj.Hash()
+	hashes, err := object.GetHashes(obj)
+	if err != nil {
+		return err
+	}
+
+	destinationPath := obj.Path()
+
+	if err := os.MkdirAll(filepath.Dir(destinationPath), 0o755); err != nil {
+		return fmt.Errorf("create destination directory for %q: %w", destinationPath, err)
+	}
+
+	destination, err := os.OpenFile(destinationPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
+	if err != nil {
+		return fmt.Errorf("create restored file %q: %w", destinationPath, err)
+	}
+
+	restoreCompleted := false
+	destinationClosed := false
+
+	defer func() {
+		if !destinationClosed {
+			_ = destination.Close()
+		}
+
+		if !restoreCompleted {
+			_ = os.Remove(destinationPath)
+		}
+	}()
+
+	var restoredSize int64
+
+	for index, hash := range hashes {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
+		written, err := o.restoreObjectPart(ctx, comp, hash, destination)
+		if err != nil {
+			return fmt.Errorf(
+				"restore WebDAV part %d/%d of %q: %w",
+				index+1,
+				len(hashes),
+				destinationPath,
+				err,
+			)
+		}
+
+		restoredSize += written
+	}
+
+	if restoredSize != obj.Size() {
+		return fmt.Errorf(
+			"restored size mismatch for %q: expected %d, restored %d",
+			destinationPath,
+			obj.Size(),
+			restoredSize,
+		)
+	}
+
+	if err := destination.Close(); err != nil {
+		destinationClosed = true
+		return fmt.Errorf("close restored file %q: %w", destinationPath, err)
+	}
+
+	destinationClosed = true
+	restoreCompleted = true
+
+	return nil
+}
+
+func (o ObjectRepository) restoreObjectPart(ctx context.Context, comp *repository.Compression, hash string, destination io.Writer) (int64, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+
 	if len(hash) < 3 {
-		return fmt.Errorf("invalid object hash %q", hash)
+		return 0, fmt.Errorf("invalid object hash %q", hash)
 	}
 
 	remotePath := path.Join(
@@ -271,10 +354,10 @@ func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Co
 	source, err := o.client.ReadStream(remotePath)
 	if err != nil {
 		if gowebdav.IsErrNotFound(err) {
-			return snapshot.NewNotFoundError(obj.Path())
+			return 0, snapshot.NewNotFoundError(hash)
 		}
 
-		return fmt.Errorf("open WebDAV object %q: %w", remotePath, err)
+		return 0, fmt.Errorf("open WebDAV object %q: %w", remotePath, err)
 	}
 	defer func() {
 		_ = source.Close()
@@ -282,61 +365,27 @@ func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Co
 
 	handler, err := o.handlersFactory.GetHandler(comp.CompType())
 	if err != nil {
-		return err
+		return 0, fmt.Errorf("get compression handler %q: %w", comp.CompType(), err)
 	}
 
 	decoded, err := handler.Decode(source)
 	if err != nil {
-		return fmt.Errorf("decode WebDAV object %q using %q: %w", remotePath, comp.CompType(), err)
-	}
-	defer func() {
-		if decoded.Closer != nil {
-			decoded.Closer()
-		}
-	}()
-
-	destinationPath := obj.Path()
-	destinationDir := filepath.Dir(destinationPath)
-
-	if err := os.MkdirAll(destinationDir, 0o755); err != nil {
-		return fmt.Errorf("create destination directory for %q: %w", destinationPath, err)
+		return 0, fmt.Errorf("decode WebDAV object %q using %q: %w", remotePath, comp.CompType(), err)
 	}
 
-	destination, err := os.OpenFile(
-		destinationPath,
-		os.O_WRONLY|os.O_CREATE|os.O_TRUNC,
-		0o644,
-	)
+	if decoded.Closer != nil {
+		defer decoded.Closer()
+	}
+
+	written, err := io.Copy(destination, model.ContextReader{
+		Ctx:    ctx,
+		Reader: decoded.Reader,
+	})
 	if err != nil {
-		return fmt.Errorf("create restored file %q: %w", destinationPath, err)
+		return written, fmt.Errorf("copy decoded WebDAV object %q: %w", remotePath, err)
 	}
 
-	restoreCompleted := false
-
-	defer func() {
-		if !restoreCompleted {
-			_ = destination.Close()
-			_ = os.Remove(destinationPath)
-		}
-	}()
-
-	if _, err := io.Copy(
-		destination,
-		model.ContextReader{
-			Ctx:    ctx,
-			Reader: decoded.Reader,
-		},
-	); err != nil {
-		return fmt.Errorf("restore WebDAV object %q to %q: %w", remotePath, destinationPath, err)
-	}
-
-	if err := destination.Close(); err != nil {
-		return fmt.Errorf("close restored file %q: %w", destinationPath, err)
-	}
-
-	restoreCompleted = true
-
-	return nil
+	return written, nil
 }
 
 func (o ObjectRepository) objectPath(hash string) (string, error) {
@@ -353,5 +402,11 @@ func (o ObjectRepository) objectPath(hash string) (string, error) {
 }
 
 func NewObjectRepository(client *gowebdav.Client, repositoryPath string) *ObjectRepository {
-	return &ObjectRepository{client: client, repositoryPath: repositoryPath, handlersFactory: compression.NewHandlersFactory()}
+	handlersFactory := compression.NewHandlersFactory()
+	return &ObjectRepository{
+		client:          client,
+		repositoryPath:  repositoryPath,
+		handlersFactory: handlersFactory,
+		encoder:         object.NewEncoder(handlersFactory),
+	}
 }

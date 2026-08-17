@@ -2,6 +2,7 @@ package snapshot
 
 import (
 	"context"
+	"io"
 
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 )
@@ -10,6 +11,7 @@ import (
 type SourceRepository interface {
 	Explore(ctx context.Context, sourcePath string) (*Source, error)
 	CalculateHash(ctx context.Context, filePath string, comp *repository.Compression) (string, error)
+	CalculateChunks(ctx context.Context, filePath string, size int64, comp *repository.Compression) ([]Chunk, error)
 }
 
 type ManifestRepository interface {
@@ -19,8 +21,9 @@ type ManifestRepository interface {
 }
 
 type ObjectRepository interface {
-	Save(ctx context.Context, obj *File, comp *repository.Compression) error
-	AlreadyExists(ctx context.Context, obj *File) (bool, error)
-	ReadObject(ctx context.Context, originalPath, hash string) (*File, error)
+	Save(ctx context.Context, filePath, hash string, comp *repository.Compression) error
+	AlreadyExists(ctx context.Context, hash string) (bool, error)
+	ReadObject(ctx context.Context, hash string) (io.ReadCloser, error)
 	RestoreObject(ctx context.Context, comp *repository.Compression, obj *File) error
+	SaveChunk(ctx context.Context, filePath string, hash string, offset int64, size int64, comp *repository.Compression) error
 }
