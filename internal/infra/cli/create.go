@@ -4,15 +4,20 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/disk"
+	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
 	"github.com/bruli-lab/stowmark/internal/infra/repositories"
 	"github.com/spf13/cobra"
 )
 
 func newSnapshotCreateCommand() *cobra.Command {
-	var repositoryPath string
+	var (
+		repositoryPath string
+		privateKeyPath string
+	)
 	sourceRepo := disk.NewSourceRepository()
 
 	cmd := &cobra.Command{
@@ -43,12 +48,19 @@ func newSnapshotCreateCommand() *cobra.Command {
 				return err
 			}
 			folderRepositoryRepo := repoHand.FolderRepository()
-			create := snapshot.NewCreate(sourceRepo, manifestRepo, objRepo, repository.NewGetConfig(folderRepositoryRepo))
+			decryptSymmetricKeySvc := encryption.NewDecryptSymmetricKey(encrypt.NewSymmetricRepository(), disk.NewAsymmetricKeyPairRepository())
+			create := snapshot.NewCreate(sourceRepo, manifestRepo, objRepo, repository.NewGetConfig(folderRepositoryRepo), decryptSymmetricKeySvc)
+
+			var privateKey *string
+			if privateKeyPath != "" {
+				privateKey = &privateKeyPath
+			}
 
 			result, err := create.Do(
 				cmd.Context(),
 				repoHand.RepositoryPath(),
 				sourcePath,
+				privateKey,
 			)
 			if err != nil {
 				return err
@@ -72,6 +84,14 @@ func newSnapshotCreateCommand() *cobra.Command {
 		"",
 		"path to the Stowmark repository",
 	)
+
+	cmd.Flags().StringVar(
+		&privateKeyPath,
+		"private-key",
+		"",
+		"path to the private key for encryption",
+	)
+	_ = cmd.MarkFlagRequired("repo")
 
 	return cmd
 }

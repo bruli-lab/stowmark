@@ -11,7 +11,6 @@ import (
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/infra/codec"
 	"github.com/bruli-lab/stowmark/internal/infra/model"
-	"github.com/google/uuid"
 )
 
 type FolderRepositoryRepository struct{}
@@ -38,19 +37,7 @@ func (f FolderRepositoryRepository) GetConfig(ctx context.Context, path string) 
 	if err := json.Unmarshal(data, &conf); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
-	id, err := uuid.Parse(conf.ID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse config id: %w", err)
-	}
-	compType, err := repository.ParseCompressionType(conf.Compression.Type)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse compression type: %w", err)
-	}
-	comp, err := repository.NewCompression(*compType, conf.Compression.Level)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create compression: %w", err)
-	}
-	return repository.NewConfig(id, repository.FormatVersion(conf.FormatVersion), comp), nil
+	return model.BuildConfigDomain(conf)
 }
 
 func (f FolderRepositoryRepository) Exists(ctx context.Context, path string) (bool, error) {

@@ -178,18 +178,15 @@ func NewManifestRepository(client *s3.Client, bucket, repositoryPath string) *Ma
 }
 
 func isNotFoundError(err error) bool {
-	var noSuchKey *types.NoSuchKey
-	if errors.As(err, &noSuchKey) {
+	if _, ok := errors.AsType[*types.NoSuchKey](err); ok {
 		return true
 	}
 
-	var notFound *types.NotFound
-	if errors.As(err, &notFound) {
+	if _, ok := errors.AsType[*types.NotFound](err); ok {
 		return true
 	}
 
-	var apiErr smithy.APIError
-	if errors.As(err, &apiErr) {
+	if apiErr, ok := errors.AsType[smithy.APIError](err); ok {
 		switch apiErr.ErrorCode() {
 		case "NoSuchKey", "NotFound", "NoSuchBucket":
 			return true

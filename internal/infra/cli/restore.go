@@ -1,10 +1,13 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
 
+	"github.com/bruli-lab/stowmark/internal/domain/encryption"
+	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
+	"github.com/bruli-lab/stowmark/internal/infra/disk"
+	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
 	"github.com/bruli-lab/stowmark/internal/infra/repositories"
 	"github.com/spf13/cobra"
 )
@@ -15,6 +18,7 @@ func newSnapshotRestoreCommand() *cobra.Command {
 		snapshotID      string
 		filePath        string
 		destinationPath string
+		privateKeyPath  string
 	)
 
 	cmd := &cobra.Command{
@@ -23,16 +27,13 @@ func newSnapshotRestoreCommand() *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			var destination *string
-			if repositoryPath == "" {
-				return errors.New("--repo is required")
-			}
-
-			if snapshotID == "" {
-				return errors.New("--id is required")
-			}
 
 			if destinationPath != "" {
 				destination = &destinationPath
+			}
+			var privateKey *string
+			if privateKeyPath != "" {
+				privateKey = &privateKeyPath
 			}
 
 			repoHandler, err := repositories.NewHandler(cmd.Context(), repositoryPath)
@@ -53,11 +54,33 @@ func newSnapshotRestoreCommand() *cobra.Command {
 				return err
 			}
 
+			decryptKeySvc := encryption.NewDecryptSymmetricKey(encrypt.NewSymmetricRepository(), disk.NewAsymmetricKeyPairRepository())
 			switch filePath {
 			case "":
-				return executeRestore(cmd, manifestRepo, objectRepo, snapshotID, destination)
+				return executeRestore(
+					cmd,
+					manifestRepo,
+					objectRepo,
+					repoHandler.FolderRepository(),
+					decryptKeySvc,
+					repoHandler.RepositoryPath(),
+					snapshotID,
+					destination,
+					privateKey,
+				)
 			default:
-				return executeRestoreFile(cmd, manifestRepo, objectRepo, snapshotID, filePath, destination)
+				return executeRestoreFile(
+					cmd,
+					manifestRepo,
+					objectRepo,
+					repoHandler.FolderRepository(),
+					decryptKeySvc,
+					snapshotID,
+					filePath,
+					repoHandler.RepositoryPath(),
+					destination,
+					privateKey,
+				)
 			}
 		},
 	}
@@ -88,6 +111,15 @@ func newSnapshotRestoreCommand() *cobra.Command {
 		"",
 		"destination path",
 	)
+	cmd.Flags().StringVar(
+		&privateKeyPath,
+		"private-key",
+		"",
+		"private key for decryption",
+	)
+
+	_ = cmd.MarkFlagRequired("id")
+	_ = cmd.MarkFlagRequired("repo")
 
 	return cmd
 }
@@ -96,12 +128,13 @@ func executeRestoreFile(
 	cmd *cobra.Command,
 	manifestRepo snapshot.ManifestRepository,
 	objectRepo snapshot.ObjectRepository,
-	snapshotID, filePath string,
-	destinationPath *string,
+	folderRepository repository.FolderRepository,
+	decryptKeySvc *encryption.DecryptSymmetricKey,
+	snapshotID, filePath, repositoryPath string,
+	destinationPath, privateKey *string,
 ) error {
-	svc := snapshot.NewRestoreFile(manifestRepo, objectRepo)
-
-	if err := svc.Restore(cmd.Context(), snapshotID, filePath, destinationPath); err != nil {
+	svc := snapshot.NewRestoreFile(manifestRepo, objectRepo, folderRepository, decryptKeySvc)
+	if err := svc.Restore(cmd.Context(), snapshotID, filePath, repositoryPath, destinationPath, privateKey); err != nil {
 		return err
 	}
 	_, err := fmt.Fprintf(
@@ -113,16 +146,29 @@ func executeRestoreFile(
 	return err
 }
 
-func executeRestore(cmd *cobra.Command, manifestRepo snapshot.ManifestRepository, objectRepo snapshot.ObjectRepository, snapshotID string, destination *string) error {
+func executeRestore(
+	cmd *cobra.Command,
+	manifestRepo snapshot.ManifestRepository,
+	objectRepo snapshot.ObjectRepository,
+	folderRepo repository.FolderRepository,
+	decryptKeySvc *encryption.DecryptSymmetricKey,
+	repositoryPath, snapshotID string,
+	destination *string,
+	privateKey *string,
+) error {
 	svc := snapshot.NewRestore(
 		manifestRepo,
 		objectRepo,
+		folderRepo,
+		decryptKeySvc,
 	)
 
 	result, err := svc.Restore(
 		cmd.Context(),
 		snapshotID,
+		repositoryPath,
 		destination,
+		privateKey,
 	)
 	if err != nil {
 		return err

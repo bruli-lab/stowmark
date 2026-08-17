@@ -5,36 +5,42 @@ import (
 	"fmt"
 )
 
+type InitResult struct {
+	ID       string
+	Warnings []string
+}
 type Init struct {
 	repo FolderRepository
 }
 
-func (i Init) Do(ctx context.Context, r *Repository) error {
-	ex, err := i.repo.Exists(ctx, r.Path())
+func (i Init) Do(ctx context.Context, r *Repository, force bool) (*InitResult, error) {
+	exists, err := i.repo.Exists(ctx, r.Path())
 	if err != nil {
-		return err
+		return nil, err
 	}
+	result := &InitResult{}
 	if err := i.repo.CreateFolder(ctx, r.Path()); err != nil {
-		return err
+		return nil, err
 	}
 	conf := r.Config()
-	if ex {
+	if exists {
 		previous, err := i.repo.GetConfig(ctx, r.path)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		conf = NewConfig(previous.Id(), previous.formatVersion, r.config.compression)
+		conf = updateConfig(previous, r.config, force, result)
 	}
 	if err := i.repo.CreateConfig(ctx, r.Path(), conf); err != nil {
-		return err
+		return nil, err
 	}
 	if err := i.repo.CreateFolder(ctx, r.ObjectsFolder()); err != nil {
-		return err
+		return nil, err
 	}
 	if err := i.repo.CreateFolder(ctx, r.SnapshotsFolder()); err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	result.ID = conf.Id().String()
+	return result, nil
 }
 
 func NewInit(repo FolderRepository) *Init {

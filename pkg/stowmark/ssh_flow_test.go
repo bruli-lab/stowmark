@@ -4,11 +4,8 @@ package stowmark_test
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/stretchr/testify/require"
 )
 
 func TestSSHRepositoryFlow(t *testing.T) {
@@ -32,14 +29,17 @@ func TestSSHRepositoryFlow(t *testing.T) {
 			testRoot := t.TempDir()
 			sourcePath := filepath.Join(testRoot, "source")
 			restorePath := filepath.Join(testRoot, "restore")
-
-			require.NoError(t, os.MkdirAll(sourcePath, 0o755))
-			createSourceFixture(t, sourcePath)
+			alternativeRestorePath := filepath.Join(testRoot, "alternative-restore")
+			keyPairsFolder := filepath.Join(testRoot, "keypairs")
+			newKeyPairsFolder := filepath.Join(testRoot, "new-keypairs")
 
 			mainFlow(t, ctx, Folders{
-				Source:     sourcePath,
-				Repository: repositoryURL,
-				Restore:    new(restorePath),
+				Source:             sourcePath,
+				Repository:         repositoryURL,
+				Restore:            new(restorePath),
+				keyPairsFolder:     keyPairsFolder,
+				AlternativeRestore: new(alternativeRestorePath),
+				newKeyPairsFolder:  newKeyPairsFolder,
 			}, version)
 		})
 	}

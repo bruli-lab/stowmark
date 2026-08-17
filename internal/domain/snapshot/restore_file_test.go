@@ -2,9 +2,11 @@ package snapshot_test
 
 import (
 	"context"
+	"crypto/rsa"
 	"errors"
 	"testing"
 
+	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/fixtures"
@@ -17,18 +19,26 @@ func TestRestoreFile_Restore(t *testing.T) {
 	type args struct {
 		filePath        string
 		destinationPath *string
+		privateKey      *string
 	}
 	files := []snapshot.File{
 		fixtures.FileBuilder{Path: new("path1")}.Build(),
 		fixtures.FileBuilder{Path: new("path2")}.Build(),
 		fixtures.FileBuilder{Path: new("path3")}.Build(),
 	}
+	config := fixtures.ConfigBuilder{
+		EncryptionConfig: encryption.NewEncryptionConfig("abc", "def", uint64(1)),
+	}.
+		Build(t)
 	tests := []struct {
 		name string
 		args args
 		expectedErr, manifestErr,
 		objectErr error
-		manifest *snapshot.Manifest
+		manifest     *snapshot.Manifest
+		config       *repository.Config
+		symmetricKey []byte
+		privateKey   *rsa.PrivateKey
 	}{
 		{
 			name:        "and get manifest returns error, then it returns same error",
@@ -49,9 +59,12 @@ func TestRestoreFile_Restore(t *testing.T) {
 			objectErr:   errTest,
 		},
 		{
-			name:     "and restore object return nil, then it returns nil",
-			args:     args{filePath: "path3", destinationPath: new("destinationPath")},
-			manifest: new(fixtures.ManifestBuilder{Files: files}.Build()),
+			name:         "and restore object return nil, then it returns nil",
+			args:         args{filePath: "path3", destinationPath: new("destinationPath")},
+			manifest:     new(fixtures.ManifestBuilder{Files: files}.Build()),
+			config:       &config,
+			privateKey:   &rsa.PrivateKey{},
+			symmetricKey: []byte("addd"),
 		},
 	}
 	for _, tt := range tests {
@@ -63,11 +76,23 @@ func TestRestoreFile_Restore(t *testing.T) {
 				return tt.manifest, tt.manifestErr
 			}
 			objectRepo := &snapshot.ObjectRepositoryMock{}
-			objectRepo.RestoreObjectFunc = func(_ context.Context, _ *repository.Compression, _ *snapshot.File) error {
+			objectRepo.RestoreObjectFunc = func(_ context.Context, _ *repository.Compression, _ *snapshot.File, _ []byte, _ uint64) error {
 				return tt.objectErr
 			}
-			svc := snapshot.NewRestoreFile(manifestRepo, objectRepo)
-			err := svc.Restore(t.Context(), uuid.NewString(), tt.args.filePath, tt.args.destinationPath)
+			folderRepo := &repository.FolderRepositoryMock{}
+			folderRepo.GetConfigFunc = func(_ context.Context, _ string) (*repository.Config, error) {
+				return tt.config, nil
+			}
+			symmetricRepo := &encryption.SymmetricKeyRepositoryMock{}
+			symmetricRepo.DecodeAndDecryptSymmetricKeyFunc = func(_ context.Context, _ *rsa.PrivateKey, _ string) ([]byte, error) {
+				return tt.symmetricKey, nil
+			}
+			asymmetricRepo := &encryption.AsymmetricKeyPairRepositoryMock{}
+			asymmetricRepo.ReadRSAPrivateKeyFunc = func(_ context.Context, _ string) (*rsa.PrivateKey, error) {
+				return tt.privateKey, nil
+			}
+			svc := snapshot.NewRestoreFile(manifestRepo, objectRepo, folderRepo, encryption.NewDecryptSymmetricKey(symmetricRepo, asymmetricRepo))
+			err := svc.Restore(t.Context(), uuid.NewString(), tt.args.filePath, "repository-path", tt.args.destinationPath, tt.args.privateKey)
 			if err != nil {
 				require.ErrorAs(t, err, &tt.expectedErr)
 			}

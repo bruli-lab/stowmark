@@ -8,6 +8,7 @@ import (
 const (
 	ObjectsFolder   = "objects"
 	SnapshotsFolder = "snapshots"
+	EncryptedFolder = "encrypted"
 )
 
 var (

@@ -14,6 +14,7 @@ func Execute() error {
 
 	rootCmd.AddCommand(newInitCommand())
 	rootCmd.AddCommand(newSnapshotCommand())
+	rootCmd.AddCommand(newKeyCommand())
 
 	return rootCmd.Execute()
 }

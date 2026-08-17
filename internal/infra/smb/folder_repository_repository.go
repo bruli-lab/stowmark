@@ -12,7 +12,6 @@ import (
 	"github.com/bruli-lab/stowmark/internal/infra/codec"
 	"github.com/bruli-lab/stowmark/internal/infra/model"
 	"github.com/cloudsoda/go-smb2"
-	"github.com/google/uuid"
 )
 
 type FolderRepositoryRepository struct {
@@ -106,25 +105,7 @@ func (f FolderRepositoryRepository) GetConfig(ctx context.Context, folderPath st
 		return nil, fmt.Errorf("unmarshal config %q: %w", configPath, err)
 	}
 
-	id, err := uuid.Parse(conf.ID)
-	if err != nil {
-		return nil, fmt.Errorf("parse config ID: %w", err)
-	}
-
-	compType, err := repository.ParseCompressionType(conf.Compression.Type)
-	if err != nil {
-		return nil, fmt.Errorf("parse compression type: %w", err)
-	}
-
-	comp, err := repository.NewCompression(
-		*compType,
-		conf.Compression.Level,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create compression: %w", err)
-	}
-
-	return repository.NewConfig(id, repository.FormatVersion(conf.FormatVersion), comp), nil
+	return model.BuildConfigDomain(conf)
 }
 
 func NewFolderRepositoryRepository(share *smb2.Share) *FolderRepositoryRepository {

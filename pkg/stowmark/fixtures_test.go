@@ -104,6 +104,14 @@ func requireDirectoriesEqual(t *testing.T, expectedRoot, actualRoot string) {
 	require.NoError(t, err)
 }
 
+func requireFileExists(t *testing.T, filePath string) {
+	t.Helper()
+
+	info, err := os.Stat(filePath)
+	require.NoError(t, err, "expected file %q to exist", filePath)
+	require.False(t, info.IsDir(), "expected %q to be a file, but it is a directory", filePath)
+}
+
 func fileHash(path string) ([sha256.Size]byte, error) {
 	file, err := os.Open(path)
 	if err != nil {

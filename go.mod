@@ -1,12 +1,13 @@
 module github.com/bruli-lab/stowmark
 
-go 1.26.6
+go 1.27.0
 
 require (
 	cloud.google.com/go/storage v1.64.0
 	github.com/aws/aws-sdk-go-v2 v1.43.7
 	github.com/aws/aws-sdk-go-v2/config v1.32.38
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.37
+	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.3.15
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.107.3
 	github.com/aws/smithy-go v1.27.8
 	github.com/bruli-lab/go-core v1.7.0
@@ -23,6 +24,7 @@ require (
 	github.com/testcontainers/testcontainers-go v0.44.0
 	github.com/ulikunitz/xz v0.5.16
 	golang.org/x/crypto v0.55.0
+	golang.org/x/sync v0.22.0
 	google.golang.org/api v0.293.0
 )
 
@@ -140,7 +142,6 @@ require (
 	golang.org/x/mod v0.40.0 // indirect
 	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
-	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/telemetry v0.0.0-20260811182544-a038080d80e5 // indirect
 	golang.org/x/term v0.45.0 // indirect
