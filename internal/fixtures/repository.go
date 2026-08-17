@@ -24,7 +24,7 @@ func (b RepositoryBuilder) Build(t *testing.T) repository.Repository {
 
 type ConfigBuilder struct {
 	ID            *uuid.UUID
-	FormatVersion *int
+	FormatVersion *repository.FormatVersion
 }
 
 func (c ConfigBuilder) Build(t *testing.T) repository.Config {

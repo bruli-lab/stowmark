@@ -3,6 +3,7 @@ package snapshot_test
 import (
 	"context"
 	"errors"
+	"io"
 	"testing"
 
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
@@ -29,6 +30,7 @@ func TestVerifier_Verify(t *testing.T) {
 		expectedFailedLen int
 		manifest          *snapshot.Manifest
 		file              *snapshot.File
+		reader            io.ReadCloser
 	}{
 		{
 			name:           "and get manifest returns error, then it returns same error",
@@ -49,17 +51,26 @@ func TestVerifier_Verify(t *testing.T) {
 			expectedFailedLen: 1,
 		},
 		{
-			name:              "and read object returns with different hash, then it returns a failed result",
-			manifest:          &manifest,
+			name:          "with chunks and read object returns not found error, then it returns a failed result",
+			readObjectErr: snapshot.NotFoundError{},
+			manifest: new(fixtures.ManifestBuilder{Files: []snapshot.File{
+				fixtures.FileBuilder{Hash: &hash, Chunks: []snapshot.Chunk{
+					*snapshot.NewChunk("hash", 0, 10),
+				}}.Build(),
+			}}.Build()),
 			expectedSuccess:   false,
 			expectedFailedLen: 1,
-			file:              new(fixtures.FileBuilder{}.Build()),
 		},
 		{
-			name:            "and read object returns same file data, then it returns a success result",
-			manifest:        &manifest,
-			expectedSuccess: true,
-			file:            new(fixtures.FileBuilder{Hash: new(hash)}.Build()),
+			name:          "with chunks and read object returns not found error, then it returns a failed result",
+			readObjectErr: snapshot.NotFoundError{},
+			manifest: new(fixtures.ManifestBuilder{Files: []snapshot.File{
+				fixtures.FileBuilder{Hash: &hash, Chunks: []snapshot.Chunk{
+					*snapshot.NewChunk("hash", 0, 10),
+				}}.Build(),
+			}}.Build()),
+			expectedSuccess:   false,
+			expectedFailedLen: 1,
 		},
 	}
 	for _, tt := range tests {
@@ -67,8 +78,8 @@ func TestVerifier_Verify(t *testing.T) {
 		when Verify method is called `+tt.name, func(t *testing.T) {
 			t.Parallel()
 			objectRepo := &snapshot.ObjectRepositoryMock{}
-			objectRepo.ReadObjectFunc = func(_ context.Context, _ string, _ string) (*snapshot.File, error) {
-				return tt.file, tt.readObjectErr
+			objectRepo.ReadObjectFunc = func(_ context.Context, _ string) (io.ReadCloser, error) {
+				return tt.reader, tt.readObjectErr
 			}
 			manifestRepo := &snapshot.ManifestRepositoryMock{}
 			manifestRepo.GetFunc = func(_ context.Context, _ string) (*snapshot.Manifest, error) {

@@ -1,4 +1,4 @@
-services:
+    services:
   ssh-server:
     image: lscr.io/linuxserver/openssh-server:latest
     container_name: stowmark-ssh-test

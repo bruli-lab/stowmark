@@ -1,4 +1,4 @@
-package cli
+package repositories
 
 import (
 	"context"
@@ -15,7 +15,7 @@ type Repositories interface {
 	Close() error
 }
 
-func NewRepositoriesHandler(ctx context.Context, value string) (Repositories, error) {
+func NewHandler(ctx context.Context, value string) (Repositories, error) {
 	repoType, err := repository.ParseRepositoryType(value)
 	if err != nil {
 		return nil, err

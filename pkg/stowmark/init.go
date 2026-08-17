@@ -12,7 +12,7 @@ type Compression struct {
 	Level *int
 }
 
-func (h *Handler) Init(ctx context.Context, source string, comp *Compression) error {
+func (h *Handler) Init(ctx context.Context, comp *Compression, formatversion int) error {
 	svc := repository.NewInit(h.folderRepository)
 	compType, err := repository.ParseCompressionType(comp.Type)
 	if err != nil {
@@ -22,8 +22,8 @@ func (h *Handler) Init(ctx context.Context, source string, comp *Compression) er
 	if err != nil {
 		return err
 	}
-	conf := repository.NewConfig(uuid.New(), repository.CurrentFormatVersion, compre)
-	repo, err := repository.NewRepository(source, conf)
+	conf := repository.NewConfig(uuid.New(), repository.ParseFormatVersion(formatversion), compre)
+	repo, err := repository.NewRepository(h.repositoryPath, conf)
 	if err != nil {
 		return err
 	}

@@ -73,13 +73,26 @@ tasks:
         echo "🚀 Executing golangci-lint..."
         golangci-lint run ./...
 
-  test:
-    desc: Executing tests amb race, coverage i tparse
+  unit-test:
+    desc: Executing unit tests amb race, coverage i tparse
     cmds:
       - |
         set -euo pipefail
         echo "🧪 Running unit tests (race, JSON → tparse)..."
         go test -race ./... -json -cover -coverprofile=coverage.out | go tool tparse -all
+
+  integration-test:
+    desc: Run integration tests
+    cmds:
+      - |
+        set -euo pipefail
+        echo "🧪 Running integration tests..."
+        go tool gotestsum \
+          --format testname \
+          -- \
+          -tags=integration \
+          -count=1 \
+          ./pkg/stowmark
 
   check:
     desc: Executing fmt, security, lint i test
@@ -88,4 +101,4 @@ tasks:
       - fix
       - security
       - lint
-      - test
+      - unit-test

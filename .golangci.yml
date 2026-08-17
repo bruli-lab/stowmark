@@ -17,8 +17,11 @@ linters:
     - bodyclose
     - misspell
     - unconvert
+    - dupl
 
   settings:
+    dupl:
+      threshold: 80
     errcheck:
       check-type-assertions: true
       check-blank: false
@@ -34,6 +37,11 @@ linters:
         - performance
         - style
 
+  exclusions:
+    rules:
+      - path: '_test\.go$'
+        linters:
+          - dupl
 issues:
   exclude-rules:
     - path: _test\.go

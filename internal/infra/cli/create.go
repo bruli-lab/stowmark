@@ -7,6 +7,7 @@ import (
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/disk"
+	"github.com/bruli-lab/stowmark/internal/infra/repositories"
 	"github.com/spf13/cobra"
 )
 
@@ -25,7 +26,7 @@ func newSnapshotCreateCommand() *cobra.Command {
 				return errors.New("--repo is required")
 			}
 
-			repoHand, err := NewRepositoriesHandler(cmd.Context(), repositoryPath)
+			repoHand, err := repositories.NewHandler(cmd.Context(), repositoryPath)
 			if err != nil {
 				return err
 			}
