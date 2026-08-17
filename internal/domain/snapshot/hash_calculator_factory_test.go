@@ -96,7 +96,7 @@ func TestHashCalculatorFactory_Handle(t *testing.T) {
 			sourceRepo.CalculateHashFunc = func(_ context.Context, _ string, _ *repository.Compression) (string, error) {
 				return tt.hash, tt.calculateErr
 			}
-			sourceRepo.CalculateChunksFunc = func(ctx context.Context, _ string, _ int64, _ *repository.Compression) ([]snapshot.Chunk, error) {
+			sourceRepo.CalculateChunksFunc = func(_ context.Context, _ string, _ int64, _ *repository.Compression) ([]snapshot.Chunk, error) {
 				return tt.chunks, tt.calculateChunksErr
 			}
 			handler := snapshot.NewHashCalculatorFactory(sourceRepo)

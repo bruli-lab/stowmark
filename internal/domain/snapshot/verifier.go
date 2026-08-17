@@ -19,7 +19,6 @@ func (v Verifier) Verify(ctx context.Context, snapshotID string) (*Result, error
 	if err != nil {
 		return nil, err
 	}
-
 	result := NewResult(snapshotID)
 
 	for _, file := range manifest.Files() {
@@ -27,7 +26,6 @@ func (v Verifier) Verify(ctx context.Context, snapshotID string) (*Result, error
 		if err != nil {
 			return nil, err
 		}
-
 		if reason != "" {
 			result.AddFailed(*NewFailedResult(
 				file.Path(),
@@ -49,14 +47,9 @@ func (v Verifier) verifyFile(ctx context.Context, file *File) (string, error) {
 			file.Hash(),
 		)
 	}
-
 	chunks := file.Chunks()
-
 	for index, chunk := range chunks {
-		reason, err := v.verifyObject(
-			ctx,
-			chunk.Hash(),
-		)
+		reason, err := v.verifyObject(ctx, chunk.Hash())
 		if err != nil {
 			return "", err
 		}
@@ -73,7 +66,6 @@ func (v Verifier) verifyObject(ctx context.Context, expectedHash string) (string
 	if expectedHash == "" {
 		return "object hash is empty", nil
 	}
-
 	reader, err := v.objectRepo.ReadObject(ctx, expectedHash)
 	if err != nil {
 		var notFoundErr NotFoundError
@@ -81,7 +73,6 @@ func (v Verifier) verifyObject(ctx context.Context, expectedHash string) (string
 		if errors.As(err, &notFoundErr) {
 			return err.Error(), nil
 		}
-
 		return "", err
 	}
 
