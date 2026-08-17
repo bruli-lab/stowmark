@@ -23,13 +23,13 @@ require (
 	github.com/testcontainers/testcontainers-go v0.44.0
 	github.com/ulikunitz/xz v0.5.16
 	golang.org/x/crypto v0.55.0
-	google.golang.org/api v0.287.1
+	google.golang.org/api v0.293.0
 )
 
 require (
 	cel.dev/expr v0.25.2 // indirect
 	cloud.google.com/go v0.123.0 // indirect
-	cloud.google.com/go/auth v0.20.0 // indirect
+	cloud.google.com/go/auth v0.23.0 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
 	cloud.google.com/go/iam v1.11.0 // indirect
@@ -87,7 +87,7 @@ require (
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
-	github.com/googleapis/enterprise-certificate-proxy v0.3.17 // indirect
+	github.com/googleapis/enterprise-certificate-proxy v0.3.20 // indirect
 	github.com/googleapis/gax-go/v2 v2.23.0 // indirect
 	github.com/hashicorp/go-uuid v1.0.3 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
