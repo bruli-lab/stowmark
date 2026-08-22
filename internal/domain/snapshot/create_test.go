@@ -2,9 +2,11 @@ package snapshot_test
 
 import (
 	"context"
+	"crypto/rsa"
 	"errors"
 	"testing"
 
+	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/fixtures"
@@ -16,9 +18,14 @@ func TestCreate_Do(t *testing.T) {
 	errTest := errors.New("test error")
 	config := fixtures.ConfigBuilder{}.Build(t)
 	oneConfig := fixtures.ConfigBuilder{FormatVersion: new(repository.FormatVersionOne)}.Build(t)
+	oneConfigWithEncryption := fixtures.ConfigBuilder{
+		FormatVersion:    new(repository.FormatVersionOne),
+		EncryptionConfig: encryption.NewEncryptionConfig("abc", "def", uint64(1)),
+	}.Build(t)
 	type args struct {
 		repoPath   string
 		sourcePath string
+		privateKey *string
 	}
 	tests := []struct {
 		name string
@@ -26,7 +33,8 @@ func TestCreate_Do(t *testing.T) {
 		expectedErr, getConfigErr,
 		exploreErr, calculateHashErr,
 		saveObjErr, alreadyExistsErr,
-		saveManifestErr, saveChunkErr error
+		saveManifestErr, saveChunkErr,
+		decodeErr error
 		source *snapshot.Source
 		hash   string
 		exists bool
@@ -62,6 +70,29 @@ func TestCreate_Do(t *testing.T) {
 			hash:   uuid.NewString(),
 			exists: false,
 			config: &config,
+		},
+		{
+			name:        "with private key but no encryption config, then it returns an missing encryption config to encrypt error",
+			args:        args{repoPath: "path", sourcePath: "path", privateKey: new("private-key")},
+			expectedErr: snapshot.ErrMissingEncryptionConfigToEncrypt,
+			source: new(fixtures.SourceBuilder{Files: []snapshot.File{
+				fixtures.FileBuilder{}.Build(),
+			}}.Build()),
+			hash:   uuid.NewString(),
+			exists: false,
+			config: &oneConfig,
+		},
+		{
+			name:        "when decrypt return an error, then it returns same error",
+			args:        args{repoPath: "path", sourcePath: "path", privateKey: new("private-key")},
+			expectedErr: errTest,
+			decodeErr:   errTest,
+			source: new(fixtures.SourceBuilder{Files: []snapshot.File{
+				fixtures.FileBuilder{}.Build(),
+			}}.Build()),
+			hash:   uuid.NewString(),
+			exists: false,
+			config: &oneConfigWithEncryption,
 		},
 		{
 			name:             "with format version one and Already exists on saveChunk returns error, then it returns same error",
@@ -134,6 +165,16 @@ func TestCreate_Do(t *testing.T) {
 			exists: true,
 			config: &oneConfig,
 		},
+		{
+			name: "with format version one and encryption and no error when manifest does exists, then it returns nil",
+			args: args{repoPath: "path", sourcePath: "path", privateKey: new("private-key")},
+			source: new(fixtures.SourceBuilder{Files: []snapshot.File{
+				fixtures.FileBuilder{}.Build(),
+			}}.Build()),
+			hash:   uuid.NewString(),
+			exists: true,
+			config: &oneConfigWithEncryption,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(`Given a Create service,
@@ -151,26 +192,36 @@ func TestCreate_Do(t *testing.T) {
 				return tt.saveManifestErr
 			}
 			objRepo := &snapshot.ObjectRepositoryMock{}
-			objRepo.SaveFunc = func(_ context.Context, _, _ string, _ *repository.Compression) error {
+			objRepo.SaveFunc = func(_ context.Context, _, _ string, _ *repository.Compression, _ []byte, _ uint64) error {
 				return tt.saveObjErr
 			}
-			objRepo.AlreadyExistsFunc = func(_ context.Context, _ string) (bool, error) {
+			objRepo.AlreadyExistsFunc = func(_ context.Context, _ string, _ []byte, _ uint64) (bool, error) {
 				return tt.exists, tt.alreadyExistsErr
 			}
-			objRepo.SaveChunkFunc = func(_ context.Context, _, _ string, _ int64, _ int64, _ *repository.Compression) error {
+			objRepo.SaveChunkFunc = func(_ context.Context, _, _ string, _ int64, _ int64, _ *repository.Compression, _ []byte, _ uint64) error {
 				return tt.saveChunkErr
 			}
 			folderRepositoryRep := &repository.FolderRepositoryMock{}
 			folderRepositoryRep.GetConfigFunc = func(_ context.Context, _ string) (*repository.Config, error) {
 				return tt.config, tt.getConfigErr
 			}
+			symmetricRepo := &encryption.SymmetricKeyRepositoryMock{}
+			symmetricRepo.DecodeAndDecryptSymmetricKeyFunc = func(_ context.Context, _ *rsa.PrivateKey, _ string) ([]byte, error) {
+				return []byte("abc"), tt.decodeErr
+			}
+			asymmetricRepo := &encryption.AsymmetricKeyPairRepositoryMock{}
+			asymmetricRepo.ReadRSAPrivateKeyFunc = func(_ context.Context, _ string) (*rsa.PrivateKey, error) {
+				return new(rsa.PrivateKey{}), nil
+			}
+			decryptSvc := encryption.NewDecryptSymmetricKey(symmetricRepo, asymmetricRepo)
 			svc := snapshot.NewCreate(
 				sourceRepo,
 				manifestRepo,
 				objRepo,
 				repository.NewGetConfig(folderRepositoryRep),
+				decryptSvc,
 			)
-			result, err := svc.Do(t.Context(), tt.args.repoPath, tt.args.sourcePath)
+			result, err := svc.Do(t.Context(), tt.args.repoPath, tt.args.sourcePath, tt.args.privateKey)
 			if err != nil {
 				require.ErrorAs(t, err, &tt.expectedErr)
 				return

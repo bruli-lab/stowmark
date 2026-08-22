@@ -10,7 +10,7 @@ tasks:
   up:
     desc: Start the local S3 server and create the bucket
     cmds:
-      - docker compose -f "{{.COMPOSE_FILE}}" up -d "{{.S3_SERVICE}}" "{{.S3_CLIENT}}"
+      - docker compose -f "{{.COMPOSE_FILE}}" up -d "{{.S3_SERVICE}}" "{{.S3_CLIENT}}" --remove-orphans
       - |
         docker compose -f "{{.COMPOSE_FILE}}" exec -T "{{.S3_CLIENT}}" \
           aws s3api head-bucket --bucket "{{.S3_BUCKET}}" 2>/dev/null ||

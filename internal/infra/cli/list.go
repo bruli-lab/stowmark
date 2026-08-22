@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
 	"text/tabwriter"
 	"time"
@@ -19,10 +18,6 @@ func newSnapshotListCommand() *cobra.Command {
 		Short: "List repository snapshots",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if repositoryPath == "" {
-				return errors.New("--repo is required")
-			}
-
 			repoHand, err := repositories.NewHandler(cmd.Context(), repositoryPath)
 			if err != nil {
 				return err
@@ -95,6 +90,8 @@ func newSnapshotListCommand() *cobra.Command {
 		"",
 		"path to the Stowmark repository",
 	)
+
+	_ = cmd.MarkFlagRequired("repo")
 
 	return cmd
 }

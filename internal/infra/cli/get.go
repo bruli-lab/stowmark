@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"text/tabwriter"
@@ -21,13 +20,6 @@ func newSnapshotGetCommand() *cobra.Command {
 		Short: "Show a snapshot manifest",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if repositoryPath == "" {
-				return errors.New("--repo is required")
-			}
-			if snapshotID == "" {
-				return errors.New("--id is required")
-			}
-
 			repohand, err := repositories.NewHandler(cmd.Context(), repositoryPath)
 			if err != nil {
 				return err
@@ -61,6 +53,9 @@ func newSnapshotGetCommand() *cobra.Command {
 		"",
 		"snapshot ID",
 	)
+
+	_ = cmd.MarkFlagRequired("id")
+	_ = cmd.MarkFlagRequired("repo")
 
 	return cmd
 }

@@ -1,0 +1,59 @@
+package cli
+
+import (
+	"fmt"
+
+	"github.com/bruli-lab/stowmark/internal/domain/repository"
+	"github.com/bruli-lab/stowmark/internal/infra/disk"
+	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
+	"github.com/spf13/cobra"
+)
+
+func newKeyRewrapCommand() *cobra.Command {
+	var (
+		repositoryPath string
+		oldPrivateKey  string
+		newPublicKey   string
+	)
+	cmd := &cobra.Command{
+		Use:   "rewrap",
+		Short: "Rotate encryption key pair",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			asymmetricRepo := disk.NewAsymmetricKeyPairRepository()
+			symmetricRepo := encrypt.NewSymmetricRepository()
+			folderRepo := disk.NewFolderRepositoryRepository()
+			svc := repository.NewRewrap(folderRepo, symmetricRepo, asymmetricRepo)
+			err := svc.Do(cmd.Context(), repositoryPath, oldPrivateKey, newPublicKey)
+			if err != nil {
+				return fmt.Errorf("failed to rewrap: %w", err)
+			}
+			_, err = fmt.Fprintln(cmd.OutOrStdout(), "rotate encryption key pair successful")
+			return err
+		},
+	}
+
+	cmd.Flags().StringVar(
+		&repositoryPath,
+		"repo",
+		"",
+		"Repository path",
+	)
+	cmd.Flags().StringVar(
+		&oldPrivateKey,
+		"old-private-key",
+		"",
+		"old private key path",
+	)
+	cmd.Flags().StringVar(
+		&newPublicKey,
+		"new-public-key",
+		"",
+		"new public key path",
+	)
+
+	_ = cmd.MarkFlagRequired("repo")
+	_ = cmd.MarkFlagRequired("old-private-key")
+	_ = cmd.MarkFlagRequired("new-public-key")
+	return cmd
+}

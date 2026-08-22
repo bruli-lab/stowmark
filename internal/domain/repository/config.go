@@ -3,6 +3,7 @@ package repository
 import (
 	"time"
 
+	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/google/uuid"
 )
 
@@ -11,6 +12,11 @@ type Config struct {
 	formatVersion FormatVersion
 	createdAt     time.Time
 	compression   *Compression
+	encryption    *encryption.EncryptionConfig
+}
+
+func (c Config) Encryption() *encryption.EncryptionConfig {
+	return c.encryption
 }
 
 func (c Config) Compression() *Compression {
@@ -29,6 +35,17 @@ func (c Config) CreatedAt() time.Time {
 	return c.createdAt
 }
 
-func NewConfig(id uuid.UUID, version FormatVersion, comp *Compression) *Config {
-	return &Config{id: id, formatVersion: version, createdAt: time.Now().UTC(), compression: comp}
+func NewConfig(
+	id uuid.UUID,
+	version FormatVersion,
+	comp *Compression,
+	encryptionConfig *encryption.EncryptionConfig,
+) *Config {
+	return &Config{
+		id:            id,
+		formatVersion: version,
+		createdAt:     time.Now().UTC(),
+		compression:   comp,
+		encryption:    encryptionConfig,
+	}
 }

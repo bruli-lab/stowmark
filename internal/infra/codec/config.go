@@ -14,6 +14,16 @@ func MarshalConfig(ctx context.Context, c *repository.Config) ([]byte, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	var encryption *model.Encryption
+	if c.Encryption() != nil {
+		encryption = &model.Encryption{
+			Type:                 c.Encryption().EncryptionType(),
+			KeyEncryption:        c.Encryption().KeyEncryption(),
+			EncryptedKey:         c.Encryption().EncryptedKey(),
+			PublicKeyFingerprint: c.Encryption().PublicKeyFingerprint(),
+			Generation:           c.Encryption().Generation(),
+		}
+	}
 
 	co := model.Config{
 		ID:            c.Id().String(),
@@ -23,6 +33,7 @@ func MarshalConfig(ctx context.Context, c *repository.Config) ([]byte, error) {
 			Type:  c.Compression().CompType().String(),
 			Level: c.Compression().Level(),
 		},
+		Encryption: encryption,
 	}
 
 	data, err := json.MarshalIndent(co, "", "  ")

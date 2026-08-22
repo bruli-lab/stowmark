@@ -3,14 +3,34 @@ package snapshot
 import (
 	"context"
 	"fmt"
+
+	"github.com/bruli-lab/stowmark/internal/domain/encryption"
+	"github.com/bruli-lab/stowmark/internal/domain/repository"
 )
 
 type RestoreFile struct {
-	manifestRepo ManifestRepository
-	objectRepo   ObjectRepository
+	manifestRepo  ManifestRepository
+	objectRepo    ObjectRepository
+	symKeyHandler *SymmetricKeyHandler
 }
 
-func (r *RestoreFile) Restore(ctx context.Context, snapshotID, filePath string, destinationPath *string) error {
+func (r *RestoreFile) Restore(
+	ctx context.Context,
+	snapshotID, filePath, repositoryPath string,
+	destinationPath, privateKeyPath *string,
+) error {
+	data, err := r.symKeyHandler.Handle(ctx, privateKeyPath, repositoryPath)
+	if err != nil {
+		return err
+	}
+	var (
+		symmetricKey []byte
+		generation   uint64
+	)
+	if data != nil {
+		symmetricKey = data.SymmetricKey
+		generation = data.Generation
+	}
 	man, err := r.manifestRepo.Get(ctx, snapshotID)
 	if err != nil {
 		return err
@@ -22,7 +42,7 @@ func (r *RestoreFile) Restore(ctx context.Context, snapshotID, filePath string, 
 	if destinationPath != nil {
 		file.ChangeSourcePath(man.Source(), *destinationPath)
 	}
-	if err := r.objectRepo.RestoreObject(ctx, man.compression, file); err != nil {
+	if err := r.objectRepo.RestoreObject(ctx, man.compression, file, symmetricKey, generation); err != nil {
 		return err
 	}
 	return nil
@@ -37,8 +57,17 @@ func (r *RestoreFile) findFile(man *Manifest, filePath string) (*File, error) {
 	return nil, NewRestoreFileError("file not found: " + filePath + "")
 }
 
-func NewRestoreFile(manifestRepo ManifestRepository, objectRepo ObjectRepository) *RestoreFile {
-	return &RestoreFile{manifestRepo: manifestRepo, objectRepo: objectRepo}
+func NewRestoreFile(
+	manifestRepo ManifestRepository,
+	objectRepo ObjectRepository,
+	folderRepo repository.FolderRepository,
+	decryptKeySvc *encryption.DecryptSymmetricKey,
+) *RestoreFile {
+	return &RestoreFile{
+		manifestRepo:  manifestRepo,
+		objectRepo:    objectRepo,
+		symKeyHandler: newSymmetricKeyHandler(folderRepo, decryptKeySvc),
+	}
 }
 
 type RestoreFileError struct {

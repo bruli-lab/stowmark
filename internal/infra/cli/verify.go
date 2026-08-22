@@ -4,7 +4,10 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
+	"github.com/bruli-lab/stowmark/internal/infra/disk"
+	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
 	"github.com/bruli-lab/stowmark/internal/infra/repositories"
 	"github.com/spf13/cobra"
 )
@@ -13,6 +16,7 @@ func newSnapshotVerifyCommand() *cobra.Command {
 	var (
 		repositoryPath string
 		snapshotID     string
+		privateKey     string
 	)
 
 	cmd := &cobra.Command{
@@ -49,11 +53,19 @@ func newSnapshotVerifyCommand() *cobra.Command {
 			verifier := snapshot.NewVerifier(
 				objectRepo,
 				manifestRepo,
+				repoHand.FolderRepository(),
+				encryption.NewDecryptSymmetricKey(encrypt.NewSymmetricRepository(), disk.NewAsymmetricKeyPairRepository()),
 			)
+			var privateKeyPath *string
+			if privateKey != "" {
+				privateKeyPath = &privateKey
+			}
 
 			result, err := verifier.Verify(
 				cmd.Context(),
+				repoHand.RepositoryPath(),
 				snapshotID,
+				privateKeyPath,
 			)
 			if err != nil {
 				return err
@@ -87,6 +99,14 @@ func newSnapshotVerifyCommand() *cobra.Command {
 		"",
 		"snapshot ID",
 	)
+	cmd.Flags().StringVar(
+		&privateKey,
+		"private-key",
+		"",
+		"Private key for decryption",
+	)
+	_ = cmd.MarkFlagRequired("id")
+	_ = cmd.MarkFlagRequired("repo")
 
 	return cmd
 }

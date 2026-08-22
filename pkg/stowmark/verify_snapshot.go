@@ -3,6 +3,7 @@ package stowmark
 import (
 	"context"
 
+	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 )
 
@@ -17,9 +18,10 @@ type Result struct {
 	IsSuccess  bool
 }
 
-func (h *Handler) VerifySnapshot(ctx context.Context, id string) (*Result, error) {
-	svc := snapshot.NewVerifier(h.objectRepository, h.manifestRepository)
-	result, err := svc.Verify(ctx, id)
+func (h *Handler) VerifySnapshot(ctx context.Context, id string, privateKey *string) (*Result, error) {
+	decryptSvc := encryption.NewDecryptSymmetricKey(h.symmetricKeyRepository, h.asymmetricKeyPaiRepository)
+	svc := snapshot.NewVerifier(h.objectRepository, h.manifestRepository, h.folderRepository, decryptSvc)
+	result, err := svc.Verify(ctx, h.repositoryPath, id, privateKey)
 	if err != nil {
 		return nil, err
 	}

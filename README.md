@@ -33,6 +33,8 @@ the source path, creation time and references to its files.
 - Deduplication of unchanged files between snapshots.
 - Automatic chunking for files larger than 8 MiB.
 - Optional `gzip`, `zstd`, `lz4` and `xz` compression.
+- Optional client-side encryption using AES-256-GCM and RSA-OAEP-SHA256.
+- Encryption key rotation without exposing plaintext data to remote storage.
 - Separate JSON manifest for every snapshot.
 - Snapshot listing ordered from newest to oldest.
 - Inspection of a snapshot and all its files.
@@ -457,6 +459,135 @@ stowmark snapshot --help
 stowmark snapshot create --help
 ```
 
+## Encryption
+
+Stowmark supports optional client-side encryption for repository objects. Encryption and decryption take place on the
+machine running Stowmark, so remote backends only receive encrypted object data.
+
+Stowmark uses hybrid encryption:
+
+- Every repository has a randomly generated 256-bit symmetric key.
+- Object contents are encrypted with `AES-256-GCM`.
+- The symmetric key is encrypted with an RSA public key using `RSA-OAEP-SHA256`.
+- Only the encrypted symmetric key, the public-key fingerprint and the current key generation are stored in
+  `config.json`.
+- The RSA private key is never stored in the repository.
+
+The private key is therefore required to create, verify and restore snapshots from an encrypted repository. Keep it in
+a secure location and maintain a separate backup of it. Losing the private key makes the encrypted repository
+unrecoverable.
+
+Encryption is configured when the repository is initialized. Run the built-in help to see the available encryption
+and key options:
+
+```bash
+stowmark init --help
+stowmark --help
+```
+
+### Encrypted repository usage
+
+Create asymmetric keys pair with:
+
+```bash
+stowmark key generate --folder keys
+```
+
+Initialize an encrypted repository with the RSA public key that will protect the repository symmetric key:
+
+```bash
+stowmark init --repo /srv/backups/stowmark \
+  --compression <compression> \ 
+  --level <level> \
+  --public-key keys/stowmark-public.pem
+```
+
+Create a snapshot. The corresponding private key is required to decrypt the repository symmetric key before new
+objects can be encrypted:
+
+```bash
+stowmark snapshot create ~/documents \
+  --repo /srv/backups/stowmark \
+  --private-key keys/stowmark-private.pem
+```
+
+Verify an encrypted snapshot:
+
+```bash
+stowmark snapshot verify \
+  --id <snapshot-id> \
+  --repo /srv/backups/stowmark \
+  --private-key keys/stowmark-private.pem
+```
+
+Restore an encrypted snapshot:
+
+```bash
+stowmark snapshot restore \
+  --id <snapshot-id> \
+  --repo /srv/backups/stowmark \
+  --destination /srv/restores/stowmark \ optional
+  --private-key keys/stowmark-private.pem
+```
+
+Rewrap the repository symmetric key when replacing the RSA key pair. The old private key decrypts the symmetric key
+and the new public key protects it from that point onward:
+
+```bash
+stowmark key rewrap \
+  --repo /srv/backups/stowmark \
+  --old-private-key keys/stowmark-old-private.pem \
+  --new-public-key keys/stowmark-new-public.pem
+```
+
+After the rewrap completes, snapshot creation, verification, restoration and future key rotations require the private
+key corresponding to `stowmark-new-public.pem`.
+
+Rotate the repository symmetric key when it must be revoked. The current private key decrypts the old symmetric key,
+while its corresponding public key protects the newly generated symmetric key:
+
+```bash
+stowmark key rekey \
+  --repo /srv/backups/stowmark \
+  --private-key keys/stowmark-new-private.pem \
+  --public-key keys/stowmark-new-public.pem
+```
+
+Compression is applied before encryption. Object hashes are calculated from the compressed plaintext, which preserves
+content-addressed deduplication inside the encrypted repository while authenticated encryption protects the stored
+bytes against disclosure and modification.
+
+Snapshot creation encrypts new objects before writing them to the repository. Verification and restoration decrypt
+objects transparently before checking their hashes or decoding their compression. Manifests continue to reference
+objects by their content hash and do not contain the symmetric key.
+
+### Asymmetric key rotation
+
+Use a key rewrap when the RSA key pair must be replaced but the repository symmetric key is still trusted. Stowmark
+decrypts the existing symmetric key with the old private key and encrypts that same key with the new public key. Object
+data does not need to be rewritten, making this operation fast regardless of repository size.
+
+The operation updates the encrypted key and public-key fingerprint in `config.json`. After it completes, the new
+private key is required to access the repository.
+
+### Symmetric key rotation
+
+Use a rekey when the repository symmetric key may have been compromised or must be replaced. Stowmark:
+
+1. Decrypts the current symmetric key with the RSA private key.
+2. Generates a new random symmetric key.
+3. Decrypts every object with the old key and encrypts it into a new generation with the new key.
+4. Encrypts the new symmetric key with the configured RSA public key.
+5. Commits the new generation in `config.json` only after every object has been processed successfully.
+6. Removes the previous encrypted generation after the commit.
+
+Objects are processed concurrently using a bounded worker pool. If any object fails, Stowmark cancels the remaining
+work, removes the incomplete generation and leaves the repository configuration pointing to the previous valid
+generation.
+
+Rewrap and rekey operations should not run concurrently with snapshot creation, verification, restoration or another
+key rotation against the same repository.
+
 ## Compression
 
 Compression is selected when the repository is initialized. Stowmark currently supports:
@@ -504,7 +635,12 @@ repository/
 ├── objects/
 │   ├── 00/
 │   ├── 01/
-│   └── ...
+│   ├── ...
+│   └── encrypted/
+│       └── <generation>/
+│           ├── 00/
+│           ├── 01/
+│           └── ...
 └── snapshots/
     ├── <snapshot-id>.json
     └── ...
@@ -525,6 +661,11 @@ objects/<first-two-hash-characters>/<remaining-hash-characters>
 When two snapshots contain the same file or chunk content encoded with the same compression settings, they both
 reference the same stored object. The same original content encoded differently produces a different object and hash.
 
+In encrypted repositories, encrypted objects are stored in a generation-specific namespace under `objects/encrypted`.
+The active generation is recorded in `config.json`. A rekey writes a complete new generation before switching the
+configuration to it, so an interrupted rotation cannot leave the repository pointing to a partially
+rewritten object set.
+
 ### Snapshot manifests
 
 Each snapshot is stored as a JSON manifest containing:
@@ -544,7 +685,8 @@ The manifest references objects but does not duplicate their contents.
 The `snapshot verify` command reads each object referenced by the manifest and checks:
 
 1. The object exists.
-2. Its calculated SHA-256 hash matches the manifest.
+2. The object can be authenticated and decrypted when repository encryption is enabled.
+3. Its calculated SHA-256 hash matches the manifest.
 
 The command exits with an error when any referenced file fails verification, making it suitable for scripts and
 scheduled checks.

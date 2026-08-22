@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/bruli-lab/go-core/fixtures"
+	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -23,8 +24,9 @@ func (b RepositoryBuilder) Build(t *testing.T) repository.Repository {
 }
 
 type ConfigBuilder struct {
-	ID            *uuid.UUID
-	FormatVersion *repository.FormatVersion
+	ID               *uuid.UUID
+	FormatVersion    *repository.FormatVersion
+	EncryptionConfig *encryption.EncryptionConfig
 }
 
 func (c ConfigBuilder) Build(t *testing.T) repository.Config {
@@ -32,6 +34,6 @@ func (c ConfigBuilder) Build(t *testing.T) repository.Config {
 	compType, err := repository.NewCompression(repository.NoneCompressionType, nil)
 	require.NoError(t, err)
 	version := fixtures.SetData(repository.CurrentFormatVersion, c.FormatVersion)
-	co := repository.NewConfig(id, version, compType)
+	co := repository.NewConfig(id, version, compType, c.EncryptionConfig)
 	return *co
 }

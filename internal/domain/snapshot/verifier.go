@@ -7,53 +7,125 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"runtime"
+	"sync"
+
+	"github.com/bruli-lab/stowmark/internal/domain/encryption"
+	"github.com/bruli-lab/stowmark/internal/domain/repository"
 )
 
+var defaultVerifyWorkers = runtime.GOMAXPROCS(0) * 4
+
 type Verifier struct {
-	objectRepo   ObjectRepository
-	manifestRepo ManifestRepository
+	objectRepo          ObjectRepository
+	manifestRepo        ManifestRepository
+	workers             int
+	symmetricKeyHandler *SymmetricKeyHandler
 }
 
-func (v Verifier) Verify(ctx context.Context, snapshotID string) (*Result, error) {
+func (v Verifier) Verify(ctx context.Context, repositoryPath, snapshotID string, privateKeyPath *string) (*Result, error) {
+	data, err := v.symmetricKeyHandler.Handle(ctx, privateKeyPath, repositoryPath)
+	if err != nil {
+		return nil, err
+	}
+	var (
+		symmetricKey []byte
+		generation   uint64
+	)
+	if data != nil {
+		symmetricKey = data.SymmetricKey
+		generation = data.Generation
+	}
+
 	manifest, err := v.manifestRepo.Get(ctx, snapshotID)
 	if err != nil {
 		return nil, err
 	}
 	result := NewResult(snapshotID)
 
-	for _, file := range manifest.Files() {
-		reason, err := v.verifyFile(ctx, &file)
-		if err != nil {
-			return nil, err
-		}
-		if reason != "" {
-			result.AddFailed(*NewFailedResult(
-				file.Path(),
-				reason,
-			))
-			continue
-		}
+	files := manifest.Files()
 
-		result.AddSuccess()
+	workers := v.workers
+	if workers <= 0 {
+		workers = defaultVerifyWorkers
+	}
+	if workers > len(files) {
+		workers = len(files)
+	}
+	if workers < 1 {
+		workers = 1
+	}
+
+	var (
+		wg       sync.WaitGroup
+		mu       sync.Mutex
+		firstErr error
+	)
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	jobs := make(chan File)
+
+	worker := func() {
+		defer wg.Done()
+		for file := range jobs {
+			reason, err := v.verifyFile(ctx, &file, symmetricKey, generation)
+
+			mu.Lock()
+			switch {
+			case err != nil:
+				if firstErr == nil {
+					firstErr = err
+					cancel()
+				}
+			case reason != "":
+				result.AddFailed(*NewFailedResult(file.Path(), reason))
+			default:
+				result.AddSuccess()
+			}
+			mu.Unlock()
+		}
+	}
+
+	wg.Add(workers)
+	for i := 0; i < workers; i++ {
+		go worker()
+	}
+
+	for _, file := range files {
+		select {
+		case jobs <- file:
+		case <-ctx.Done():
+			goto drained
+		}
+	}
+drained:
+	close(jobs)
+	wg.Wait()
+
+	if firstErr != nil {
+		return nil, firstErr
 	}
 
 	return result, nil
 }
 
-func (v Verifier) verifyFile(ctx context.Context, file *File) (string, error) {
+func (v Verifier) verifyFile(ctx context.Context, file *File, symmetricKey []byte, generation uint64) (string, error) {
 	if len(file.Chunks()) == 0 {
 		return v.verifyObject(
 			ctx,
 			file.Hash(),
+			symmetricKey,
+			generation,
 		)
 	}
 	chunks := file.Chunks()
 	for index, chunk := range chunks {
-		reason, err := v.verifyObject(ctx, chunk.Hash())
+		reason, err := v.verifyObject(ctx, chunk.Hash(), symmetricKey, generation)
 		if err != nil {
 			return "", err
 		}
-
 		if reason != "" {
 			return fmt.Sprintf("chunk %d/%d: %s", index+1, len(chunks), reason), nil
 		}
@@ -62,15 +134,13 @@ func (v Verifier) verifyFile(ctx context.Context, file *File) (string, error) {
 	return "", nil
 }
 
-func (v Verifier) verifyObject(ctx context.Context, expectedHash string) (string, error) {
+func (v Verifier) verifyObject(ctx context.Context, expectedHash string, symmetricKey []byte, generation uint64) (string, error) {
 	if expectedHash == "" {
 		return "object hash is empty", nil
 	}
-	reader, err := v.objectRepo.ReadObject(ctx, expectedHash)
+	reader, err := v.objectRepo.ReadObject(ctx, expectedHash, symmetricKey, generation)
 	if err != nil {
-		var notFoundErr NotFoundError
-
-		if errors.As(err, &notFoundErr) {
+		if errors.As(err, &NotFoundError{}) {
 			return err.Error(), nil
 		}
 		return "", err
@@ -104,19 +174,16 @@ func (v Verifier) verifyObject(ctx context.Context, expectedHash string) (string
 	return "", nil
 }
 
-func NewVerifier(objectRepo ObjectRepository, manifestRepo ManifestRepository) *Verifier {
-	return &Verifier{objectRepo: objectRepo, manifestRepo: manifestRepo}
-}
-
-type contextReader struct {
-	ctx    context.Context
-	reader io.Reader
-}
-
-func (r *contextReader) Read(data []byte) (int, error) {
-	if err := r.ctx.Err(); err != nil {
-		return 0, err
+func NewVerifier(
+	objectRepo ObjectRepository,
+	manifestRepo ManifestRepository,
+	folderRepo repository.FolderRepository,
+	decryptKeySvc *encryption.DecryptSymmetricKey,
+) *Verifier {
+	return &Verifier{
+		objectRepo:          objectRepo,
+		manifestRepo:        manifestRepo,
+		workers:             defaultVerifyWorkers,
+		symmetricKeyHandler: newSymmetricKeyHandler(folderRepo, decryptKeySvc),
 	}
-
-	return r.reader.Read(data)
 }

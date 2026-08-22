@@ -31,9 +31,12 @@ go.work.sum
 # .idea/
 # .vscode/
 /backup*
-/documents
+/keys*
+/documents*
 /docker/ssh-test/
 /docker/smb-test/
 /.s3-source
 /docker/webdav-data/
 /docker/gcs-test/
+/benchmark-results/
+/stowmark

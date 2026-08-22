@@ -11,25 +11,254 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
+	"strings"
 
 	"cloud.google.com/go/storage"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/chunkio"
 	"github.com/bruli-lab/stowmark/internal/infra/compression"
+	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
 	"github.com/bruli-lab/stowmark/internal/infra/model"
 	"github.com/bruli-lab/stowmark/internal/infra/object"
 	"google.golang.org/api/googleapi"
+	"google.golang.org/api/iterator"
 )
 
 type ObjectRepository struct {
-	client          *storage.Client
-	bucket          string
-	repositoryPath  string
-	handlersFactory *compression.HandlersFactory
+	client            *storage.Client
+	bucket            string
+	repositoryPath    string
+	handlersFactory   *compression.HandlersFactory
+	encryptionHandler *encrypt.AESGCMHandler
 }
 
-func (o ObjectRepository) SaveChunk(ctx context.Context, filePath, hash string, offset, size int64, comp *repository.Compression) error {
+func (o ObjectRepository) ListEncryptedObjects(ctx context.Context, generation uint64) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	prefix := object.EncryptedGenerationPath(
+		o.repositoryPath,
+		generation,
+		true,
+	)
+
+	if !strings.HasSuffix(prefix, "/") {
+		prefix += "/"
+	}
+
+	objectsIterator := o.client.
+		Bucket(o.bucket).
+		Objects(ctx, &storage.Query{
+			Prefix: prefix,
+		})
+
+	var hashes []string
+
+	for {
+		attrs, err := objectsIterator.Next()
+		if errors.Is(err, iterator.Done) {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("list encrypted objects for generation %d in bucket %q: %w", generation, o.bucket, err)
+		}
+
+		relativeName := strings.TrimPrefix(attrs.Name, prefix)
+		parts := strings.Split(relativeName, "/")
+
+		if len(parts) != 2 || len(parts[0]) != 2 || parts[1] == "" {
+			continue
+		}
+
+		hashes = append(hashes, parts[0]+parts[1])
+	}
+
+	sort.Strings(hashes)
+
+	return hashes, nil
+}
+
+func (o ObjectRepository) ReadEncryptedObject(ctx context.Context, hash string, generation uint64, key []byte) (io.ReadCloser, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	if len(hash) < 3 {
+		return nil, fmt.Errorf("invalid object hash %q", hash)
+	}
+
+	if len(key) == 0 {
+		return nil, errors.New("symmetric key is required")
+	}
+
+	directory := object.EncryptedGenerationPath(o.repositoryPath, generation, true)
+
+	objectPath := path.Join(directory, hash[:2], hash[2:])
+
+	source, err := o.client.
+		Bucket(o.bucket).
+		Object(objectPath).
+		NewReader(ctx)
+	if err != nil {
+		if errors.Is(err, storage.ErrObjectNotExist) {
+			return nil, fmt.Errorf("encrypted object %q from generation %d: %w", hash, generation, os.ErrNotExist)
+		}
+
+		return nil, fmt.Errorf("open encrypted object %q in bucket %q: %w", objectPath, o.bucket, err)
+	}
+
+	decoded, err := o.encryptionHandler.Decode(source, key)
+	if err != nil {
+		_ = source.Close()
+
+		return nil, fmt.Errorf(
+			"decrypt object %q from generation %d: %w",
+			hash,
+			generation,
+			err,
+		)
+	}
+	return &model.ReadCloser{
+		Reader: decoded,
+		Closer: source,
+	}, nil
+}
+
+func (o ObjectRepository) SaveRekeyedObject(ctx context.Context, hash string, source io.Reader, generation uint64, key []byte) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	if len(hash) < 3 {
+		return fmt.Errorf("invalid object hash %q", hash)
+	}
+
+	if source == nil {
+		return errors.New("source is required")
+	}
+
+	if len(key) == 0 {
+		return errors.New("symmetric key is required")
+	}
+
+	directory := object.EncryptedGenerationPath(
+		o.repositoryPath,
+		generation,
+		true,
+	)
+
+	objectPath := path.Join(directory, hash[:2], hash[2:])
+
+	uploadCtx, cancelUpload := context.WithCancel(ctx)
+	defer cancelUpload()
+
+	writer := o.client.
+		Bucket(o.bucket).
+		Object(objectPath).
+		NewWriter(uploadCtx)
+
+	abortUpload := func() {
+		cancelUpload()
+		_ = writer.Close()
+	}
+
+	encoder, err := o.encryptionHandler.Encode(writer, key)
+	if err != nil {
+		abortUpload()
+
+		return fmt.Errorf(
+			"create encryption encoder for object %q: %w",
+			hash,
+			err,
+		)
+	}
+
+	if _, err := io.Copy(encoder.Writer, source); err != nil {
+		_ = encoder.Closer()
+		abortUpload()
+
+		return fmt.Errorf("encrypt rekeyed object %q: %w", hash, err)
+	}
+
+	if err := encoder.Closer(); err != nil {
+		abortUpload()
+
+		return fmt.Errorf("finalize encryption of rekeyed object %q: %w", hash, err)
+	}
+
+	if err := writer.Close(); err != nil {
+		return fmt.Errorf(
+			"save rekeyed object %q as %q in bucket %q: %w",
+			hash,
+			objectPath,
+			o.bucket,
+			err,
+		)
+	}
+
+	return nil
+}
+
+func (o ObjectRepository) DeleteEncryptedGeneration(ctx context.Context, generation uint64) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	prefix := object.EncryptedGenerationPath(o.repositoryPath, generation, true)
+
+	if !strings.HasSuffix(prefix, "/") {
+		prefix += "/"
+	}
+
+	bucket := o.client.Bucket(o.bucket)
+
+	objectsIterator := bucket.Objects(ctx, &storage.Query{
+		Prefix: prefix,
+	})
+
+	for {
+		attrs, err := objectsIterator.Next()
+		if errors.Is(err, iterator.Done) {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf(
+				"list encrypted generation %d in bucket %q: %w",
+				generation,
+				o.bucket,
+				err,
+			)
+		}
+
+		if err := bucket.Object(attrs.Name).Delete(ctx); err != nil {
+			if errors.Is(err, storage.ErrObjectNotExist) {
+				continue
+			}
+
+			return fmt.Errorf(
+				"delete encrypted object %q from generation %d in bucket %q: %w",
+				attrs.Name,
+				generation,
+				o.bucket,
+				err,
+			)
+		}
+	}
+
+	return nil
+}
+
+func (o ObjectRepository) AbortRekey(ctx context.Context, generation uint64) error {
+	if err := o.DeleteEncryptedGeneration(ctx, generation); err != nil {
+		return fmt.Errorf("abort rekey for generation %d: %w", generation, err)
+	}
+	return nil
+}
+
+func (o ObjectRepository) SaveChunk(ctx context.Context, filePath, hash string, offset, size int64, comp *repository.Compression, key []byte, generation uint64) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -42,12 +271,8 @@ func (o ObjectRepository) SaveChunk(ctx context.Context, filePath, hash string, 
 		_ = source.Close()
 	}()
 
-	objectPath := path.Join(
-		o.repositoryPath,
-		repository.ObjectsFolder,
-		hash[:2],
-		hash[2:],
-	)
+	dest := object.GetObjectsPath(o.repositoryPath, hash, generation, key, true)
+	objectPath := dest.ObjectPath
 
 	uploadCtx, cancelUpload := context.WithCancel(ctx)
 	defer cancelUpload()
@@ -64,31 +289,41 @@ func (o ObjectRepository) SaveChunk(ctx context.Context, filePath, hash string, 
 
 	hasher := sha256.New()
 
-	destination := io.MultiWriter(
-		writer,
+	output := io.Writer(writer)
+	var closeEncryption func() error
+
+	if len(key) > 0 {
+		encrypted, err := o.encryptionHandler.Encode(writer, key)
+		if err != nil {
+			abortUpload()
+
+			return fmt.Errorf("create encryption writer for object %q: %w", objectPath, err)
+		}
+
+		output = encrypted.Writer
+		closeEncryption = encrypted.Closer
+	}
+
+	compressionDestination := io.MultiWriter(
+		output,
 		hasher,
 	)
 
-	handler, err := o.handlersFactory.GetHandler(
-		comp.CompType(),
-	)
+	handler, err := o.handlersFactory.GetHandler(comp.CompType())
 	if err != nil {
 		abortUpload()
-		return err
+
+		return fmt.Errorf("get compression handler %q: %w", comp.CompType(), err)
 	}
 
 	encoder, err := handler.Encode(
-		destination,
+		compressionDestination,
 		comp.Level(),
 	)
 	if err != nil {
 		abortUpload()
 
-		return fmt.Errorf(
-			"create compression encoder for chunk %q: %w",
-			hash,
-			err,
-		)
+		return fmt.Errorf("create compression encoder for chunk %q: %w", hash, err)
 	}
 
 	section := io.NewSectionReader(
@@ -113,54 +348,41 @@ func (o ObjectRepository) SaveChunk(ctx context.Context, filePath, hash string, 
 
 		_ = writer.Close()
 
-		return fmt.Errorf(
-			"write chunk %q from %q at offset %d: %w",
-			hash,
-			filePath,
-			offset,
-			copyErr,
-		)
+		return fmt.Errorf("write chunk %q from %q at offset %d: %w", hash, filePath, offset, copyErr)
 	}
 
 	if encoder.Closer != nil {
 		if err := encoder.Closer(); err != nil {
 			abortUpload()
 
-			return fmt.Errorf(
-				"finish compression for chunk %q: %w",
-				hash,
-				err,
-			)
+			return fmt.Errorf("finish compression for chunk %q: %w", hash, err)
 		}
 	}
 
-	calculatedHash := hex.EncodeToString(
-		hasher.Sum(nil),
-	)
+	calculatedHash := hex.EncodeToString(hasher.Sum(nil))
 
 	if calculatedHash != hash {
 		abortUpload()
 
-		return fmt.Errorf(
-			"chunk hash mismatch: expected %s, calculated %s",
-			hash,
-			calculatedHash,
-		)
+		return fmt.Errorf("chunk hash mismatch: expected %s, calculated %s", hash, calculatedHash)
+	}
+
+	if closeEncryption != nil {
+		if err := closeEncryption(); err != nil {
+			abortUpload()
+
+			return fmt.Errorf("finish encryption for chunk %q: %w", hash, err)
+		}
 	}
 
 	if err := writer.Close(); err != nil {
-		return fmt.Errorf(
-			"close object %q in bucket %q: %w",
-			objectPath,
-			o.bucket,
-			err,
-		)
+		return fmt.Errorf("close object %q in bucket %q: %w", objectPath, o.bucket, err)
 	}
 
 	return nil
 }
 
-func (o ObjectRepository) Save(ctx context.Context, filePath, hash string, comp *repository.Compression) error {
+func (o ObjectRepository) Save(ctx context.Context, filePath, hash string, comp *repository.Compression, symmetricKey []byte, generation uint64) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -173,13 +395,8 @@ func (o ObjectRepository) Save(ctx context.Context, filePath, hash string, comp 
 		return fmt.Errorf("invalid object hash %q", hash)
 	}
 
-	objectPath := path.Join(
-		o.repositoryPath,
-		repository.ObjectsFolder,
-		hash[:2],
-		hash[2:],
-	)
-
+	dest := object.GetObjectsPath(o.repositoryPath, hash, generation, symmetricKey, true)
+	objectPath := dest.ObjectPath
 	obj := o.client.
 		Bucket(o.bucket).
 		Object(objectPath)
@@ -214,8 +431,24 @@ func (o ObjectRepository) Save(ctx context.Context, filePath, hash string, comp 
 
 	destination.ContentType = "application/octet-stream"
 
-	encoded, err := handler.Encode(destination, comp.Level())
+	output := io.Writer(destination)
+	var closeEncryption func() error
+
+	if len(symmetricKey) > 0 {
+		encrypted, err := o.encryptionHandler.Encode(destination, symmetricKey)
+		if err != nil {
+			return fmt.Errorf("create encryption writer: %w", err)
+		}
+
+		output = encrypted.Writer
+		closeEncryption = encrypted.Closer
+	}
+
+	encoded, err := handler.Encode(output, comp.Level())
 	if err != nil {
+		if closeEncryption != nil {
+			_ = closeEncryption()
+		}
 		cancel()
 
 		return fmt.Errorf("create encoder for object %q: %w", objectPath, err)
@@ -226,13 +459,12 @@ func (o ObjectRepository) Save(ctx context.Context, filePath, hash string, comp 
 
 		if encoded.Closer != nil {
 			_ = encoded.Closer()
+			if closeEncryption != nil {
+				_ = closeEncryption()
+			}
 		}
 
-		return fmt.Errorf(
-			"copy object %q: %w",
-			objectPath,
-			err,
-		)
+		return fmt.Errorf("copy object %q: %w", objectPath, err)
 	}
 
 	if encoded.Closer != nil {
@@ -241,6 +473,10 @@ func (o ObjectRepository) Save(ctx context.Context, filePath, hash string, comp 
 
 			return fmt.Errorf("close encoder for object %q: %w", objectPath, err)
 		}
+	}
+
+	if closeEncryption != nil {
+		_ = closeEncryption()
 	}
 
 	if err := destination.Close(); err != nil {
@@ -254,7 +490,7 @@ func (o ObjectRepository) Save(ctx context.Context, filePath, hash string, comp 
 	return nil
 }
 
-func (o ObjectRepository) AlreadyExists(ctx context.Context, hash string) (bool, error) {
+func (o ObjectRepository) AlreadyExists(ctx context.Context, hash string, symmetricKey []byte, generation uint64) (bool, error) {
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}
@@ -263,13 +499,8 @@ func (o ObjectRepository) AlreadyExists(ctx context.Context, hash string) (bool,
 		return false, fmt.Errorf("invalid object hash %q", hash)
 	}
 
-	objectPath := path.Join(
-		o.repositoryPath,
-		repository.ObjectsFolder,
-		hash[:2],
-		hash[2:],
-	)
-
+	dest := object.GetObjectsPath(o.repositoryPath, hash, generation, symmetricKey, true)
+	objectPath := dest.ObjectPath
 	_, err := o.client.
 		Bucket(o.bucket).
 		Object(objectPath).
@@ -287,7 +518,7 @@ func (o ObjectRepository) AlreadyExists(ctx context.Context, hash string) (bool,
 	}
 }
 
-func (o ObjectRepository) ReadObject(ctx context.Context, hash string) (io.ReadCloser, error) {
+func (o ObjectRepository) ReadObject(ctx context.Context, hash string, symmetricKey []byte, generation uint64) (io.ReadCloser, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -299,12 +530,8 @@ func (o ObjectRepository) ReadObject(ctx context.Context, hash string) (io.ReadC
 		)
 	}
 
-	objectPath := path.Join(
-		o.repositoryPath,
-		repository.ObjectsFolder,
-		hash[:2],
-		hash[2:],
-	)
+	dest := object.GetObjectsPath(o.repositoryPath, hash, generation, symmetricKey, true)
+	objectPath := dest.ObjectPath
 
 	reader, err := o.client.
 		Bucket(o.bucket).
@@ -323,10 +550,23 @@ func (o ObjectRepository) ReadObject(ctx context.Context, hash string) (io.ReadC
 		)
 	}
 
-	return reader, nil
+	if len(symmetricKey) == 0 {
+		return reader, nil
+	}
+
+	decoded, err := o.encryptionHandler.Decode(reader, symmetricKey)
+	if err != nil {
+		_ = reader.Close()
+		return nil, fmt.Errorf("decrypt object %q: %w", dest.ObjectPath, err)
+	}
+
+	return &model.ReadCloser{
+		Reader: decoded,
+		Closer: reader,
+	}, nil
 }
 
-func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Compression, obj *snapshot.File) error {
+func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Compression, obj *snapshot.File, symmetricKey []byte, generation uint64) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -375,7 +615,7 @@ func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Co
 			return err
 		}
 
-		written, err := o.restoreObjectPart(ctx, comp, hash, destination)
+		written, err := o.restoreObjectPart(ctx, comp, hash, destination, symmetricKey, generation)
 		if err != nil {
 			return fmt.Errorf(
 				"restore GCS part %d/%d of %q: %w",
@@ -409,7 +649,7 @@ func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Co
 	return nil
 }
 
-func (o ObjectRepository) restoreObjectPart(ctx context.Context, comp *repository.Compression, hash string, destination io.Writer) (int64, error) {
+func (o ObjectRepository) restoreObjectPart(ctx context.Context, comp *repository.Compression, hash string, destination io.Writer, symmetricKey []byte, generation uint64) (int64, error) {
 	if err := ctx.Err(); err != nil {
 		return 0, err
 	}
@@ -418,7 +658,8 @@ func (o ObjectRepository) restoreObjectPart(ctx context.Context, comp *repositor
 		return 0, fmt.Errorf("invalid object hash %q", hash)
 	}
 
-	objectPath := path.Join(o.repositoryPath, repository.ObjectsFolder, hash[:2], hash[2:])
+	dest := object.GetObjectsPath(o.repositoryPath, hash, generation, symmetricKey, true)
+	objectPath := dest.ObjectPath
 
 	source, err := o.client.Bucket(o.bucket).Object(objectPath).NewReader(ctx)
 	if err != nil {
@@ -432,12 +673,21 @@ func (o ObjectRepository) restoreObjectPart(ctx context.Context, comp *repositor
 		_ = source.Close()
 	}()
 
+	reader := io.Reader(source)
+
+	if len(symmetricKey) > 0 {
+		reader, err = o.encryptionHandler.Decode(source, symmetricKey)
+		if err != nil {
+			return 0, fmt.Errorf("decrypt object %q: %w", objectPath, err)
+		}
+	}
+
 	handler, err := o.handlersFactory.GetHandler(comp.CompType())
 	if err != nil {
 		return 0, fmt.Errorf("get compression handler %q: %w", comp.CompType(), err)
 	}
 
-	decoded, err := handler.Decode(source)
+	decoded, err := handler.Decode(reader)
 	if err != nil {
 		return 0, fmt.Errorf("decode object %q using %q: %w", objectPath, comp.CompType(), err)
 	}
@@ -458,7 +708,13 @@ func (o ObjectRepository) restoreObjectPart(ctx context.Context, comp *repositor
 }
 
 func NewObjectRepository(repositoryPath, bucket string, client *storage.Client) *ObjectRepository {
-	return &ObjectRepository{repositoryPath: repositoryPath, bucket: bucket, client: client, handlersFactory: compression.NewHandlersFactory()}
+	return &ObjectRepository{
+		repositoryPath:    repositoryPath,
+		bucket:            bucket,
+		client:            client,
+		handlersFactory:   compression.NewHandlersFactory(),
+		encryptionHandler: encrypt.NewAESGCMHandler(),
+	}
 }
 
 func isPreconditionFailed(err error) bool {

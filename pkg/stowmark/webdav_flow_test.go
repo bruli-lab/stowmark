@@ -4,16 +4,13 @@ package stowmark_test
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/stretchr/testify/require"
 )
 
 func TestWebdavRepositoryFlow(t *testing.T) {
 	for k, version := range Versions() {
-		t.Run(`Running WEBDAV workflow, with format version `+k, func(t *testing.T) {
+		t.Run(fmt.Sprintf("Running WEBDAV workflow, with format version %d", version), func(t *testing.T) {
 			ctx := t.Context()
 
 			container := startWebDAVContainer(t, ctx)
@@ -25,16 +22,19 @@ func TestWebdavRepositoryFlow(t *testing.T) {
 			repositoryURL := fmt.Sprintf("webdav://%s/backups", address)
 
 			testRoot := t.TempDir()
-			sourcePath := filepath.Join(testRoot, "source")
-			restorePath := filepath.Join(testRoot, "restore")
-
-			require.NoError(t, os.MkdirAll(sourcePath, 0o755))
-			createSourceFixture(t, sourcePath)
+			sourcePath := filepath.Join(testRoot, "source-"+k)
+			restorePath := filepath.Join(testRoot, "restore-"+k)
+			alternativeRestorePath := filepath.Join(testRoot, "alternative-restore-"+k)
+			keyPairsFolder := filepath.Join(testRoot, "keypairs-"+k)
+			newKeyPairsFolder := filepath.Join(testRoot, "new-keypairs-"+k)
 
 			mainFlow(t, ctx, Folders{
-				Source:     sourcePath,
-				Repository: repositoryURL,
-				Restore:    new(restorePath),
+				Source:             sourcePath,
+				Repository:         repositoryURL,
+				Restore:            new(restorePath),
+				keyPairsFolder:     keyPairsFolder,
+				AlternativeRestore: new(alternativeRestorePath),
+				newKeyPairsFolder:  newKeyPairsFolder,
 			}, version)
 		})
 	}

@@ -3,19 +3,23 @@ package stowmark
 import (
 	"context"
 
+	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/disk"
+	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
 	"github.com/bruli-lab/stowmark/internal/infra/repositories"
 )
 
 type Handler struct {
-	folderRepository    repository.FolderRepository
-	sourceRepository    snapshot.SourceRepository
-	manifestRepository  snapshot.ManifestRepository
-	objectRepository    snapshot.ObjectRepository
-	repositoryPath      string
-	repositoriesHandler repositories.Repositories
+	folderRepository           repository.FolderRepository
+	sourceRepository           snapshot.SourceRepository
+	manifestRepository         snapshot.ManifestRepository
+	objectRepository           snapshot.ObjectRepository
+	repositoryPath             string
+	repositoriesHandler        repositories.Repositories
+	asymmetricKeyPaiRepository encryption.AsymmetricKeyPairRepository
+	symmetricKeyRepository     encryption.SymmetricKeyRepository
 }
 
 func (h *Handler) Close() error {
@@ -40,11 +44,13 @@ func NewHandler(ctx context.Context, repositoryPath string) (*Handler, error) {
 	}
 
 	return &Handler{
-		folderRepository:    folderRepo,
-		sourceRepository:    sourceRepo,
-		manifestRepository:  manifestRepo,
-		objectRepository:    objectRepo,
-		repositoryPath:      repoHandler.RepositoryPath(),
-		repositoriesHandler: repoHandler,
+		folderRepository:           folderRepo,
+		sourceRepository:           sourceRepo,
+		manifestRepository:         manifestRepo,
+		objectRepository:           objectRepo,
+		repositoryPath:             repoHandler.RepositoryPath(),
+		repositoriesHandler:        repoHandler,
+		asymmetricKeyPaiRepository: disk.NewAsymmetricKeyPairRepository(),
+		symmetricKeyRepository:     encrypt.NewSymmetricRepository(),
 	}, nil
 }

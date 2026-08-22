@@ -23,8 +23,8 @@ func TestInit_Do(t *testing.T) {
 		createRepoErr, createConfigErr,
 		createObjectErr, createSnapshotErr,
 		getConfigErr error
-		exists bool
-		config *repository.Config
+		exists         bool
+		previousConfig *repository.Config
 	}{
 		{
 			name:        "and exists returns an error, then it returns same error",
@@ -40,18 +40,18 @@ func TestInit_Do(t *testing.T) {
 			expectedErr:   errTest,
 		},
 		{
-			name:         "and get config returns an error, then it returns same error",
-			exists:       true,
-			args:         args{r: &re},
-			config:       &repository.Config{},
-			getConfigErr: errTest,
-			expectedErr:  errTest,
+			name:           "and get config returns an error, then it returns same error",
+			exists:         true,
+			args:           args{r: &re},
+			previousConfig: &repository.Config{},
+			getConfigErr:   errTest,
+			expectedErr:    errTest,
 		},
 		{
 			name:            "and create config returns an error, then it returns same error",
 			exists:          true,
 			args:            args{r: &re},
-			config:          &repository.Config{},
+			previousConfig:  &repository.Config{},
 			createConfigErr: errTest,
 			expectedErr:     errTest,
 		},
@@ -59,7 +59,7 @@ func TestInit_Do(t *testing.T) {
 			name:            "and create objects folder returns an error, then it returns same error",
 			exists:          true,
 			args:            args{r: &re},
-			config:          &repository.Config{},
+			previousConfig:  &repository.Config{},
 			createObjectErr: errTest,
 			expectedErr:     errTest,
 		},
@@ -67,7 +67,7 @@ func TestInit_Do(t *testing.T) {
 			name:              "and create snapshots folder returns an error, then it returns same error",
 			exists:            true,
 			args:              args{r: &re},
-			config:            &repository.Config{},
+			previousConfig:    &repository.Config{},
 			createSnapshotErr: errTest,
 			expectedErr:       errTest,
 		},
@@ -89,7 +89,7 @@ func TestInit_Do(t *testing.T) {
 					return tt.createConfigErr
 				},
 				GetConfigFunc: func(_ context.Context, _ string) (*repository.Config, error) {
-					return tt.config, tt.getConfigErr
+					return tt.previousConfig, tt.getConfigErr
 				},
 			}
 			repo.CreateFolderFunc = func(_ context.Context, _ string) error {
@@ -105,7 +105,7 @@ func TestInit_Do(t *testing.T) {
 				return nil
 			}
 			svc := repository.NewInit(repo)
-			err := svc.Do(t.Context(), tt.args.r)
+			_, err := svc.Do(t.Context(), tt.args.r, false)
 			if err != nil {
 				require.ErrorAs(t, err, &tt.expectedErr)
 				return

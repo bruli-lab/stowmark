@@ -22,6 +22,9 @@ includes:
         taskfile: ./taskfiles/gcs/Taskfile.yaml
         dir: .
 
+    benchmark:
+        taskfile: ./taskfiles/benchmark/Taskfile.yaml
+
 
 silent: false
 
@@ -102,3 +105,11 @@ tasks:
       - security
       - lint
       - unit-test
+
+  build:
+    desc: Compiling binary
+    cmds:
+      - |
+        set -euo pipefail
+        echo "Compiling stowmark binary..."
+        go build -o stowmark ./cmd/cli
