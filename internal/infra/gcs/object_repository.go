@@ -150,7 +150,7 @@ func (o ObjectRepository) SaveRekeyedObject(ctx context.Context, hash string, so
 		true,
 	)
 
-	objectPath := path.Join(directory, hash[:2], hash)
+	objectPath := path.Join(directory, hash[:2], hash[2:])
 
 	uploadCtx, cancelUpload := context.WithCancel(ctx)
 	defer cancelUpload()

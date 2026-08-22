@@ -24,15 +24,16 @@ import (
 )
 
 type ObjectRepository struct {
-	client            *gowebdav.Client
-	repositoryPath    string
-	handlersFactory   *compression.HandlersFactory
-	encoder           *object.Encoder
-	encryptionHandler *encrypt.AESGCMHandler
-	mu                *sync.Mutex
+	client             *gowebdav.Client
+	repositoryPath     string
+	handlersFactory    *compression.HandlersFactory
+	encoder            *object.Encoder
+	encryptionHandler  *encrypt.AESGCMHandler
+	mu                 *sync.Mutex
+	createdDirectories map[string]struct{}
 }
 
-func (o ObjectRepository) ListEncryptedObjects(ctx context.Context, generation uint64) ([]string, error) {
+func (o *ObjectRepository) ListEncryptedObjects(ctx context.Context, generation uint64) ([]string, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -85,7 +86,7 @@ func (o ObjectRepository) ListEncryptedObjects(ctx context.Context, generation u
 	return hashes, nil
 }
 
-func (o ObjectRepository) ReadEncryptedObject(ctx context.Context, hash string, generation uint64, key []byte) (io.ReadCloser, error) {
+func (o *ObjectRepository) ReadEncryptedObject(ctx context.Context, hash string, generation uint64, key []byte) (io.ReadCloser, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -127,7 +128,7 @@ func (o ObjectRepository) ReadEncryptedObject(ctx context.Context, hash string, 
 	}, nil
 }
 
-func (o ObjectRepository) SaveRekeyedObject(ctx context.Context, hash string, source io.Reader, generation uint64, key []byte) error {
+func (o *ObjectRepository) SaveRekeyedObject(ctx context.Context, hash string, source io.Reader, generation uint64, key []byte) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -145,16 +146,15 @@ func (o ObjectRepository) SaveRekeyedObject(ctx context.Context, hash string, so
 	}
 
 	directory := object.EncryptedGenerationPath(o.repositoryPath, generation, true)
+
 	prefixDirectory := path.Join(directory, hash[:2])
 
-	o.mu.Lock()
-	err := o.client.MkdirAll(prefixDirectory, 0o755)
-	o.mu.Unlock()
-	if err != nil {
+	if err := o.ensureDirectory(prefixDirectory); err != nil {
 		return fmt.Errorf("create encrypted WebDAV directory %q: %w", prefixDirectory, err)
 	}
 
 	objectPath := path.Join(prefixDirectory, hash[2:])
+
 	var encrypted bytes.Buffer
 
 	encoder, err := o.encryptionHandler.Encode(&encrypted, key)
@@ -164,6 +164,7 @@ func (o ObjectRepository) SaveRekeyedObject(ctx context.Context, hash string, so
 
 	if _, err := io.Copy(encoder.Writer, source); err != nil {
 		_ = encoder.Closer()
+
 		return fmt.Errorf("encrypt rekeyed object %q: %w", hash, err)
 	}
 
@@ -176,15 +177,31 @@ func (o ObjectRepository) SaveRekeyedObject(ctx context.Context, hash string, so
 		return fmt.Errorf("finalize encryption of rekeyed object %q: %w", hash, err)
 	}
 
-	if err := o.client.WriteStream(objectPath, bytes.NewReader(encrypted.Bytes()), 0o644); err != nil {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	if err := o.writeStream(objectPath, bytes.NewReader(encrypted.Bytes())); err != nil {
 		_ = o.client.Remove(objectPath)
+
 		return fmt.Errorf("save rekeyed WebDAV object %q: %w", objectPath, err)
 	}
 
 	return nil
 }
 
-func (o ObjectRepository) DeleteEncryptedGeneration(ctx context.Context, generation uint64) error {
+func (o *ObjectRepository) writeStream(objectPath string, source io.Reader) error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+
+	return o.client.WriteStream(
+		objectPath,
+		source,
+		0o644,
+	)
+}
+
+func (o *ObjectRepository) DeleteEncryptedGeneration(ctx context.Context, generation uint64) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -202,14 +219,14 @@ func (o ObjectRepository) DeleteEncryptedGeneration(ctx context.Context, generat
 	return ctx.Err()
 }
 
-func (o ObjectRepository) AbortRekey(ctx context.Context, generation uint64) error {
+func (o *ObjectRepository) AbortRekey(ctx context.Context, generation uint64) error {
 	if err := o.DeleteEncryptedGeneration(ctx, generation); err != nil {
 		return fmt.Errorf("abort rekey of generation %d: %w", generation, err)
 	}
 	return nil
 }
 
-func (o ObjectRepository) ReadObject(ctx context.Context, hash string, symmetricKey []byte, generation uint64) (io.ReadCloser, error) {
+func (o *ObjectRepository) ReadObject(ctx context.Context, hash string, symmetricKey []byte, generation uint64) (io.ReadCloser, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -246,7 +263,7 @@ func (o ObjectRepository) ReadObject(ctx context.Context, hash string, symmetric
 	}, nil
 }
 
-func (o ObjectRepository) SaveChunk(ctx context.Context, filePath, hash string, offset, size int64, comp *repository.Compression, symmetricKey []byte, generation uint64) error {
+func (o *ObjectRepository) SaveChunk(ctx context.Context, filePath, hash string, offset, size int64, comp *repository.Compression, symmetricKey []byte, generation uint64) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -267,11 +284,15 @@ func (o ObjectRepository) SaveChunk(ctx context.Context, filePath, hash string, 
 	dest := object.GetObjectsPath(o.repositoryPath, hash, generation, symmetricKey, true)
 
 	if err := o.ensureDirectory(dest.DirectoryPath); err != nil {
-		return err
+		return fmt.Errorf(
+			"create WebDAV object directory %q: %w",
+			dest.DirectoryPath,
+			err,
+		)
 	}
 
-	if err := o.client.MkdirAll(dest.DirectoryPath, 0o755); err != nil {
-		return fmt.Errorf("create WebDAV object directory %q: %w", dest.DirectoryPath, err)
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 
 	if err := o.client.WriteStream(
@@ -279,38 +300,32 @@ func (o ObjectRepository) SaveChunk(ctx context.Context, filePath, hash string, 
 		bytes.NewReader(encoded.Bytes()),
 		0o644,
 	); err != nil {
+		_ = o.client.Remove(dest.ObjectPath)
+
 		return fmt.Errorf("write WebDAV object %q: %w", dest.ObjectPath, err)
+	}
+
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 
 	info, err := o.client.Stat(dest.ObjectPath)
 	if err != nil {
-		return fmt.Errorf(
-			"WebDAV object %q not found immediately after writing: %w",
-			dest.ObjectPath,
-			err,
-		)
+		return fmt.Errorf("WebDAV object %q not found immediately after writing: %w", dest.ObjectPath, err)
 	}
 
 	if info.IsDir() {
-		return fmt.Errorf(
-			"WebDAV object path %q is a directory after writing",
-			dest.ObjectPath,
-		)
+		return fmt.Errorf("WebDAV object path %q is a directory after writing", dest.ObjectPath)
 	}
 
-	if info.Size() != int64(len(encoded.Bytes())) {
-		return fmt.Errorf(
-			"WebDAV object %q size mismatch after writing: expected %d, got %d",
-			dest.ObjectPath,
-			len(encoded.Bytes()),
-			info.Size(),
-		)
+	if info.Size() != int64(encoded.Len()) {
+		return fmt.Errorf("WebDAV object %q size mismatch after writing: expected %d, got %d", dest.ObjectPath, encoded.Len(), info.Size())
 	}
 
 	return nil
 }
 
-func (o ObjectRepository) Save(ctx context.Context, filePath, hash string, comp *repository.Compression, symmetricKey []byte, generation uint64) error {
+func (o *ObjectRepository) Save(ctx context.Context, filePath, hash string, comp *repository.Compression, symmetricKey []byte, generation uint64) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -383,7 +398,7 @@ func (o ObjectRepository) Save(ctx context.Context, filePath, hash string, comp 
 	return nil
 }
 
-func (o ObjectRepository) AlreadyExists(ctx context.Context, hash string, symmetricKey []byte, generation uint64) (bool, error) {
+func (o *ObjectRepository) AlreadyExists(ctx context.Context, hash string, symmetricKey []byte, generation uint64) (bool, error) {
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}
@@ -415,7 +430,7 @@ func (o ObjectRepository) AlreadyExists(ctx context.Context, hash string, symmet
 	}
 }
 
-func (o ObjectRepository) ensureDirectory(directoryPath string) error {
+func (o *ObjectRepository) ensureDirectory(directoryPath string) error {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	info, err := o.client.Stat(directoryPath)
@@ -438,17 +453,15 @@ func (o ObjectRepository) ensureDirectory(directoryPath string) error {
 	}
 
 	if err := o.client.MkdirAll(directoryPath, 0o755); err != nil {
-		return fmt.Errorf(
-			"create WebDAV directory %q: %w",
-			directoryPath,
-			err,
-		)
+		return fmt.Errorf("create WebDAV directory %q: %w", directoryPath, err)
 	}
+
+	o.createdDirectories[directoryPath] = struct{}{}
 
 	return nil
 }
 
-func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Compression, obj *snapshot.File, symmetricKey []byte, generation uint64) error {
+func (o *ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Compression, obj *snapshot.File, symmetricKey []byte, generation uint64) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -531,7 +544,7 @@ func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Co
 	return nil
 }
 
-func (o ObjectRepository) restoreObjectPart(ctx context.Context, comp *repository.Compression, hash string, destination io.Writer, symmetricKey []byte, generation uint64) (int64, error) {
+func (o *ObjectRepository) restoreObjectPart(ctx context.Context, comp *repository.Compression, hash string, destination io.Writer, symmetricKey []byte, generation uint64) (int64, error) {
 	if err := ctx.Err(); err != nil {
 		return 0, err
 	}
@@ -592,11 +605,12 @@ func (o ObjectRepository) restoreObjectPart(ctx context.Context, comp *repositor
 func NewObjectRepository(client *gowebdav.Client, repositoryPath string) *ObjectRepository {
 	handlersFactory := compression.NewHandlersFactory()
 	return &ObjectRepository{
-		client:            client,
-		repositoryPath:    repositoryPath,
-		handlersFactory:   handlersFactory,
-		encoder:           object.NewEncoder(handlersFactory),
-		encryptionHandler: encrypt.NewAESGCMHandler(),
-		mu:                new(sync.Mutex),
+		client:             client,
+		repositoryPath:     repositoryPath,
+		handlersFactory:    handlersFactory,
+		encoder:            object.NewEncoder(handlersFactory),
+		encryptionHandler:  encrypt.NewAESGCMHandler(),
+		mu:                 new(sync.Mutex),
+		createdDirectories: make(map[string]struct{}),
 	}
 }

@@ -266,16 +266,24 @@ func (o ObjectRepository) AlreadyExists(ctx context.Context, hash string, symmet
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}
+
+	if len(hash) < 3 {
+		return false, fmt.Errorf("invalid object hash %q", hash)
+	}
+
 	dest := object.GetObjectsPath(o.repositoryPath, hash, generation, symmetricKey, false)
-	destinationPath := dest.DirectoryPath
+
+	destinationPath := dest.ObjectPath
+
 	_, err := os.Stat(destinationPath)
 	switch {
 	case err == nil:
 		return true, nil
-	case !errors.Is(err, os.ErrNotExist):
-		return false, fmt.Errorf("check destination file %q: %w", destinationPath, err)
+	case errors.Is(err, os.ErrNotExist):
+		return false, nil
+	default:
+		return false, fmt.Errorf("check destination object %q: %w", destinationPath, err)
 	}
-	return false, nil
 }
 
 func (o ObjectRepository) Save(ctx context.Context, filePath, hash string, comp *repository.Compression, symmetricKey []byte, generation uint64) error {

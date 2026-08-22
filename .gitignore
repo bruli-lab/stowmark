@@ -38,3 +38,5 @@ go.work.sum
 /.s3-source
 /docker/webdav-data/
 /docker/gcs-test/
+/benchmark-results/
+/stowmark

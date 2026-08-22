@@ -461,7 +461,7 @@ func (o ObjectRepository) AlreadyExists(ctx context.Context, hash string, symmet
 	}
 
 	dest := object.GetObjectsPath(o.repositoryPath, hash, generation, symmetricKey, true)
-	destinationPath := dest.DirectoryPath
+	destinationPath := dest.ObjectPath
 	_, err := o.share.Stat(destinationPath)
 	switch {
 	case err == nil:

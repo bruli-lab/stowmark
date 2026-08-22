@@ -510,21 +510,18 @@ func (o ObjectRepository) AlreadyExists(ctx context.Context, hash string, symmet
 	}
 
 	dest := object.GetObjectsPath(o.repositoryPath, hash, generation, symmetricKey, true)
-	destinationPath := dest.DirectoryPath
+
+	destinationPath := dest.ObjectPath
+
 	_, err := o.client.Stat(destinationPath)
 	switch {
 	case err == nil:
 		return true, nil
-
-	case os.IsNotExist(err):
+	case errors.Is(err, os.ErrNotExist):
 		return false, nil
 
 	default:
-		return false, fmt.Errorf(
-			"check remote destination file %q: %w",
-			destinationPath,
-			err,
-		)
+		return false, fmt.Errorf("check remote destination object %q: %w", destinationPath, err)
 	}
 }
 

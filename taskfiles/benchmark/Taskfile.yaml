@@ -1,0 +1,89 @@
+version: '3'
+
+vars:
+  SCRIPT: '{{.BENCHMARK_SCRIPT | default "./benchmark-stowmark.sh"}}'
+
+tasks:
+  local:
+    desc: Execute benchmark on local repository
+    deps:
+      - task: :build
+    cmds:
+      - >-
+        REPOSITORY="${BENCHMARK_LOCAL_REPOSITORY:-}"
+        {{.SCRIPT}}
+
+  ssh:
+    desc: Executing benchmark over SSH
+    env:
+      STOWMARK_SSH_PRIVATE_KEY: ./docker/ssh-test/keys/stowmark
+    deps:
+      - task: :build
+      - task: :ssh:up
+    cmds:
+       - >-
+        REPOSITORY="ssh://stowmark@localhost:2222/repositories/backups-$(date -u +%Y%m%dT%H%M%SZ)"
+        {{.SCRIPT}}
+
+  smb:
+    desc: Executing benchmark ovr SMB
+    env:
+      STOWMARK_SMB_PASSWORD: stowmark
+    deps:
+      - task: :build
+      - task: :smb:up
+    cmds:
+      - >-
+        REPOSITORY="smb://stowmark@localhost:1445/stowmark/backups-$(date -u +%Y%m%dT%H%M%SZ)"
+        {{.SCRIPT}}
+
+  webdav:
+    desc: Executing benchmark over WebDAV
+    deps:
+      - task: :build
+      - task: :webdav:up
+    env:
+      STOWMARK_WEBDAV_USERNAME: '{{.STOWMARK_WEBDAV_USERNAME | default "stowmark"}}'
+      STOWMARK_WEBDAV_PASSWORD: '{{.STOWMARK_WEBDAV_PASSWORD | default "stowmark"}}'
+    cmds:
+      - >-
+        REPOSITORY="webdav://localhost:18080/backups-$(date -u +%Y%m%dT%H%M%SZ)"
+        {{.SCRIPT}}
+
+  s3:
+    desc: Executing benchmark over S3
+    deps:
+      - task: :build
+      - task: :s3:up
+    env:
+      STOWMARK_S3_ENDPOINT: 'http://localhost:5000'
+      STOWMARK_S3_PATH_STYLE: 'true'
+      AWS_ACCESS_KEY: 'stowmark'
+      AWS_SECRET_ACCESS_KEY: 'stowmark-secret'
+      AWS_REGION: 'us-east-1'
+    cmds:
+      - >-
+        REPOSITORY="s3://stowmark/backups-$(date -u +%Y%m%dT%H%M%SZ)"
+        {{.SCRIPT}}
+
+  gcs:
+    desc: Executing benchmark over GCS o fake-gcs-server
+    deps:
+      - task: :build
+      - task: :gcs:up
+    env:
+      STOWMARK_GCS_ENDPOINT: '{{.STOWMARK_GCS_ENDPOINT | default "http://localhost:4443/storage/v1/"}}'
+    cmds:
+      - >-
+        REPOSITORY="gcs://stowmark/backups-$(date -u +%Y%m%dT%H%M%SZ)"
+        {{.SCRIPT}}
+
+  all:
+    desc: Executing all benchmarks from all backends in order
+    cmds:
+      - task: local
+      - task: ssh
+      - task: smb
+      - task: webdav
+      - task: s3
+      - task: gcs

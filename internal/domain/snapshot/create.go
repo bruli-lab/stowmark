@@ -160,7 +160,7 @@ func (c *Create) getSymmetricKey(ctx context.Context, encryptionConfig *encrypti
 }
 
 func (c *Create) saveObject(ctx context.Context, filePath, hash string, comp *repository.Compression, key []byte, generation uint64) error {
-	exists, err := c.objectRepo.AlreadyExists(ctx, hash, key, 0)
+	exists, err := c.objectRepo.AlreadyExists(ctx, hash, key, generation)
 	if err != nil {
 		return err
 	}
