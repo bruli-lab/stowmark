@@ -20,7 +20,7 @@ tasks:
     deps:
       - init
     cmds:
-      - docker compose -f "{{.COMPOSE_FILE}}" up -d "{{.GCS_SERVICE}}"
+      - docker compose -f "{{.COMPOSE_FILE}}" up -d "{{.GCS_SERVICE}}" --remove-orphans
       - |
         echo "Waiting for the GCS emulator..."
         until curl --fail --silent "{{.GCS_ENDPOINT}}/storage/v1/b" > /dev/null; do

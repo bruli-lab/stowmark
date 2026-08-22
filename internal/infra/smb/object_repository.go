@@ -6,27 +6,96 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/chunkio"
 	"github.com/bruli-lab/stowmark/internal/infra/compression"
+	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
 	"github.com/bruli-lab/stowmark/internal/infra/model"
 	"github.com/bruli-lab/stowmark/internal/infra/object"
 	"github.com/cloudsoda/go-smb2"
 )
 
 type ObjectRepository struct {
-	repositoryPath  string
-	share           *smb2.Share
-	handlersFactory *compression.HandlersFactory
-	encoder         *object.Encoder
+	repositoryPath    string
+	share             *smb2.Share
+	handlersFactory   *compression.HandlersFactory
+	encoder           *object.Encoder
+	encryptionHandler *encrypt.AESGCMHandler
 }
 
-func (o ObjectRepository) ReadObject(ctx context.Context, hash string) (io.ReadCloser, error) {
+func (o ObjectRepository) ListEncryptedObjects(ctx context.Context, generation uint64) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	directory := object.EncryptedGenerationPath(
+		o.repositoryPath,
+		generation,
+		true,
+	)
+
+	prefixDirectories, err := o.share.ReadDir(directory)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []string{}, nil
+		}
+
+		return nil, fmt.Errorf("list encrypted generation %d in SMB directory %q: %w", generation, directory, err)
+	}
+
+	var hashes []string
+
+	for _, prefixDirectory := range prefixDirectories {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+
+		if !prefixDirectory.IsDir() ||
+			len(prefixDirectory.Name()) != 2 {
+			continue
+		}
+
+		prefix := prefixDirectory.Name()
+		prefixPath := path.Join(directory, prefix)
+
+		entries, err := o.share.ReadDir(prefixPath)
+		if err != nil {
+			return nil, fmt.Errorf("list encrypted object directory %q: %w", prefixPath, err)
+		}
+
+		for _, entry := range entries {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+
+			if entry.IsDir() {
+				continue
+			}
+
+			if entry.Name() == "" {
+				continue
+			}
+
+			hashes = append(
+				hashes,
+				prefix+entry.Name(),
+			)
+		}
+	}
+
+	sort.Strings(hashes)
+
+	return hashes, nil
+}
+
+func (o ObjectRepository) ReadEncryptedObject(ctx context.Context, hash string, generation uint64, key []byte) (io.ReadCloser, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -35,13 +104,158 @@ func (o ObjectRepository) ReadObject(ctx context.Context, hash string) (io.ReadC
 		return nil, fmt.Errorf("invalid object hash %q", hash)
 	}
 
+	if len(key) == 0 {
+		return nil, errors.New("symmetric key is required")
+	}
+
+	directory := object.EncryptedGenerationPath(o.repositoryPath, generation, true)
+
 	objectPath := path.Join(
-		o.repositoryPath,
-		repository.ObjectsFolder,
+		directory,
 		hash[:2],
 		hash[2:],
 	)
 
+	source, err := o.share.Open(objectPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("encrypted object %q from generation %d: %w", hash, generation, os.ErrNotExist)
+		}
+
+		return nil, fmt.Errorf("open encrypted SMB object %q: %w", objectPath, err)
+	}
+
+	if err := ctx.Err(); err != nil {
+		_ = source.Close()
+
+		return nil, err
+	}
+
+	decoded, err := o.encryptionHandler.Decode(source, key)
+	if err != nil {
+		_ = source.Close()
+
+		return nil, fmt.Errorf("decrypt object %q from generation %d: %w", hash, generation, err)
+	}
+
+	return &model.ReadCloser{
+		Reader: decoded,
+		Closer: source,
+	}, nil
+}
+
+func (o ObjectRepository) SaveRekeyedObject(ctx context.Context, hash string, source io.Reader, generation uint64, key []byte) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	if len(hash) < 3 {
+		return fmt.Errorf("invalid object hash %q", hash)
+	}
+
+	if source == nil {
+		return errors.New("source is required")
+	}
+
+	if len(key) == 0 {
+		return errors.New("symmetric key is required")
+	}
+
+	directory := object.EncryptedGenerationPath(o.repositoryPath, generation, true)
+
+	prefixDirectory := path.Join(directory, hash[:2])
+
+	if err := o.share.MkdirAll(prefixDirectory, 0o755); err != nil {
+		return fmt.Errorf("create SMB encrypted object directory %q: %w", prefixDirectory, err)
+	}
+
+	objectPath := path.Join(prefixDirectory, hash[2:])
+
+	destination, err := o.share.OpenFile(
+		objectPath,
+		os.O_WRONLY|os.O_CREATE|os.O_TRUNC,
+		0o644,
+	)
+	if err != nil {
+		return fmt.Errorf("create rekeyed SMB object %q: %w", objectPath, err)
+	}
+
+	abortSave := func() {
+		_ = destination.Close()
+		_ = o.share.Remove(objectPath)
+	}
+
+	encoder, err := o.encryptionHandler.Encode(destination, key)
+	if err != nil {
+		abortSave()
+
+		return fmt.Errorf("create encryption encoder for object %q: %w", hash, err)
+	}
+
+	if _, err := io.Copy(encoder.Writer, source); err != nil {
+		_ = encoder.Closer()
+		abortSave()
+
+		return fmt.Errorf("encrypt rekeyed object %q: %w", hash, err)
+	}
+
+	if err := ctx.Err(); err != nil {
+		_ = encoder.Closer()
+		abortSave()
+
+		return err
+	}
+
+	if err := encoder.Closer(); err != nil {
+		abortSave()
+
+		return fmt.Errorf("finalize encryption of rekeyed object %q: %w", hash, err)
+	}
+
+	if err := destination.Close(); err != nil {
+		_ = o.share.Remove(objectPath)
+
+		return fmt.Errorf("close rekeyed SMB object %q: %w", objectPath, err)
+	}
+
+	return nil
+}
+
+func (o ObjectRepository) DeleteEncryptedGeneration(ctx context.Context, generation uint64) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	directory := object.EncryptedGenerationPath(o.repositoryPath, generation, true)
+
+	slog.WarnContext(
+		ctx,
+		"SMB backend cannot delete the encrypted generation automatically; remove the directory manually",
+		slog.Uint64("generation", generation),
+		slog.String("directory", directory),
+	)
+
+	return nil
+}
+
+func (o ObjectRepository) AbortRekey(ctx context.Context, generation uint64) error {
+	if err := o.DeleteEncryptedGeneration(ctx, generation); err != nil {
+		return fmt.Errorf("abort rekey failed for generation %d: %w", generation, err)
+	}
+	return nil
+}
+
+func (o ObjectRepository) ReadObject(ctx context.Context, hash string, symmetricKey []byte, generation uint64) (io.ReadCloser, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	if len(hash) < 3 {
+		return nil, fmt.Errorf("invalid object hash %q", hash)
+	}
+
+	dest := object.GetObjectsPath(o.repositoryPath, hash, generation, symmetricKey, true)
+	objectPath := dest.ObjectPath
 	reader, err := o.share.Open(objectPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) ||
@@ -52,10 +266,22 @@ func (o ObjectRepository) ReadObject(ctx context.Context, hash string) (io.ReadC
 		return nil, fmt.Errorf("open SMB object %q: %w", objectPath, err)
 	}
 
-	return reader, nil
+	if len(symmetricKey) == 0 {
+		return reader, nil
+	}
+	decoded, err := o.encryptionHandler.Decode(reader, symmetricKey)
+	if err != nil {
+		_ = reader.Close()
+		return nil, fmt.Errorf("decrypt object %q: %w", dest.ObjectPath, err)
+	}
+
+	return &model.ReadCloser{
+		Reader: decoded,
+		Closer: reader,
+	}, nil
 }
 
-func (o ObjectRepository) SaveChunk(ctx context.Context, filePath, hash string, offset, size int64, comp *repository.Compression) error {
+func (o ObjectRepository) SaveChunk(ctx context.Context, filePath, hash string, offset, size int64, comp *repository.Compression, key []byte, generation uint64) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -67,21 +293,15 @@ func (o ObjectRepository) SaveChunk(ctx context.Context, filePath, hash string, 
 		_ = source.Close()
 	}()
 
-	encoded, err := o.encoder.Encode(ctx, filePath, hash, offset, size, comp, source)
+	encoded, err := o.encoder.Encode(ctx, filePath, hash, offset, size, comp, key, source)
 	if err != nil {
 		return err
 	}
 
-	objectDirectory := path.Join(
-		o.repositoryPath,
-		repository.ObjectsFolder,
-		hash[:2],
-	)
+	dest := object.GetObjectsPath(o.repositoryPath, hash, generation, key, true)
 
-	objectPath := path.Join(
-		objectDirectory,
-		hash[2:],
-	)
+	objectDirectory := dest.DirectoryPath
+	objectPath := dest.ObjectPath
 
 	if err := o.share.MkdirAll(
 		objectDirectory,
@@ -120,7 +340,7 @@ func (o ObjectRepository) SaveChunk(ctx context.Context, filePath, hash string, 
 	return nil
 }
 
-func (o ObjectRepository) Save(ctx context.Context, filePath, hash string, comp *repository.Compression) error {
+func (o ObjectRepository) Save(ctx context.Context, filePath, hash string, comp *repository.Compression, symmetricKey []byte, generation uint64) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -129,16 +349,12 @@ func (o ObjectRepository) Save(ctx context.Context, filePath, hash string, comp 
 		return fmt.Errorf("invalid object hash %q", hash)
 	}
 
-	destinationPath := path.Join(
-		o.repositoryPath,
-		repository.ObjectsFolder,
-		hash[:2],
-		hash[2:],
-	)
-	destinationDir := path.Dir(destinationPath)
+	dest := object.GetObjectsPath(o.repositoryPath, hash, generation, symmetricKey, true)
+	destinationPath := dest.DirectoryPath
+	objectPath := dest.ObjectPath
 
-	if err := o.share.MkdirAll(destinationDir, 0o755); err != nil {
-		return fmt.Errorf("create object directory %q: %w", destinationDir, err)
+	if err := o.share.MkdirAll(destinationPath, 0o755); err != nil {
+		return fmt.Errorf("create object directory %q: %w", destinationPath, err)
 	}
 
 	source, err := os.Open(filePath)
@@ -150,7 +366,7 @@ func (o ObjectRepository) Save(ctx context.Context, filePath, hash string, comp 
 	}()
 
 	destination, err := o.share.OpenFile(
-		destinationPath,
+		objectPath,
 		os.O_WRONLY|os.O_CREATE|os.O_EXCL,
 		0o644,
 	)
@@ -159,7 +375,7 @@ func (o ObjectRepository) Save(ctx context.Context, filePath, hash string, comp 
 			return nil
 		}
 
-		return fmt.Errorf("create object file %q: %w", destinationPath, err)
+		return fmt.Errorf("create object file %q: %w", objectPath, err)
 	}
 
 	writeCompleted := false
@@ -180,8 +396,24 @@ func (o ObjectRepository) Save(ctx context.Context, filePath, hash string, comp 
 		return err
 	}
 
-	writer, err := handler.Encode(destination, comp.Level())
+	output := io.Writer(destination)
+	var closeEncryption func() error
+
+	if len(symmetricKey) > 0 {
+		encrypted, err := o.encryptionHandler.Encode(destination, symmetricKey)
+		if err != nil {
+			return fmt.Errorf("create encryption writer: %w", err)
+		}
+
+		output = encrypted.Writer
+		closeEncryption = encrypted.Closer
+	}
+
+	writer, err := handler.Encode(output, comp.Level())
 	if err != nil {
+		if closeEncryption != nil {
+			_ = closeEncryption()
+		}
 		return fmt.Errorf("create encoder for object %q: %w", destinationPath, err)
 	}
 
@@ -192,6 +424,9 @@ func (o ObjectRepository) Save(ctx context.Context, filePath, hash string, comp 
 			Reader: source,
 		},
 	); err != nil {
+		if closeEncryption != nil {
+			_ = closeEncryption()
+		}
 		return fmt.Errorf("write object %q: %w", destinationPath, err)
 	}
 
@@ -199,6 +434,9 @@ func (o ObjectRepository) Save(ctx context.Context, filePath, hash string, comp 
 		if err := writer.Closer(); err != nil {
 			return fmt.Errorf("close encoder for object %q: %w", destinationPath, err)
 		}
+	}
+	if closeEncryption != nil {
+		_ = closeEncryption()
 	}
 
 	if err := destination.Close(); err != nil {
@@ -213,7 +451,7 @@ func (o ObjectRepository) Save(ctx context.Context, filePath, hash string, comp 
 	return nil
 }
 
-func (o ObjectRepository) AlreadyExists(ctx context.Context, hash string) (bool, error) {
+func (o ObjectRepository) AlreadyExists(ctx context.Context, hash string, symmetricKey []byte, generation uint64) (bool, error) {
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}
@@ -222,13 +460,8 @@ func (o ObjectRepository) AlreadyExists(ctx context.Context, hash string) (bool,
 		return false, fmt.Errorf("invalid object hash %q", hash)
 	}
 
-	destinationPath := path.Join(
-		o.repositoryPath,
-		repository.ObjectsFolder,
-		hash[:2],
-		hash[2:],
-	)
-
+	dest := object.GetObjectsPath(o.repositoryPath, hash, generation, symmetricKey, true)
+	destinationPath := dest.DirectoryPath
 	_, err := o.share.Stat(destinationPath)
 	switch {
 	case err == nil:
@@ -240,7 +473,7 @@ func (o ObjectRepository) AlreadyExists(ctx context.Context, hash string) (bool,
 	}
 }
 
-func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Compression, obj *snapshot.File) error {
+func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Compression, obj *snapshot.File, symmetricKey []byte, generation uint64) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -296,12 +529,7 @@ func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Co
 			return err
 		}
 
-		written, err := o.restoreObjectPart(
-			ctx,
-			comp,
-			hash,
-			destination,
-		)
+		written, err := o.restoreObjectPart(ctx, comp, hash, destination, symmetricKey, generation)
 		if err != nil {
 			return fmt.Errorf("restore SMB part %d/%d of %q: %w", index+1, len(hashes), destinationPath, err)
 		}
@@ -325,7 +553,7 @@ func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Co
 	return nil
 }
 
-func (o ObjectRepository) restoreObjectPart(ctx context.Context, comp *repository.Compression, hash string, destination io.Writer) (int64, error) {
+func (o ObjectRepository) restoreObjectPart(ctx context.Context, comp *repository.Compression, hash string, destination io.Writer, symmetricKey []byte, generation uint64) (int64, error) {
 	if err := ctx.Err(); err != nil {
 		return 0, err
 	}
@@ -334,12 +562,8 @@ func (o ObjectRepository) restoreObjectPart(ctx context.Context, comp *repositor
 		return 0, fmt.Errorf("invalid object hash %q", hash)
 	}
 
-	sourcePath := path.Join(
-		o.repositoryPath,
-		repository.ObjectsFolder,
-		hash[:2],
-		hash[2:],
-	)
+	dest := object.GetObjectsPath(o.repositoryPath, hash, generation, symmetricKey, true)
+	sourcePath := dest.ObjectPath
 
 	source, err := o.share.Open(sourcePath)
 	if err != nil {
@@ -353,12 +577,21 @@ func (o ObjectRepository) restoreObjectPart(ctx context.Context, comp *repositor
 		_ = source.Close()
 	}()
 
+	reader := io.Reader(source)
+
+	if len(symmetricKey) > 0 {
+		reader, err = o.encryptionHandler.Decode(source, symmetricKey)
+		if err != nil {
+			return 0, fmt.Errorf("decrypt object %q: %w", sourcePath, err)
+		}
+	}
+
 	handler, err := o.handlersFactory.GetHandler(comp.CompType())
 	if err != nil {
 		return 0, fmt.Errorf("get compression handler %q: %w", comp.CompType(), err)
 	}
 
-	decoded, err := handler.Decode(source)
+	decoded, err := handler.Decode(reader)
 	if err != nil {
 		return 0, fmt.Errorf("decode SMB object %q using %q: %w", sourcePath, comp.CompType(), err)
 	}
@@ -384,5 +617,11 @@ func (o ObjectRepository) restoreObjectPart(ctx context.Context, comp *repositor
 func NewObjectRepository(repositoryPath string, share *smb2.Share) *ObjectRepository {
 	handlersFactory := compression.NewHandlersFactory()
 	encoder := object.NewEncoder(handlersFactory)
-	return &ObjectRepository{repositoryPath: repositoryPath, share: share, handlersFactory: handlersFactory, encoder: encoder}
+	return &ObjectRepository{
+		repositoryPath:    repositoryPath,
+		share:             share,
+		handlersFactory:   handlersFactory,
+		encoder:           encoder,
+		encryptionHandler: encrypt.NewAESGCMHandler(),
+	}
 }

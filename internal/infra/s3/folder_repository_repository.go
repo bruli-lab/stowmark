@@ -10,14 +10,12 @@ import (
 	"path"
 	"strings"
 
-	"github.com/bruli-lab/stowmark/internal/domain/repository"
-	"github.com/bruli-lab/stowmark/internal/infra/codec"
-	"github.com/bruli-lab/stowmark/internal/infra/model"
-	"github.com/google/uuid"
-
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/bruli-lab/stowmark/internal/domain/repository"
+	"github.com/bruli-lab/stowmark/internal/infra/codec"
+	"github.com/bruli-lab/stowmark/internal/infra/model"
 
 	"github.com/aws/smithy-go"
 )
@@ -45,13 +43,11 @@ func (f FolderRepositoryRepository) Exists(ctx context.Context, repositoryPath s
 		return true, nil
 	}
 
-	var notFound *types.NotFound
-	if errors.As(err, &notFound) {
+	if _, ok := errors.AsType[*types.NotFound](err); ok {
 		return false, nil
 	}
 
-	var apiErr smithy.APIError
-	if errors.As(err, &apiErr) {
+	if apiErr, ok := errors.AsType[smithy.APIError](err); ok {
 		switch apiErr.ErrorCode() {
 		case "NotFound", "NoSuchKey", "NoSuchBucket":
 			return false, nil
@@ -109,9 +105,8 @@ func (f FolderRepositoryRepository) GetConfig(ctx context.Context, repositoryPat
 		Key:    aws.String(key),
 	})
 	if err != nil {
-		var apiErr smithy.APIError
 
-		if errors.As(err, &apiErr) {
+		if apiErr, ok := errors.AsType[smithy.APIError](err); ok {
 			switch apiErr.ErrorCode() {
 			case "NoSuchKey", "NotFound", "NoSuchBucket":
 				return nil, repository.NewNotFoundError(
@@ -146,33 +141,7 @@ func (f FolderRepositoryRepository) GetConfig(ctx context.Context, repositoryPat
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
-	id, err := uuid.Parse(conf.ID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse config id: %w", err)
-	}
-
-	compType, err := repository.ParseCompressionType(
-		conf.Compression.Type,
-	)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"failed to parse compression type: %w",
-			err,
-		)
-	}
-
-	comp, err := repository.NewCompression(
-		*compType,
-		conf.Compression.Level,
-	)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"failed to create compression: %w",
-			err,
-		)
-	}
-
-	return repository.NewConfig(id, repository.FormatVersion(conf.FormatVersion), comp), nil
+	return model.BuildConfigDomain(conf)
 }
 
 func NewFolderRepositoryRepository(client *s3.Client, bucket string) *FolderRepositoryRepository {

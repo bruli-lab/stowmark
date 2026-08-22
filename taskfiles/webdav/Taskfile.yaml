@@ -11,7 +11,7 @@ tasks:
   up:
     desc: Start the WebDAV test server
     cmds:
-      - docker compose -f "{{.COMPOSE_FILE}}" up -d "{{.WEBDAV_SERVICE}}"
+      - docker compose -f "{{.COMPOSE_FILE}}" up -d "{{.WEBDAV_SERVICE}}" --remove-orphans
 
   down:
     desc: Stop the WebDAV test server

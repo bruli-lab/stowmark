@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/fixtures"
@@ -19,6 +20,7 @@ func TestRestore_Restore(t *testing.T) {
 	type args struct {
 		snapshotID      string
 		destinationPath *string
+		privateKey      *string
 	}
 	tests := []struct {
 		name string
@@ -58,12 +60,15 @@ func TestRestore_Restore(t *testing.T) {
 				return tt.manifest, tt.manifestErr
 			}
 			objectRepo := &snapshot.ObjectRepositoryMock{}
-			objectRepo.RestoreObjectFunc = func(_ context.Context, _ *repository.Compression, _ *snapshot.File) error {
+			objectRepo.RestoreObjectFunc = func(_ context.Context, _ *repository.Compression, _ *snapshot.File, _ []byte, _ uint64) error {
 				return tt.restoreErr
 			}
+			folderRepo := &repository.FolderRepositoryMock{}
+			symmetricRepo := &encryption.SymmetricKeyRepositoryMock{}
+			asymmetricRepo := &encryption.AsymmetricKeyPairRepositoryMock{}
 
-			svc := snapshot.NewRestore(manifestRepo, objectRepo)
-			result, err := svc.Restore(t.Context(), tt.args.snapshotID, tt.args.destinationPath)
+			svc := snapshot.NewRestore(manifestRepo, objectRepo, folderRepo, encryption.NewDecryptSymmetricKey(symmetricRepo, asymmetricRepo))
+			result, err := svc.Restore(t.Context(), tt.args.snapshotID, "repository-path", tt.args.destinationPath, tt.args.privateKey)
 			if err != nil {
 				require.ErrorAs(t, err, &tt.expectedErr)
 				return

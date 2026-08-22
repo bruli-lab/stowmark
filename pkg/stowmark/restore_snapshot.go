@@ -3,15 +3,21 @@ package stowmark
 import (
 	"context"
 
+	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
+	"github.com/bruli-lab/stowmark/internal/infra/disk"
+	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
 )
 
-func (h *Handler) RestoreSnapshot(ctx context.Context, snapshotID string, destinationPath *string) (*Result, error) {
+func (h *Handler) RestoreSnapshot(ctx context.Context, snapshotID string, destinationPath, privateKey *string) (*Result, error) {
+	decryptKeySvc := encryption.NewDecryptSymmetricKey(encrypt.NewSymmetricRepository(), disk.NewAsymmetricKeyPairRepository())
 	svc := snapshot.NewRestore(
 		h.manifestRepository,
 		h.objectRepository,
+		h.folderRepository,
+		decryptKeySvc,
 	)
-	result, err := svc.Restore(ctx, snapshotID, destinationPath)
+	result, err := svc.Restore(ctx, snapshotID, h.repositoryPath, destinationPath, privateKey)
 	if err != nil {
 		return nil, err
 	}

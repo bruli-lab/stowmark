@@ -28,7 +28,7 @@ tasks:
     deps:
       - keys
     cmds:
-      - docker compose -f "{{.COMPOSE_FILE}}" up -d "{{.SSH_SERVICE}}"
+      - docker compose -f "{{.COMPOSE_FILE}}" up -d "{{.SSH_SERVICE}}" --remove-orphans
 
   down:
     desc: Stop and remove only the SSH server

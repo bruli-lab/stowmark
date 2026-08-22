@@ -3,7 +3,10 @@ package cli
 import (
 	"fmt"
 
+	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
+	"github.com/bruli-lab/stowmark/internal/infra/disk"
+	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
 	"github.com/bruli-lab/stowmark/internal/infra/repositories"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
@@ -15,6 +18,8 @@ func newInitCommand() *cobra.Command {
 		compressionType string
 		level           int
 		formatVersion   int
+		publicKey       string
+		force           bool
 	)
 
 	cmd := &cobra.Command{
@@ -42,15 +47,28 @@ func newInitCommand() *cobra.Command {
 
 			id := uuid.New()
 
+			var encryptionConfig *encryption.EncryptionConfig
+
+			if publicKey != "" {
+				asymmetricRepo := disk.NewAsymmetricKeyPairRepository()
+				symmetricRepo := encrypt.NewSymmetricRepository()
+				encryptionConfigSvc := encryption.NewCreateEncryptionConfig(asymmetricRepo, symmetricRepo)
+				encryptionConfig, err = encryptionConfigSvc.Create(cmd.Context(), publicKey)
+				if err != nil {
+					return fmt.Errorf("create encryption config: %w", err)
+				}
+			}
+
 			re, err := repository.NewRepository(
 				repoHand.RepositoryPath(),
-				repository.NewConfig(id, repository.ParseFormatVersion(formatVersion), comp),
+				repository.NewConfig(id, repository.ParseFormatVersion(formatVersion), comp, encryptionConfig),
 			)
 			if err != nil {
 				return fmt.Errorf("create repository: %w", err)
 			}
 
-			if err := svc.Do(cmd.Context(), re); err != nil {
+			result, err := svc.Do(cmd.Context(), re, force)
+			if err != nil {
 				return fmt.Errorf("initialize repository: %w", err)
 			}
 
@@ -62,8 +80,15 @@ func newInitCommand() *cobra.Command {
 			_, _ = fmt.Fprintf(
 				cmd.OutOrStdout(),
 				"Repository ID: %s\n",
-				id.String(),
+				result.ID,
 			)
+			for _, warning := range result.Warnings {
+				_, _ = fmt.Fprintf(
+					cmd.OutOrStdout(),
+					"WARNING: %s\n",
+					warning,
+				)
+			}
 
 			return nil
 		},
@@ -83,6 +108,13 @@ func newInitCommand() *cobra.Command {
 		"compression type: none, zstd",
 	)
 
+	cmd.Flags().StringVar(
+		&publicKey,
+		"public-key",
+		"",
+		"public key for encryption:",
+	)
+
 	cmd.Flags().IntVar(
 		&formatVersion,
 		"version",
@@ -95,6 +127,12 @@ func newInitCommand() *cobra.Command {
 		"level",
 		0,
 		"compression level: 0 for none, 1-22 for zstd",
+	)
+	cmd.Flags().BoolVar(
+		&force,
+		"force",
+		false,
+		"Force the operation",
 	)
 
 	_ = cmd.MarkFlagRequired("repo")
