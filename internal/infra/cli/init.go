@@ -31,7 +31,7 @@ func newInitCommand() *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			obsConf := config.NewObservabilityConfig()
-			_, err := observability.New(cmd.Context(), obsConf)
+			obsv, err := observability.New(cmd.Context(), obsConf)
 			if err != nil {
 				return fmt.Errorf("create observability: %w", err)
 			}
@@ -75,7 +75,12 @@ func newInitCommand() *cobra.Command {
 				return fmt.Errorf("create repository: %w", err)
 			}
 
-			ch := app.NewInit(svc)
+			tracerMdw := app.NewTracerCommandMiddleware(obsv.TracerProvider)
+			defer func() {
+				_ = obsv.Shutdown(cmd.Context())
+			}()
+
+			ch := tracerMdw(app.NewInit(svc))
 
 			events, err := ch.Handle(cmd.Context(), app.InitCommand{
 				Repository: re,
