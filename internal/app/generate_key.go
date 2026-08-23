@@ -9,6 +9,7 @@ import (
 )
 
 const GenerateKeyCommandName = "generate-key"
+
 type GenerateKeyCommand struct {
 	Keys *encryption.AsymmetricKeyPair
 }
@@ -16,7 +17,6 @@ type GenerateKeyCommand struct {
 func (g GenerateKeyCommand) Name() string {
 	return GenerateKeyCommandName
 }
-
 
 type GenerateKey struct {
 	svc *encryption.CreateAsymmetricKeyPair
