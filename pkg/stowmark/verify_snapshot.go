@@ -7,6 +7,7 @@ import (
 	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
+	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 )
 
 type FailedResult struct {
@@ -30,8 +31,11 @@ func (h *Handler) VerifySnapshot(ctx context.Context, id string, privateKey *str
 	}()
 	decryptSvc := encryption.NewDecryptSymmetricKey(h.symmetricKeyRepository, h.asymmetricKeyPaiRepository)
 	svc := snapshot.NewVerifier(h.objectRepository, h.manifestRepository, h.folderRepository, decryptSvc)
-	tracerMdw := app.NewTracerQueryMiddleware(obsv.TracerProvider)
-	handler := tracerMdw(app.NewVerifySnapshot(svc))
+	mdw, err := middlewares.BuildQueryMiddlewares(obsv)
+	if err != nil {
+		return nil, err
+	}
+	handler := mdw(app.NewVerifySnapshot(svc))
 	resultQuery, err := handler.Handle(ctx, app.VerifySnapshotQuery{
 		SnapshotID:     id,
 		RepositoryPath: h.repositoryPath,

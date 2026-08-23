@@ -5,6 +5,7 @@ import (
 
 	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
+	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 )
 
 func (h *Handler) Rewrap(ctx context.Context, oldPrivateKeyPat, newPublicKeyPath string) error {
@@ -16,8 +17,11 @@ func (h *Handler) Rewrap(ctx context.Context, oldPrivateKeyPat, newPublicKeyPath
 		_ = obsv.Shutdown(ctx)
 	}()
 	svc := repository.NewRewrap(h.folderRepository, h.symmetricKeyRepository, h.asymmetricKeyPaiRepository)
-	tracerMdw := app.NewTracerCommandMiddleware(obsv.TracerProvider)
-	handler := tracerMdw(app.NewRewrapKey(svc))
+	mdw, err := middlewares.BuildCommandMiddlewares(obsv)
+	if err != nil {
+		return err
+	}
+	handler := mdw(app.NewRewrapKey(svc))
 	_, err = handler.Handle(ctx, app.RewrapKeyCommand{
 		RepositoryPath: h.repositoryPath,
 		OldPrivateKey:  oldPrivateKeyPat,

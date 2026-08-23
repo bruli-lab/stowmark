@@ -5,9 +5,9 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/bruli-lab/go-core/cqs"
 	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
+	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 	"github.com/bruli-lab/stowmark/internal/infra/repositories"
 	"github.com/spf13/cobra"
 )
@@ -39,9 +39,10 @@ func newSnapshotListCommand() *cobra.Command {
 			}
 
 			svc := snapshot.NewListing(manifestRepo)
-			loggerMdw := app.NewLoggerQueryMiddleware(obsv.Logger)
-			tracerMdw := app.NewTracerQueryMiddleware(obsv.TracerProvider)
-			multiMdw := cqs.QueryHandlerMultiMiddleware(loggerMdw, tracerMdw)
+			multiMdw, err := middlewares.BuildQueryMiddlewares(obsv)
+			if err != nil {
+				return err
+			}
 			handler := multiMdw(app.NewSnapshotList(svc))
 
 			result, err := handler.Handle(cmd.Context(), app.SnaphotListQuery{})
@@ -126,9 +127,5 @@ func formatBytes(size int64) string {
 		exponent++
 	}
 
-	return fmt.Sprintf(
-		"%.1f %ciB",
-		float64(size)/float64(divisor),
-		"KMGTPE"[exponent],
-	)
+	return fmt.Sprintf("%.1f %ciB", float64(size)/float64(divisor), "KMGTPE"[exponent])
 }

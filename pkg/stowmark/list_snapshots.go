@@ -7,6 +7,7 @@ import (
 
 	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
+	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 )
 
 type SnapshotSummary struct {
@@ -26,8 +27,11 @@ func (h *Handler) ListSnapshots(ctx context.Context) ([]SnapshotSummary, error) 
 		_ = obsv.Shutdown(ctx)
 	}()
 	svc := snapshot.NewListing(h.manifestRepository)
-	tracerMdw := app.NewTracerQueryMiddleware(obsv.TracerProvider)
-	handler := tracerMdw(app.NewSnapshotList(svc))
+	mdw, err := middlewares.BuildQueryMiddlewares(obsv)
+	if err != nil {
+		return nil, err
+	}
+	handler := mdw(app.NewSnapshotList(svc))
 	resultQuery, err := handler.Handle(ctx, app.SnaphotListQuery{})
 	if err != nil {
 		return nil, err

@@ -1,4 +1,4 @@
-package cli
+package middlewares
 
 import (
 	"fmt"
@@ -8,7 +8,7 @@ import (
 	observabilityinfra "github.com/bruli-lab/stowmark/internal/infra/observability"
 )
 
-func buildCommandMiddlewares(obsv *observabilityinfra.OTLPObservability, err error) (cqs.CommandHandlerMiddleware, error) {
+func BuildCommandMiddlewares(obsv *observabilityinfra.OTLPObservability) (cqs.CommandHandlerMiddleware, error) {
 	loggerMdw := app.NewLoggerCommandMiddleware(obsv.Logger)
 	tracerMdw := app.NewTracerCommandMiddleware(obsv.TracerProvider)
 	meterMdw, err := app.NewMeterCommandMiddleware(obsv.MeterProvider)

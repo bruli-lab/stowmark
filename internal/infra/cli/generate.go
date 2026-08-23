@@ -6,6 +6,7 @@ import (
 	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/infra/disk"
+	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 	"github.com/spf13/cobra"
 )
 
@@ -25,7 +26,7 @@ func newKeyGenerateCommand() *cobra.Command {
 			}()
 			repo := disk.NewAsymmetricKeyPairRepository()
 			svc := encryption.NewCreateAsymmetricKeyPair(repo)
-			multiMdw, err := buildCommandMiddlewares(obsv, err)
+			multiMdw, err := middlewares.BuildCommandMiddlewares(obsv)
 			if err != nil {
 				return err
 			}

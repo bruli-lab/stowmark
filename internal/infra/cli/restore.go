@@ -10,6 +10,7 @@ import (
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/disk"
 	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
+	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 	"github.com/bruli-lab/stowmark/internal/infra/repositories"
 	"github.com/spf13/cobra"
 )
@@ -59,7 +60,7 @@ func newSnapshotRestoreCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			multiMdw, err := buildCommandMiddlewares(obsv, err)
+			multiMdw, err := middlewares.BuildCommandMiddlewares(obsv)
 			if err != nil {
 				return err
 			}

@@ -7,6 +7,7 @@ import (
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/infra/disk"
 	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
+	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 	"github.com/spf13/cobra"
 )
 
@@ -32,7 +33,7 @@ func newKeyRewrapCommand() *cobra.Command {
 			symmetricRepo := encrypt.NewSymmetricRepository()
 			folderRepo := disk.NewFolderRepositoryRepository()
 			svc := repository.NewRewrap(folderRepo, symmetricRepo, asymmetricRepo)
-			multiMdw, err := buildCommandMiddlewares(obsv, err)
+			multiMdw, err := middlewares.BuildCommandMiddlewares(obsv)
 			if err != nil {
 				return err
 			}

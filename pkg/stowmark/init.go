@@ -8,6 +8,7 @@ import (
 	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
+	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 	"github.com/google/uuid"
 )
 
@@ -47,8 +48,11 @@ func (h *Handler) Init(ctx context.Context, comp *Compression, formatVersion int
 	defer func() {
 		_ = obsv.Shutdown(ctx)
 	}()
-	tracerMdw := app.NewTracerCommandMiddleware(obsv.TracerProvider)
-	handler := tracerMdw(app.NewInit(svc))
+	mdw, err := middlewares.BuildCommandMiddlewares(obsv)
+	if err != nil {
+		return err
+	}
+	handler := mdw(app.NewInit(svc))
 	events, err := handler.Handle(ctx, app.InitCommand{
 		Repository: repo,
 		Force:      force,

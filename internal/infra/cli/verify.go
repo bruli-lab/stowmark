@@ -4,12 +4,12 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/bruli-lab/go-core/cqs"
 	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/disk"
 	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
+	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 	"github.com/bruli-lab/stowmark/internal/infra/repositories"
 	"github.com/spf13/cobra"
 )
@@ -68,9 +68,10 @@ func newSnapshotVerifyCommand() *cobra.Command {
 			if privateKey != "" {
 				privateKeyPath = &privateKey
 			}
-			loggerMdw := app.NewLoggerQueryMiddleware(obsv.Logger)
-			tracerMdw := app.NewTracerQueryMiddleware(obsv.TracerProvider)
-			multiMdw := cqs.QueryHandlerMultiMiddleware(loggerMdw, tracerMdw)
+			multiMdw, err := middlewares.BuildQueryMiddlewares(obsv)
+			if err != nil {
+				return err
+			}
 
 			handler := multiMdw(app.NewVerifySnapshot(svc))
 

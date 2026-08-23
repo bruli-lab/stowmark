@@ -7,6 +7,7 @@ import (
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/disk"
 	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
+	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 	"github.com/bruli-lab/stowmark/internal/infra/repositories"
 	"github.com/spf13/cobra"
 )
@@ -41,7 +42,7 @@ func newKeyReKeyCommand() *cobra.Command {
 				return fmt.Errorf("failed to create object repository: %w", err)
 			}
 			svc := snapshot.NewReKey(folderRepo, symmetricRepo, asymmetricRepo, objectRepo)
-			multiMdw, err := buildCommandMiddlewares(obsv, err)
+			multiMdw, err := middlewares.BuildCommandMiddlewares(obsv)
 			if err != nil {
 				return err
 			}
@@ -83,4 +84,3 @@ func newKeyReKeyCommand() *cobra.Command {
 	_ = cmd.MarkFlagRequired("public-key")
 	return cmd
 }
-

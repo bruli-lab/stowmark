@@ -8,6 +8,7 @@ import (
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/infra/disk"
 	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
+	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 	"github.com/bruli-lab/stowmark/internal/infra/repositories"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
@@ -73,7 +74,7 @@ func newInitCommand() *cobra.Command {
 				return fmt.Errorf("create repository: %w", err)
 			}
 
-			multiMdw, err := buildCommandMiddlewares(obsv, err)
+			multiMdw, err := middlewares.BuildCommandMiddlewares(obsv)
 			if err != nil {
 				return err
 			}

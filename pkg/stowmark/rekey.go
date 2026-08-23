@@ -5,6 +5,7 @@ import (
 
 	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
+	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 )
 
 func (h *Handler) ReKey(ctx context.Context, privateKeyPath, publicKeyPath string) error {
@@ -16,8 +17,11 @@ func (h *Handler) ReKey(ctx context.Context, privateKeyPath, publicKeyPath strin
 		_ = obsv.Shutdown(ctx)
 	}()
 	svc := snapshot.NewReKey(h.folderRepository, h.symmetricKeyRepository, h.asymmetricKeyPaiRepository, h.objectRepository)
-	tracerMdw := app.NewTracerCommandMiddleware(obsv.TracerProvider)
-	handler := tracerMdw(app.NewRekeyKey(svc))
+	mdw, err := middlewares.BuildCommandMiddlewares(obsv)
+	if err != nil {
+		return err
+	}
+	handler := mdw(app.NewRekeyKey(svc))
 	_, err = handler.Handle(ctx, app.RekeyKeyCommand{
 		RepositoryPath: h.repositoryPath,
 		PrivateKeyPath: privateKeyPath,

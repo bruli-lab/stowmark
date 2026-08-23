@@ -8,6 +8,7 @@ import (
 	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
+	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 )
 
 type CreateResult struct {
@@ -31,8 +32,11 @@ func (h *Handler) CreateSnapshot(ctx context.Context, source string, privateKey 
 		repository.NewGetConfig(h.folderRepository),
 		encryption.NewDecryptSymmetricKey(h.symmetricKeyRepository, h.asymmetricKeyPaiRepository),
 	)
-	tracerMdw := app.NewTracerCommandMiddleware(obsv.TracerProvider)
-	handler := tracerMdw(app.NewCreateSnapshot(svc))
+	mdw, err := middlewares.BuildCommandMiddlewares(obsv)
+	if err != nil {
+		return nil, err
+	}
+	handler := mdw(app.NewCreateSnapshot(svc))
 
 	events, err := handler.Handle(ctx, app.CreateSnapshotCommand{
 		RepositoryPath: h.repositoryPath,

@@ -7,6 +7,7 @@ import (
 
 	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
+	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 )
 
 type Chunk struct {
@@ -37,8 +38,11 @@ func (h *Handler) GetManifest(ctx context.Context, id string) (*Manifest, error)
 		_ = obsv.Shutdown(ctx)
 	}()
 	svc := snapshot.NewGetManifest(h.manifestRepository)
-	tracerMdw := app.NewTracerQueryMiddleware(obsv.TracerProvider)
-	handler := tracerMdw(app.NewManifestGet(svc))
+	mdw, err := middlewares.BuildQueryMiddlewares(obsv)
+	if err != nil {
+		return nil, err
+	}
+	handler := mdw(app.NewManifestGet(svc))
 	result, err := handler.Handle(ctx, app.ManifestGetQuery{
 		SnapshotID: id,
 	})

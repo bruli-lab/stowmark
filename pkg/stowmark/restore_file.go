@@ -8,6 +8,7 @@ import (
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/disk"
 	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
+	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 )
 
 func (h *Handler) RestoreFile(ctx context.Context, snapshotID, filePath string, destinationPath, privateKey *string) error {
@@ -25,8 +26,11 @@ func (h *Handler) RestoreFile(ctx context.Context, snapshotID, filePath string, 
 		h.folderRepository,
 		decryptKeySvc,
 	)
-	tracerMdw := app.NewTracerCommandMiddleware(obsv.TracerProvider)
-	handler := tracerMdw(app.NewRestoreFile(svc))
+	mdw, err := middlewares.BuildCommandMiddlewares(obsv)
+	if err != nil {
+		return err
+	}
+	handler := mdw(app.NewRestoreFile(svc))
 	_, err = handler.Handle(ctx, app.RestoreFileCommand{
 		SnapshotID:      snapshotID,
 		FilePath:        filePath,

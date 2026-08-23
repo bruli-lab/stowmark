@@ -6,19 +6,12 @@ import (
 	"go.opentelemetry.io/otel/metric"
 )
 
-const (
-	operationExecutionsMetric   = "stowmark.operation.executions"
-	operationDurationMetric     = "stowmark.operation.duration"
-	stowmarkCommandEventsMetric = "stowmark.command.events"
-)
-
-type CommandMetrics struct {
+type QueryMetrics struct {
 	Executions metric.Int64Counter
 	Duration   metric.Float64Histogram
-	Events     metric.Int64Counter
 }
 
-func NewCommandMetrics(meter metric.Meter) (*CommandMetrics, error) {
+func NewQueryMetrics(meter metric.Meter) (*QueryMetrics, error) {
 	executions, err := meter.Int64Counter(
 		operationExecutionsMetric,
 		metric.WithDescription("Number of Stowmark operations executed"),
@@ -37,18 +30,8 @@ func NewCommandMetrics(meter metric.Meter) (*CommandMetrics, error) {
 		return nil, fmt.Errorf("create operation duration histogram: %w", err)
 	}
 
-	events, err := meter.Int64Counter(
-		stowmarkCommandEventsMetric,
-		metric.WithDescription("Number of events returned by Stowmark commands"),
-		metric.WithUnit("{event}"),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create command events counter: %w", err)
-	}
-
-	return &CommandMetrics{
+	return &QueryMetrics{
 		Executions: executions,
 		Duration:   duration,
-		Events:     events,
 	}, nil
 }
