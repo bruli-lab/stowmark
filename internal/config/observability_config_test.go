@@ -31,9 +31,17 @@ func TestNewObservabilityConfig(t *testing.T) {
 			expectedServiceName: new("test-service-name"),
 		},
 	}
+	otelEnvironment := []string{
+		"OTEL_EXPORTER_OTLP_ENDPOINT",
+		"OTEL_EXPORTER_OTLP_PROTOCOL",
+		"OTEL_SERVICE_NAME",
+	}
 	for _, tt := range tests {
 		t.Run(`Given an observability config struct,
 		when the constructor is called `+tt.name, func(t *testing.T) {
+			for _, key := range otelEnvironment {
+				unsetEnv(t, key)
+			}
 			for key, value := range tt.envVars {
 				t.Setenv(key, value)
 			}
