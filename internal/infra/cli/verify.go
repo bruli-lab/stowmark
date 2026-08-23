@@ -82,9 +82,19 @@ func newSnapshotVerifyCommand() *cobra.Command {
 			if !ok {
 				return fmt.Errorf("unexpected result type: %T", resultQuery)
 			}
+			failed := make([]Failed, len(result.Failed()))
+			for i, f := range result.Failed() {
+				failed[i] = Failed{
+					Path:   f.Path(),
+					Reason: f.Reason(),
+				}
+			}
 			if err := printResult(
 				cmd.OutOrStdout(),
-				result,
+				result.SnapshotID(),
+				result.TotalFiles(),
+				failed,
+				result.IsSuccess(),
 			); err != nil {
 				return err
 			}
