@@ -1,3 +1,4 @@
+//nolint:dupl // CQS command handlers intentionally share the same adapter structure.
 package app
 
 import (
@@ -10,6 +11,7 @@ import (
 
 const RewrapKeyCommandName = "rewrap-key"
 
+//nolint:dupl // false positive
 type RewrapKeyCommand struct {
 	RepositoryPath string
 	OldPrivateKey  string

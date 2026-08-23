@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 
+	"github.com/bruli-lab/go-core/cqs"
 	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
@@ -73,9 +74,11 @@ func newInitCommand() *cobra.Command {
 				return fmt.Errorf("create repository: %w", err)
 			}
 
+			loggerMdw := app.NewLoggerCommandMiddleware(obsv.Logger)
 			tracerMdw := app.NewTracerCommandMiddleware(obsv.TracerProvider)
+			multiMdw := cqs.CommandHandlerMultiMiddleware(loggerMdw, tracerMdw)
 
-			ch := tracerMdw(app.NewInit(svc))
+			ch := multiMdw(app.NewInit(svc))
 
 			events, err := ch.Handle(cmd.Context(), app.InitCommand{
 				Repository: re,

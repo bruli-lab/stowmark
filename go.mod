@@ -10,7 +10,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.3.15
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.107.3
 	github.com/aws/smithy-go v1.27.9
-	github.com/bruli-lab/go-core v1.7.1
+	github.com/bruli-lab/go-core v1.8.0
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/cloudsoda/go-smb2 v0.0.0-20260803221621-0b399b9d036c
 	github.com/google/uuid v1.6.0

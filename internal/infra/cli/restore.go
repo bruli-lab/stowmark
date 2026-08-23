@@ -60,13 +60,15 @@ func newSnapshotRestoreCommand() *cobra.Command {
 				return err
 			}
 
+			loggerMdw := app.NewLoggerCommandMiddleware(obsv.Logger)
 			tracerMdw := app.NewTracerCommandMiddleware(obsv.TracerProvider)
+			multiMdw := cqs.CommandHandlerMultiMiddleware(loggerMdw, tracerMdw)
 			decryptKeySvc := encryption.NewDecryptSymmetricKey(encrypt.NewSymmetricRepository(), disk.NewAsymmetricKeyPairRepository())
 			switch filePath {
 			case "":
 				return executeRestore(
 					cmd,
-					tracerMdw,
+					multiMdw,
 					manifestRepo,
 					objectRepo,
 					repoHandler.FolderRepository(),
@@ -79,7 +81,7 @@ func newSnapshotRestoreCommand() *cobra.Command {
 			default:
 				return executeRestoreFile(
 					cmd,
-					tracerMdw,
+					multiMdw,
 					manifestRepo,
 					objectRepo,
 					repoHandler.FolderRepository(),

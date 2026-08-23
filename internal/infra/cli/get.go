@@ -5,6 +5,7 @@ import (
 	"io"
 	"text/tabwriter"
 
+	"github.com/bruli-lab/go-core/cqs"
 	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/repositories"
@@ -39,8 +40,10 @@ func newSnapshotGetCommand() *cobra.Command {
 				return err
 			}
 			svc := snapshot.NewGetManifest(manifestRepo)
+			loggerMdw := app.NewLoggerQueryMiddleware(obsv.Logger)
 			tracerMdw := app.NewTracerQueryMiddleware(obsv.TracerProvider)
-			handler := tracerMdw(app.NewManifestGet(svc))
+			multiMdw := cqs.QueryHandlerMultiMiddleware(loggerMdw, tracerMdw)
+			handler := multiMdw(app.NewManifestGet(svc))
 			result, err := handler.Handle(cmd.Context(), app.ManifestGetQuery{
 				SnapshotID: snapshotID,
 			})

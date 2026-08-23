@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"os"
 
 	"github.com/bruli-lab/stowmark/internal/config"
 	"go.opentelemetry.io/contrib/bridges/otelslog"
@@ -41,8 +42,14 @@ func newOTLP(ctx context.Context, cfg config.ObservabilityConfig) (*OTLPObservab
 
 		return nil, err
 	}
+	level := logLevel(cfg.LogLevel)
 
-	consoleHandler := slog.Default().Handler()
+	consoleHandler := slog.NewTextHandler(
+		os.Stderr,
+		&slog.HandlerOptions{
+			Level: level,
+		},
+	)
 
 	otelHandler := otelslog.NewHandler(
 		instrumentationName,
@@ -52,7 +59,7 @@ func newOTLP(ctx context.Context, cfg config.ObservabilityConfig) (*OTLPObservab
 	logger := slog.New(
 		newMultiHandler(
 			consoleHandler,
-			otelHandler,
+			newLevelHandler(level, otelHandler),
 		),
 	)
 
@@ -71,4 +78,17 @@ func newOTLP(ctx context.Context, cfg config.ObservabilityConfig) (*OTLPObservab
 		logger,
 		shutdown,
 	), nil
+}
+
+func logLevel(level string) slog.Level {
+	switch level {
+	case "info":
+		return slog.LevelInfo
+	case "warn":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	default:
+		return slog.LevelDebug
+	}
 }

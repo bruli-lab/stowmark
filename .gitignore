@@ -40,3 +40,4 @@ go.work.sum
 /docker/gcs-test/
 /benchmark-results/
 /stowmark
+/.otlp-source
