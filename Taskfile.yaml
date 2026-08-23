@@ -24,7 +24,11 @@ includes:
 
     benchmark:
         taskfile: ./taskfiles/benchmark/Taskfile.yaml
+        dir: .
 
+    otlp:
+        taskfile: ./taskfiles/otlp/Taskfile.yaml
+        dir: .
 
 silent: false
 
