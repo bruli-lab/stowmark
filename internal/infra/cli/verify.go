@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/disk"
@@ -32,11 +33,17 @@ func newSnapshotVerifyCommand() *cobra.Command {
 				return errors.New("--id is required")
 			}
 
+			obsv, err := builtObservability(cmd.Context())
+			if err != nil {
+				return err
+			}
+
 			repoHand, err := repositories.NewHandler(cmd.Context(), repositoryPath)
 			if err != nil {
 				return err
 			}
 			defer func() {
+				_ = obsv.Shutdown(cmd.Context())
 				_ = repoHand.Close()
 			}()
 
@@ -50,7 +57,7 @@ func newSnapshotVerifyCommand() *cobra.Command {
 				return err
 			}
 
-			verifier := snapshot.NewVerifier(
+			svc := snapshot.NewVerifier(
 				objectRepo,
 				manifestRepo,
 				repoHand.FolderRepository(),
@@ -60,17 +67,21 @@ func newSnapshotVerifyCommand() *cobra.Command {
 			if privateKey != "" {
 				privateKeyPath = &privateKey
 			}
+			tracerMdw := app.NewTracerQueryMiddleware(obsv.TracerProvider)
+			handler := tracerMdw(app.NewVerifySnapshot(svc))
 
-			result, err := verifier.Verify(
-				cmd.Context(),
-				repoHand.RepositoryPath(),
-				snapshotID,
-				privateKeyPath,
-			)
+			resultQuery, err := handler.Handle(cmd.Context(), app.VerifySnapshotQuery{
+				SnapshotID:     snapshotID,
+				RepositoryPath: repoHand.RepositoryPath(),
+				PrivateKeyPath: privateKeyPath,
+			})
 			if err != nil {
 				return err
 			}
-
+			result, ok := resultQuery.(*snapshot.Result)
+			if !ok {
+				return fmt.Errorf("unexpected result type: %T", resultQuery)
+			}
 			if err := printResult(
 				cmd.OutOrStdout(),
 				result,
