@@ -3,10 +3,13 @@ package cli
 import (
 	"fmt"
 
+	"github.com/bruli-lab/stowmark/internal/app"
+	"github.com/bruli-lab/stowmark/internal/config"
 	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/infra/disk"
 	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
+	"github.com/bruli-lab/stowmark/internal/infra/observability"
 	"github.com/bruli-lab/stowmark/internal/infra/repositories"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
@@ -27,6 +30,11 @@ func newInitCommand() *cobra.Command {
 		Short: "Initialize a new Stowmark repository",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			obsConf := config.NewObservabilityConfig()
+			_, err := observability.New(cmd.Context(), obsConf)
+			if err != nil {
+				return fmt.Errorf("create observability: %w", err)
+			}
 			repoHand, err := repositories.NewHandler(cmd.Context(), repositoryPath)
 			if err != nil {
 				return err
@@ -67,9 +75,22 @@ func newInitCommand() *cobra.Command {
 				return fmt.Errorf("create repository: %w", err)
 			}
 
-			result, err := svc.Do(cmd.Context(), re, force)
+			ch := app.NewInit(svc)
+
+			events, err := ch.Handle(cmd.Context(), app.InitCommand{
+				Repository: re,
+				Force:      force,
+			})
 			if err != nil {
 				return fmt.Errorf("initialize repository: %w", err)
+			}
+			if len(events) != 1 {
+				return fmt.Errorf("unexpected number of init events: %d", len(events))
+			}
+			ev := events[0]
+			result, ok := ev.(*app.InitEvent)
+			if !ok {
+				return fmt.Errorf("unexpected event type: %T", ev)
 			}
 
 			_, _ = fmt.Fprintf(
@@ -80,7 +101,7 @@ func newInitCommand() *cobra.Command {
 			_, _ = fmt.Fprintf(
 				cmd.OutOrStdout(),
 				"Repository ID: %s\n",
-				result.ID,
+				result.RepositoryID,
 			)
 			for _, warning := range result.Warnings {
 				_, _ = fmt.Fprintf(
