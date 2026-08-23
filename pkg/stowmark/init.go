@@ -6,10 +6,8 @@ import (
 	"log/slog"
 
 	"github.com/bruli-lab/stowmark/internal/app"
-	"github.com/bruli-lab/stowmark/internal/config"
 	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
-	"github.com/bruli-lab/stowmark/internal/infra/observability"
 	"github.com/google/uuid"
 )
 
@@ -19,7 +17,6 @@ type Compression struct {
 }
 
 func (h *Handler) Init(ctx context.Context, comp *Compression, formatVersion int, publicKey *string, force bool) error {
-
 	svc := repository.NewInit(h.folderRepository)
 	compType, err := repository.ParseCompressionType(comp.Type)
 	if err != nil {
@@ -43,11 +40,13 @@ func (h *Handler) Init(ctx context.Context, comp *Compression, formatVersion int
 		return err
 	}
 
-	obsvConf := config.NewObservabilityConfig()
-	obsv, err := observability.New(ctx, obsvConf)
+	obsv, err := builtObservability(ctx)
 	if err != nil {
 		return err
 	}
+	defer func() {
+		_ = obsv.Shutdown(ctx)
+	}()
 	tracerMdw := app.NewTracerCommandMiddleware(obsv.TracerProvider)
 	handler := tracerMdw(app.NewInit(svc))
 	events, err := handler.Handle(ctx, app.InitCommand{

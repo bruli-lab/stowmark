@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"time"
 
 	"github.com/bruli-lab/go-core/cqs"
 	"github.com/bruli-lab/go-core/event"
@@ -55,20 +54,4 @@ func NewInitEvent(repositoryID string, warnings []string) *InitEvent {
 		RepositoryID: repositoryID,
 		Warnings:     warnings,
 	}
-}
-
-func (i *InitEvent) EventID() uuid.UUID {
-	return i.IDAttr
-}
-
-func (i *InitEvent) EventName() string {
-	return i.NameAttr
-}
-
-func (i *InitEvent) EventAt() time.Time {
-	return i.AtAttr
-}
-
-func (i *InitEvent) AggregateRootID() string {
-	return i.AggregateRootIDAttr
 }

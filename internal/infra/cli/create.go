@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
@@ -49,29 +50,45 @@ func newSnapshotCreateCommand() *cobra.Command {
 			}
 			folderRepositoryRepo := repoHand.FolderRepository()
 			decryptSymmetricKeySvc := encryption.NewDecryptSymmetricKey(encrypt.NewSymmetricRepository(), disk.NewAsymmetricKeyPairRepository())
-			create := snapshot.NewCreate(sourceRepo, manifestRepo, objRepo, repository.NewGetConfig(folderRepositoryRepo), decryptSymmetricKeySvc)
+			obsv, err := builtObservability(cmd.Context())
+			if err != nil {
+				return err
+			}
+			defer func() {
+				_ = obsv.Shutdown(cmd.Context())
+			}()
+			tracerMdw := app.NewTracerCommandMiddleware(obsv.TracerProvider)
+			svc := snapshot.NewCreate(sourceRepo, manifestRepo, objRepo, repository.NewGetConfig(folderRepositoryRepo), decryptSymmetricKeySvc)
+			handler := tracerMdw(app.NewCreateSnapshot(svc))
 
 			var privateKey *string
 			if privateKeyPath != "" {
 				privateKey = &privateKeyPath
 			}
 
-			result, err := create.Do(
-				cmd.Context(),
-				repoHand.RepositoryPath(),
-				sourcePath,
-				privateKey,
-			)
+			events, err := handler.Handle(cmd.Context(), app.CreateSnapshotCommand{
+				RepositoryPath: repoHand.RepositoryPath(),
+				SourcePath:     sourcePath,
+				PrivateKey:     privateKey,
+			})
 			if err != nil {
 				return err
+			}
+
+			if len(events) != 1 {
+				return errors.New("unexpected number of events")
+			}
+			result, ok := events[0].(*app.CreateSnapshotEvent)
+			if !ok {
+				return errors.New("unexpected event type")
 			}
 
 			_, _ = fmt.Fprintf(
 				cmd.OutOrStdout(),
 				"Snapshot created: %s\nFiles: %d\nSize: %d bytes\n",
-				result.Id(),
-				result.FileCount(),
-				result.TotalSize(),
+				result.SnapshotID,
+				result.FileCount,
+				result.TotalSize,
 			)
 
 			return nil

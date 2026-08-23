@@ -4,12 +4,10 @@ import (
 	"fmt"
 
 	"github.com/bruli-lab/stowmark/internal/app"
-	"github.com/bruli-lab/stowmark/internal/config"
 	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/infra/disk"
 	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
-	"github.com/bruli-lab/stowmark/internal/infra/observability"
 	"github.com/bruli-lab/stowmark/internal/infra/repositories"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
@@ -30,8 +28,7 @@ func newInitCommand() *cobra.Command {
 		Short: "Initialize a new Stowmark repository",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			obsConf := config.NewObservabilityConfig()
-			obsv, err := observability.New(cmd.Context(), obsConf)
+			obsv, err := builtObservability(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("create observability: %w", err)
 			}
@@ -40,6 +37,7 @@ func newInitCommand() *cobra.Command {
 				return err
 			}
 			defer func() {
+				_ = obsv.Shutdown(cmd.Context())
 				_ = repoHand.Close()
 			}()
 			svc := repository.NewInit(repoHand.FolderRepository())
@@ -76,9 +74,6 @@ func newInitCommand() *cobra.Command {
 			}
 
 			tracerMdw := app.NewTracerCommandMiddleware(obsv.TracerProvider)
-			defer func() {
-				_ = obsv.Shutdown(cmd.Context())
-			}()
 
 			ch := tracerMdw(app.NewInit(svc))
 
