@@ -79,6 +79,7 @@ func newSnapshotRestoreCommand() *cobra.Command {
 			default:
 				return executeRestoreFile(
 					cmd,
+					tracerMdw,
 					manifestRepo,
 					objectRepo,
 					repoHandler.FolderRepository(),
@@ -132,17 +133,17 @@ func newSnapshotRestoreCommand() *cobra.Command {
 	return cmd
 }
 
-func executeRestoreFile(
-	cmd *cobra.Command,
-	manifestRepo snapshot.ManifestRepository,
-	objectRepo snapshot.ObjectRepository,
-	folderRepository repository.FolderRepository,
-	decryptKeySvc *encryption.DecryptSymmetricKey,
-	snapshotID, filePath, repositoryPath string,
-	destinationPath, privateKey *string,
-) error {
+func executeRestoreFile(cmd *cobra.Command, mdw cqs.CommandHandlerMiddleware, manifestRepo snapshot.ManifestRepository, objectRepo snapshot.ObjectRepository, folderRepository repository.FolderRepository, decryptKeySvc *encryption.DecryptSymmetricKey, snapshotID, filePath, repositoryPath string, destinationPath, privateKey *string) error {
 	svc := snapshot.NewRestoreFile(manifestRepo, objectRepo, folderRepository, decryptKeySvc)
-	if err := svc.Restore(cmd.Context(), snapshotID, filePath, repositoryPath, destinationPath, privateKey); err != nil {
+	handler := mdw(app.NewRestoreFile(svc))
+
+	if _, err := handler.Handle(cmd.Context(), app.RestoreFileCommand{
+		SnapshotID:      snapshotID,
+		FilePath:        filePath,
+		RepositoryPath:  repositoryPath,
+		DestinationPath: destinationPath,
+		PrivateKeyPath:  privateKey,
+	}); err != nil {
 		return err
 	}
 	_, err := fmt.Fprintf(
