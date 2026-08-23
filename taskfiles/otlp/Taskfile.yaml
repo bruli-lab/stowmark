@@ -9,7 +9,7 @@ tasks:
   up:
     desc: Start the observability stack
     cmds:
-      - "{{.COMPOSE}} up -d --remove-orphans"
+      - "{{.COMPOSE}} up -d"
       - "{{.COMPOSE}} ps"
 
   down:

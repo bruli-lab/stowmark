@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 
-	"github.com/bruli-lab/go-core/cqs"
 	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/infra/disk"
@@ -33,9 +32,10 @@ func newKeyRewrapCommand() *cobra.Command {
 			symmetricRepo := encrypt.NewSymmetricRepository()
 			folderRepo := disk.NewFolderRepositoryRepository()
 			svc := repository.NewRewrap(folderRepo, symmetricRepo, asymmetricRepo)
-			loggerMdw := app.NewLoggerCommandMiddleware(obsv.Logger)
-			tracerMdw := app.NewTracerCommandMiddleware(obsv.TracerProvider)
-			multiMdw := cqs.CommandHandlerMultiMiddleware(loggerMdw, tracerMdw)
+			multiMdw, err := buildCommandMiddlewares(obsv, err)
+			if err != nil {
+				return err
+			}
 			handler := multiMdw(app.NewRewrapKey(svc))
 			_, err = handler.Handle(cmd.Context(), app.RewrapKeyCommand{
 				RepositoryPath: repositoryPath,

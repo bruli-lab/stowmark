@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 
-	"github.com/bruli-lab/go-core/cqs"
 	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/infra/disk"
@@ -26,9 +25,10 @@ func newKeyGenerateCommand() *cobra.Command {
 			}()
 			repo := disk.NewAsymmetricKeyPairRepository()
 			svc := encryption.NewCreateAsymmetricKeyPair(repo)
-			loggerMdw := app.NewLoggerCommandMiddleware(obsv.Logger)
-			tracerMdw := app.NewTracerCommandMiddleware(obsv.TracerProvider)
-			multiMdw := cqs.CommandHandlerMultiMiddleware(loggerMdw, tracerMdw)
+			multiMdw, err := buildCommandMiddlewares(obsv, err)
+			if err != nil {
+				return err
+			}
 			handler := multiMdw(app.NewGenerateKey(svc))
 			keys, err := encryption.NewAsymmetricKeyPair(folder)
 			if err != nil {

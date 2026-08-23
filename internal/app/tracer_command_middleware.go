@@ -9,7 +9,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-const instrumentationName = "github.com/bruli-lab/stowmark/internal/application"
+const instrumentationName = "github.com/bruli-lab/stowmark/internal/app"
 
 func NewTracerCommandMiddleware(prov trace.TracerProvider) cqs.CommandHandlerMiddleware {
 	tracer := prov.Tracer(instrumentationName)

@@ -59,10 +59,10 @@ func newSnapshotRestoreCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-
-			loggerMdw := app.NewLoggerCommandMiddleware(obsv.Logger)
-			tracerMdw := app.NewTracerCommandMiddleware(obsv.TracerProvider)
-			multiMdw := cqs.CommandHandlerMultiMiddleware(loggerMdw, tracerMdw)
+			multiMdw, err := buildCommandMiddlewares(obsv, err)
+			if err != nil {
+				return err
+			}
 			decryptKeySvc := encryption.NewDecryptSymmetricKey(encrypt.NewSymmetricRepository(), disk.NewAsymmetricKeyPairRepository())
 			switch filePath {
 			case "":

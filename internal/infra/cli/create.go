@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/bruli-lab/go-core/cqs"
 	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
@@ -58,9 +57,10 @@ func newSnapshotCreateCommand() *cobra.Command {
 			defer func() {
 				_ = obsv.Shutdown(cmd.Context())
 			}()
-			loggerMdw := app.NewLoggerCommandMiddleware(obsv.Logger)
-			tracerMdw := app.NewTracerCommandMiddleware(obsv.TracerProvider)
-			multiMdw := cqs.CommandHandlerMultiMiddleware(loggerMdw, tracerMdw)
+			multiMdw, err := buildCommandMiddlewares(obsv, err)
+			if err != nil {
+				return err
+			}
 			svc := snapshot.NewCreate(sourceRepo, manifestRepo, objRepo, repository.NewGetConfig(folderRepositoryRepo), decryptSymmetricKeySvc)
 			handler := multiMdw(app.NewCreateSnapshot(svc))
 

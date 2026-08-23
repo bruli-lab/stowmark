@@ -41,8 +41,11 @@ func newKeyReKeyCommand() *cobra.Command {
 				return fmt.Errorf("failed to create object repository: %w", err)
 			}
 			svc := snapshot.NewReKey(folderRepo, symmetricRepo, asymmetricRepo, objectRepo)
-			tracerMdw := app.NewTracerCommandMiddleware(obsv.TracerProvider)
-			handler := tracerMdw(app.NewRekeyKey(svc))
+			multiMdw, err := buildCommandMiddlewares(obsv, err)
+			if err != nil {
+				return err
+			}
+			handler := multiMdw(app.NewRekeyKey(svc))
 			_, err = handler.Handle(cmd.Context(), app.RekeyKeyCommand{
 				RepositoryPath: repoHandler.RepositoryPath(),
 				PrivateKeyPath: privateKey,
@@ -80,3 +83,4 @@ func newKeyReKeyCommand() *cobra.Command {
 	_ = cmd.MarkFlagRequired("public-key")
 	return cmd
 }
+
