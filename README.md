@@ -3,7 +3,7 @@
 </p>
 
 [![CI](https://github.com/bruli-lab/stowmark/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/bruli-lab/stowmark/actions/workflows/release.yml)
-[![Coverage](https://codecov.io/gh/bruli-lab/stowmark/branch/main/graph/badge.svg)](https://codecov.io/gh/bruli-lab/stowmark)
+[![Codecov](https://codecov.io/gh/bruli-lab/stowmark/branch/main/graph/badge.svg)](https://codecov.io/gh/bruli-lab/stowmark)
 [![Check and release](https://github.com/bruli-lab/stowmark/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/bruli-lab/stowmark/actions/workflows/release.yml)
 [![Latest release](https://img.shields.io/github/v/release/bruli-lab/stowmark?display_name=tag)](https://github.com/bruli-lab/stowmark/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/bruli-lab/stowmark/total)](https://github.com/bruli-lab/stowmark/releases)
