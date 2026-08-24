@@ -4,11 +4,14 @@ import (
 	"fmt"
 	"io"
 	"text/tabwriter"
-
-	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 )
 
-func printResult(output io.Writer, result *snapshot.Result) error {
+type Failed struct {
+	Path   string
+	Reason string
+}
+
+func printResult(output io.Writer, snapshotID string, totalFiles int, failed []Failed, isSuccess bool) error {
 	writer := tabwriter.NewWriter(
 		output,
 		0,
@@ -19,12 +22,12 @@ func printResult(output io.Writer, result *snapshot.Result) error {
 	)
 
 	status := "OK"
-	if !result.IsSuccess() {
+	if !isSuccess {
 		status = "FAILED"
 	}
 
-	failedFiles := len(result.Failed())
-	validFiles := result.TotalFiles() - failedFiles
+	failedFiles := len(failed)
+	validFiles := totalFiles - failedFiles
 
 	if _, err := fmt.Fprintf(
 		writer,
@@ -33,9 +36,9 @@ func printResult(output io.Writer, result *snapshot.Result) error {
 			"RESTORED:\t%d\n"+
 			"VALID:\t%d\n"+
 			"INVALID:\t%d\n",
-		result.SnapshotID(),
+		snapshotID,
 		status,
-		result.TotalFiles(),
+		totalFiles,
 		validFiles,
 		failedFiles,
 	); err != nil {
@@ -53,12 +56,12 @@ func printResult(output io.Writer, result *snapshot.Result) error {
 		return err
 	}
 
-	for _, check := range result.Failed() {
+	for _, check := range failed {
 		if _, err := fmt.Fprintf(
 			writer,
 			"%s\tINVALID\t%s\n",
-			check.Path(),
-			check.Reason(),
+			check.Path,
+			check.Reason,
 		); err != nil {
 			return err
 		}

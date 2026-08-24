@@ -2,9 +2,12 @@ package stowmark
 
 import (
 	"context"
+	"fmt"
 	"time"
 
+	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
+	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 )
 
 type SnapshotSummary struct {
@@ -16,9 +19,26 @@ type SnapshotSummary struct {
 }
 
 func (h *Handler) ListSnapshots(ctx context.Context) ([]SnapshotSummary, error) {
-	items, err := snapshot.NewListing(h.manifestRepository).List(ctx)
+	obsv, err := builtObservability(ctx)
 	if err != nil {
 		return nil, err
+	}
+	defer func() {
+		_ = obsv.Shutdown(ctx)
+	}()
+	svc := snapshot.NewListing(h.manifestRepository)
+	mdw, err := middlewares.BuildQueryMiddlewares(obsv)
+	if err != nil {
+		return nil, err
+	}
+	handler := mdw(app.NewSnapshotList(svc))
+	resultQuery, err := handler.Handle(ctx, app.SnaphotListQuery{})
+	if err != nil {
+		return nil, err
+	}
+	items, ok := resultQuery.([]snapshot.ManifestResume)
+	if !ok {
+		return nil, fmt.Errorf("unexpected result type: %T", resultQuery)
 	}
 
 	result := make([]SnapshotSummary, len(items))

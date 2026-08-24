@@ -4,10 +4,12 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/disk"
 	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
+	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 	"github.com/bruli-lab/stowmark/internal/infra/repositories"
 	"github.com/spf13/cobra"
 )
@@ -32,11 +34,17 @@ func newSnapshotVerifyCommand() *cobra.Command {
 				return errors.New("--id is required")
 			}
 
+			obsv, err := builtObservability(cmd.Context())
+			if err != nil {
+				return err
+			}
+
 			repoHand, err := repositories.NewHandler(cmd.Context(), repositoryPath)
 			if err != nil {
 				return err
 			}
 			defer func() {
+				_ = obsv.Shutdown(cmd.Context())
 				_ = repoHand.Close()
 			}()
 
@@ -50,7 +58,7 @@ func newSnapshotVerifyCommand() *cobra.Command {
 				return err
 			}
 
-			verifier := snapshot.NewVerifier(
+			svc := snapshot.NewVerifier(
 				objectRepo,
 				manifestRepo,
 				repoHand.FolderRepository(),
@@ -60,20 +68,38 @@ func newSnapshotVerifyCommand() *cobra.Command {
 			if privateKey != "" {
 				privateKeyPath = &privateKey
 			}
-
-			result, err := verifier.Verify(
-				cmd.Context(),
-				repoHand.RepositoryPath(),
-				snapshotID,
-				privateKeyPath,
-			)
+			multiMdw, err := middlewares.BuildQueryMiddlewares(obsv)
 			if err != nil {
 				return err
 			}
 
+			handler := multiMdw(app.NewVerifySnapshot(svc))
+
+			resultQuery, err := handler.Handle(cmd.Context(), app.VerifySnapshotQuery{
+				SnapshotID:     snapshotID,
+				RepositoryPath: repoHand.RepositoryPath(),
+				PrivateKeyPath: privateKeyPath,
+			})
+			if err != nil {
+				return err
+			}
+			result, ok := resultQuery.(*snapshot.Result)
+			if !ok {
+				return fmt.Errorf("unexpected result type: %T", resultQuery)
+			}
+			failed := make([]Failed, len(result.Failed()))
+			for i, f := range result.Failed() {
+				failed[i] = Failed{
+					Path:   f.Path(),
+					Reason: f.Reason(),
+				}
+			}
 			if err := printResult(
 				cmd.OutOrStdout(),
-				result,
+				result.SnapshotID(),
+				result.TotalFiles(),
+				failed,
+				result.IsSuccess(),
 			); err != nil {
 				return err
 			}

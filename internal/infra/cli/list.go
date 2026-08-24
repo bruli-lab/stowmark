@@ -5,7 +5,9 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
+	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 	"github.com/bruli-lab/stowmark/internal/infra/repositories"
 	"github.com/spf13/cobra"
 )
@@ -18,11 +20,16 @@ func newSnapshotListCommand() *cobra.Command {
 		Short: "List repository snapshots",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			obsv, err := builtObservability(cmd.Context())
+			if err != nil {
+				return fmt.Errorf("create observability: %w", err)
+			}
 			repoHand, err := repositories.NewHandler(cmd.Context(), repositoryPath)
 			if err != nil {
 				return err
 			}
 			defer func() {
+				_ = obsv.Shutdown(cmd.Context())
 				_ = repoHand.Close()
 			}()
 
@@ -31,9 +38,18 @@ func newSnapshotListCommand() *cobra.Command {
 				return err
 			}
 
-			list := snapshot.NewListing(manifestRepo)
+			svc := snapshot.NewListing(manifestRepo)
+			multiMdw, err := middlewares.BuildQueryMiddlewares(obsv)
+			if err != nil {
+				return err
+			}
+			handler := multiMdw(app.NewSnapshotList(svc))
 
-			snapshots, err := list.List(cmd.Context())
+			result, err := handler.Handle(cmd.Context(), app.SnaphotListQuery{})
+			snapshots, ok := result.([]snapshot.ManifestResume)
+			if !ok {
+				panic("unexpected result type")
+			}
 			if err != nil {
 				return err
 			}
@@ -111,9 +127,5 @@ func formatBytes(size int64) string {
 		exponent++
 	}
 
-	return fmt.Sprintf(
-		"%.1f %ciB",
-		float64(size)/float64(divisor),
-		"KMGTPE"[exponent],
-	)
+	return fmt.Sprintf("%.1f %ciB", float64(size)/float64(divisor), "KMGTPE"[exponent])
 }

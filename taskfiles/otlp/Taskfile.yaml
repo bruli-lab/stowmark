@@ -1,0 +1,76 @@
+version: "3"
+
+silent: true
+
+vars:
+  COMPOSE: docker compose -f docker/otlp-compose.yaml
+
+tasks:
+  up:
+    desc: Start the observability stack
+    cmds:
+      - "{{.COMPOSE}} up -d"
+      - "{{.COMPOSE}} ps"
+
+  down:
+    desc: Stop the observability stack and preserve its data
+    cmds:
+      - "{{.COMPOSE}} down"
+
+  restart:
+    desc: Restart the observability stack
+    cmds:
+      - task: down
+      - task: up
+
+  ps:
+    desc: Show observability container status
+    cmds:
+      - "{{.COMPOSE}} ps"
+
+  logs:
+    desc: Follow logs from all observability services
+    cmds:
+      - "{{.COMPOSE}} logs -f --tail=200"
+
+  logs:collector:
+    desc: Follow OpenTelemetry Collector logs
+    cmds:
+      - "{{.COMPOSE}} logs -f --tail=200 otel-collector"
+
+  pull:
+    desc: Pull the observability container images
+    cmds:
+      - "{{.COMPOSE}} pull"
+
+  update:
+    desc: Update images and recreate the observability containers
+    cmds:
+      - task: pull
+      - task: up
+
+  clean:
+    desc: Stop the observability stack and remove all persistent data
+    prompt: This will remove all Prometheus, Loki, Tempo, and Grafana data. Continue?
+    cmds:
+      - "{{.COMPOSE}} down --volumes --remove-orphans"
+
+  urls:
+    desc: Show observability service URLs
+    cmds:
+      - echo "Grafana    http://localhost:3000"
+      - echo "Prometheus http://localhost:9090"
+      - echo "Loki       http://localhost:3100"
+      - echo "Tempo      http://localhost:3200"
+      - echo "OTLP HTTP  http://localhost:4318"
+      - echo "OTLP gRPC  localhost:4317"
+
+  env:
+    desc: Show the environment variables required to run Stowmark with OTLP
+    cmds:
+      - echo "export OTEL_SERVICE_NAME=stowmark"
+      - echo "export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318"
+      - echo "export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf"
+      - echo "export OTEL_TRACES_EXPORTER=otlp"
+      - echo "export OTEL_METRICS_EXPORTER=otlp"
+      - echo "export OTEL_LOGS_EXPORTER=otlp"

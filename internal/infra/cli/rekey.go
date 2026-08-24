@@ -3,9 +3,11 @@ package cli
 import (
 	"fmt"
 
+	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/disk"
 	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
+	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 	"github.com/bruli-lab/stowmark/internal/infra/repositories"
 	"github.com/spf13/cobra"
 )
@@ -21,6 +23,13 @@ func newKeyReKeyCommand() *cobra.Command {
 		Short: "Rotate symmetric key and rewrap all objects",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			obsv, err := builtObservability(cmd.Context())
+			if err != nil {
+				return fmt.Errorf("create observability: %w", err)
+			}
+			defer func() {
+				_ = obsv.Shutdown(cmd.Context())
+			}()
 			asymmetricRepo := disk.NewAsymmetricKeyPairRepository()
 			symmetricRepo := encrypt.NewSymmetricRepository()
 			repoHandler, err := repositories.NewHandler(cmd.Context(), repositoryPath)
@@ -33,7 +42,16 @@ func newKeyReKeyCommand() *cobra.Command {
 				return fmt.Errorf("failed to create object repository: %w", err)
 			}
 			svc := snapshot.NewReKey(folderRepo, symmetricRepo, asymmetricRepo, objectRepo)
-			err = svc.Do(cmd.Context(), repoHandler.RepositoryPath(), privateKey, publicKey)
+			multiMdw, err := middlewares.BuildCommandMiddlewares(obsv)
+			if err != nil {
+				return err
+			}
+			handler := multiMdw(app.NewRekeyKey(svc))
+			_, err = handler.Handle(cmd.Context(), app.RekeyKeyCommand{
+				RepositoryPath: repoHandler.RepositoryPath(),
+				PrivateKeyPath: privateKey,
+				PublicKeyPath:  publicKey,
+			})
 			if err != nil {
 				return fmt.Errorf("failed to rekey: %w", err)
 			}

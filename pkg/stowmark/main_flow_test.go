@@ -62,7 +62,7 @@ func mainFlow(t *testing.T, ctx context.Context, folders Folders, formatVersion 
 	require.Len(t, snapshots, 1)
 	require.Equal(t, created.ID, snapshots[0].ID)
 
-	snapshot, err := handler.GetSnapshot(ctx, created.ID)
+	snapshot, err := handler.GetManifest(ctx, created.ID)
 	require.NoError(t, err)
 	require.Equal(t, created.ID, snapshot.ID)
 	require.Len(t, snapshot.Files, created.FileCount)

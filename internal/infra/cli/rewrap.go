@@ -3,9 +3,11 @@ package cli
 import (
 	"fmt"
 
+	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/infra/disk"
 	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
+	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 	"github.com/spf13/cobra"
 )
 
@@ -20,11 +22,27 @@ func newKeyRewrapCommand() *cobra.Command {
 		Short: "Rotate encryption key pair",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			obsv, err := builtObservability(cmd.Context())
+			if err != nil {
+				return fmt.Errorf("create observability: %w", err)
+			}
+			defer func() {
+				_ = obsv.Shutdown(cmd.Context())
+			}()
 			asymmetricRepo := disk.NewAsymmetricKeyPairRepository()
 			symmetricRepo := encrypt.NewSymmetricRepository()
 			folderRepo := disk.NewFolderRepositoryRepository()
 			svc := repository.NewRewrap(folderRepo, symmetricRepo, asymmetricRepo)
-			err := svc.Do(cmd.Context(), repositoryPath, oldPrivateKey, newPublicKey)
+			multiMdw, err := middlewares.BuildCommandMiddlewares(obsv)
+			if err != nil {
+				return err
+			}
+			handler := multiMdw(app.NewRewrapKey(svc))
+			_, err = handler.Handle(cmd.Context(), app.RewrapKeyCommand{
+				RepositoryPath: repositoryPath,
+				OldPrivateKey:  oldPrivateKey,
+				NewPublicKey:   newPublicKey,
+			})
 			if err != nil {
 				return fmt.Errorf("failed to rewrap: %w", err)
 			}

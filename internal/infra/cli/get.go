@@ -5,7 +5,9 @@ import (
 	"io"
 	"text/tabwriter"
 
+	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
+	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 	"github.com/bruli-lab/stowmark/internal/infra/repositories"
 	"github.com/spf13/cobra"
 )
@@ -20,11 +22,16 @@ func newSnapshotGetCommand() *cobra.Command {
 		Short: "Show a snapshot manifest",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			obsv, err := builtObservability(cmd.Context())
+			if err != nil {
+				return fmt.Errorf("create observability: %w", err)
+			}
 			repohand, err := repositories.NewHandler(cmd.Context(), repositoryPath)
 			if err != nil {
 				return err
 			}
 			defer func() {
+				_ = obsv.Shutdown(cmd.Context())
 				_ = repohand.Close()
 			}()
 
@@ -32,8 +39,19 @@ func newSnapshotGetCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			get := snapshot.NewGetManifest(manifestRepo)
-			manifest, err := get.Get(cmd.Context(), snapshotID)
+			svc := snapshot.NewGetManifest(manifestRepo)
+			multiMdw, err2 := middlewares.BuildQueryMiddlewares(obsv)
+			if err2 != nil {
+				return err2
+			}
+			handler := multiMdw(app.NewManifestGet(svc))
+			result, err := handler.Handle(cmd.Context(), app.ManifestGetQuery{
+				SnapshotID: snapshotID,
+			})
+			manifest, ok := result.(*snapshot.Manifest)
+			if !ok {
+				return fmt.Errorf("unexpected result type: %T", result)
+			}
 			if err != nil {
 				return err
 			}

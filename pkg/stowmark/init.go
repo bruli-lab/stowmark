@@ -2,10 +2,13 @@ package stowmark
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 
+	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
+	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 	"github.com/google/uuid"
 )
 
@@ -37,7 +40,30 @@ func (h *Handler) Init(ctx context.Context, comp *Compression, formatVersion int
 	if err != nil {
 		return err
 	}
-	result, err := svc.Do(ctx, repo, force)
+
+	obsv, err := builtObservability(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = obsv.Shutdown(ctx)
+	}()
+	mdw, err := middlewares.BuildCommandMiddlewares(obsv)
+	if err != nil {
+		return err
+	}
+	handler := mdw(app.NewInit(svc))
+	events, err := handler.Handle(ctx, app.InitCommand{
+		Repository: repo,
+		Force:      force,
+	})
+	if len(events) != 1 {
+		return fmt.Errorf("unexpected number of init events: %d", len(events))
+	}
+	result, ok := events[0].(*app.InitEvent)
+	if !ok {
+		return fmt.Errorf("unexpected event type: %T", events[0])
+	}
 	if err != nil {
 		return err
 	}

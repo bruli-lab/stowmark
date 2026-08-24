@@ -2,14 +2,24 @@ package stowmark
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/disk"
 	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
+	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 )
 
 func (h *Handler) RestoreSnapshot(ctx context.Context, snapshotID string, destinationPath, privateKey *string) (*Result, error) {
+	obsv, err := builtObservability(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = obsv.Shutdown(ctx)
+	}()
 	decryptKeySvc := encryption.NewDecryptSymmetricKey(encrypt.NewSymmetricRepository(), disk.NewAsymmetricKeyPairRepository())
 	svc := snapshot.NewRestore(
 		h.manifestRepository,
@@ -17,21 +27,38 @@ func (h *Handler) RestoreSnapshot(ctx context.Context, snapshotID string, destin
 		h.folderRepository,
 		decryptKeySvc,
 	)
-	result, err := svc.Restore(ctx, snapshotID, h.repositoryPath, destinationPath, privateKey)
+	mdw, err := middlewares.BuildCommandMiddlewares(obsv)
 	if err != nil {
 		return nil, err
 	}
-	failed := make([]FailedResult, len(result.Failed()))
-	for i, f := range result.Failed() {
+	handler := mdw(app.NewRestoreSnapshot(svc))
+	events, err := handler.Handle(ctx, app.RestoreSnapshotCommand{
+		SnapshotID:      snapshotID,
+		RepositoryPath:  h.repositoryPath,
+		PrivateKeyPath:  privateKey,
+		DestinationPath: destinationPath,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(events) != 1 {
+		return nil, fmt.Errorf("unexpected number of events")
+	}
+	result, ok := events[0].(*app.RestoreSnapshotEvent)
+	if !ok {
+		return nil, fmt.Errorf("unexpected event type")
+	}
+	failed := make([]FailedResult, len(result.FailedFiles))
+	for i, f := range result.FailedFiles {
 		failed[i] = FailedResult{
-			Path:   f.Path(),
-			Reason: f.Reason(),
+			Path:   f.Path,
+			Reason: f.Reason,
 		}
 	}
 	return &Result{
-		SnapshotID: result.SnapshotID(),
-		TotalFiles: result.TotalFiles(),
+		SnapshotID: result.SnapshotID,
+		TotalFiles: result.TotalFiles,
 		Failed:     failed,
-		IsSuccess:  result.IsSuccess(),
+		IsSuccess:  result.IsSuccess,
 	}, nil
 }
