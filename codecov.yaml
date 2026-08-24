@@ -1,0 +1,6 @@
+ignore:
+  - "**/*_mock.go"
+  - "cmd/**"
+  - "internal/infra/**"
+  - "internal/fixtures/**"
+  - "pkg/**"
