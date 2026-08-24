@@ -39,3 +39,4 @@ go.work.sum
 /benchmark-results/
 /stowmark
 /.otlp-source
+/coverage.out

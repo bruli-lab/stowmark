@@ -38,14 +38,12 @@ func (o OTLPObservability) Shutdown(ctx context.Context) error {
 func NewOTLPObservability(
 	tracerProvider trace.TracerProvider,
 	meterProvider metric.MeterProvider,
-	loggerProvider log.LoggerProvider,
 	logger *slog.Logger,
 	shutdown func(context.Context) error,
 ) *OTLPObservability {
 	return &OTLPObservability{
 		TracerProvider: tracerProvider,
 		MeterProvider:  meterProvider,
-		LoggerProvider: loggerProvider,
 		Logger:         logger,
 		shutdown:       shutdown,
 	}

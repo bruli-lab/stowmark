@@ -74,7 +74,6 @@ func newOTLP(ctx context.Context, cfg config.ObservabilityConfig) (*OTLPObservab
 	return NewOTLPObservability(
 		tracerProvider,
 		meterProvider,
-		loggerProvider,
 		logger,
 		shutdown,
 	), nil
