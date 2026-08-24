@@ -45,6 +45,7 @@ the source path, creation time and references to its files.
 - Remote repositories in Amazon S3 and S3-compatible object storage.
 - Remote repositories in Google Cloud Storage using Application Default Credentials.
 - Remote repositories over WebDAV using username and password authentication.
+- Optional OpenTelemetry observability through an OTLP-compatible collector.
 - Linux builds for `amd64` and `arm64`.
 - Debian packages generated with GoReleaser.
 
@@ -690,6 +691,43 @@ The `snapshot verify` command reads each object referenced by the manifest and c
 
 The command exits with an error when any referenced file fails verification, making it suitable for scripts and
 scheduled checks.
+
+## Observability
+
+Stowmark provides optional OpenTelemetry observability through OTLP. Telemetry is disabled by default: no exporters
+are initialized and no data is sent unless `OTEL_EXPORTER_OTLP_ENDPOINT` is defined.
+
+To send telemetry to a local OpenTelemetry Collector using OTLP over HTTP/protobuf:
+
+```bash
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+export OTEL_SERVICE_NAME=stowmark
+
+stowmark snapshot list --repo /srv/backups/stowmark
+```
+
+The following protocols are supported:
+
+- `http/protobuf`
+- `grpc`
+
+When observability is enabled, Stowmark exports:
+
+- Traces for command and query execution, including duration and recorded errors.
+- Structured application logs correlated with active traces when a context is available.
+- Metrics for operation executions, duration, status and command events.
+
+`OTEL_EXPORTER_OTLP_PROTOCOL` defaults to `http/protobuf` and `OTEL_SERVICE_NAME` defaults to `stowmark`, so the
+endpoint is the only variable required to enable telemetry:
+
+```bash
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 stowmark snapshot list --repo /srv/backups/stowmark
+```
+
+Standard OTLP exporter variables can be used to configure headers, timeouts, compression or signal-specific
+endpoints. Stowmark does not include repository paths, file paths, object hashes, snapshot identifiers, encryption
+keys or repository contents as metric attributes.
 
 ## Development
 
