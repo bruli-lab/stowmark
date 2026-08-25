@@ -8,7 +8,7 @@ tasks:
   up:
     desc: Start only the SMB server
     cmds:
-      - docker compose -f "{{.COMPOSE_FILE}}" up -d "{{.SMB_SERVICE}}" --remove-orphans
+      - docker compose -f "{{.COMPOSE_FILE}}" up -d "{{.SMB_SERVICE}}"
 
   down:
     desc: Stop and remove only the SMB server

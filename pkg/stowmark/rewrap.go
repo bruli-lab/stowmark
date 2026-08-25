@@ -17,7 +17,8 @@ func (h *Handler) Rewrap(ctx context.Context, oldPrivateKeyPat, newPublicKeyPath
 		_ = obsv.Shutdown(ctx)
 	}()
 	svc := repository.NewRewrap(h.folderRepository, h.symmetricKeyRepository, h.asymmetricKeyPaiRepository)
-	mdw, err := middlewares.BuildCommandMiddlewares(obsv)
+	evtr := app.NewEventsTracing()
+	mdw, err := middlewares.BuildCommandMiddlewares(obsv, evtr)
 	if err != nil {
 		return err
 	}

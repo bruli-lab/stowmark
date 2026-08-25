@@ -42,7 +42,8 @@ func newKeyReKeyCommand() *cobra.Command {
 				return fmt.Errorf("failed to create object repository: %w", err)
 			}
 			svc := snapshot.NewReKey(folderRepo, symmetricRepo, asymmetricRepo, objectRepo)
-			multiMdw, err := middlewares.BuildCommandMiddlewares(obsv)
+			evtr := app.NewEventsTracing()
+			multiMdw, err := middlewares.BuildCommandMiddlewares(obsv, evtr)
 			if err != nil {
 				return err
 			}

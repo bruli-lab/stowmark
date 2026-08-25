@@ -58,7 +58,9 @@ func newSnapshotCreateCommand() *cobra.Command {
 			defer func() {
 				_ = obsv.Shutdown(cmd.Context())
 			}()
-			multiMdw, err := middlewares.BuildCommandMiddlewares(obsv)
+			evTr := app.NewEventsTracing()
+			evTr.Add(app.CreateSnapshotCommandName, app.NewCreateSnapshotTracer(obsv.Logger))
+			multiMdw, err := middlewares.BuildCommandMiddlewares(obsv, evTr)
 			if err != nil {
 				return err
 			}

@@ -26,7 +26,8 @@ func (h *Handler) RestoreFile(ctx context.Context, snapshotID, filePath string, 
 		h.folderRepository,
 		decryptKeySvc,
 	)
-	mdw, err := middlewares.BuildCommandMiddlewares(obsv)
+	evtr := app.NewEventsTracing()
+	mdw, err := middlewares.BuildCommandMiddlewares(obsv, evtr)
 	if err != nil {
 		return err
 	}

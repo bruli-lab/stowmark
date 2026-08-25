@@ -73,8 +73,8 @@ func newInitCommand() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("create repository: %w", err)
 			}
-
-			multiMdw, err := middlewares.BuildCommandMiddlewares(obsv)
+			evtr := app.NewEventsTracing()
+			multiMdw, err := middlewares.BuildCommandMiddlewares(obsv, evtr)
 			if err != nil {
 				return err
 			}

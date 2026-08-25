@@ -35,10 +35,12 @@ func TestCreate_Do(t *testing.T) {
 		saveObjErr, alreadyExistsErr,
 		saveManifestErr, saveChunkErr,
 		decodeErr error
-		source *snapshot.Source
-		hash   string
-		exists bool
-		config *repository.Config
+		source            *snapshot.Source
+		hash              string
+		exists            bool
+		config            *repository.Config
+		expectedFileCount int
+		expectedTotalSize int64
 	}{
 		{
 			name:         "and get config returns error, then it returns same error",
@@ -139,16 +141,18 @@ func TestCreate_Do(t *testing.T) {
 			config: &config,
 		},
 		{
-			name: "with error when manifest does not exists, then it returns nil",
+			name: "with error when object does not exists, then it returns a result with saved file",
 			source: new(fixtures.SourceBuilder{Files: []snapshot.File{
 				fixtures.FileBuilder{}.Build(),
 			}}.Build()),
-			hash:   uuid.NewString(),
-			exists: false,
-			config: &config,
+			hash:              uuid.NewString(),
+			exists:            false,
+			config:            &config,
+			expectedFileCount: 1,
+			expectedTotalSize: int64(20),
 		},
 		{
-			name: "with error when manifest does exists, then it returns nil",
+			name: "with error when object does exists, then it returns a result without save files",
 			source: new(fixtures.SourceBuilder{Files: []snapshot.File{
 				fixtures.FileBuilder{}.Build(),
 			}}.Build()),
@@ -157,7 +161,7 @@ func TestCreate_Do(t *testing.T) {
 			config: &config,
 		},
 		{
-			name: "with format version one and no error when manifest does exists, then it returns nil",
+			name: "with format version one and no error when object does exists, then it returns a result without saved file",
 			source: new(fixtures.SourceBuilder{Files: []snapshot.File{
 				fixtures.FileBuilder{}.Build(),
 			}}.Build()),
@@ -166,7 +170,7 @@ func TestCreate_Do(t *testing.T) {
 			config: &oneConfig,
 		},
 		{
-			name: "with format version one and encryption and no error when manifest does exists, then it returns nil",
+			name: "with format version one and encryption and no error when object does exists, then it returns without save file",
 			args: args{repoPath: "path", sourcePath: "path", privateKey: new("private-key")},
 			source: new(fixtures.SourceBuilder{Files: []snapshot.File{
 				fixtures.FileBuilder{}.Build(),
@@ -227,8 +231,8 @@ func TestCreate_Do(t *testing.T) {
 				return
 			}
 			require.NotEmpty(t, result.Id())
-			require.Equal(t, 1, result.FileCount())
-			require.Equal(t, int64(20), result.TotalSize())
+			require.Equal(t, tt.expectedFileCount, result.FileCount())
+			require.Equal(t, tt.expectedTotalSize, result.TotalSize())
 		})
 	}
 }

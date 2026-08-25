@@ -60,7 +60,8 @@ func newSnapshotRestoreCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			multiMdw, err := middlewares.BuildCommandMiddlewares(obsv)
+			evtr := app.NewEventsTracing()
+			multiMdw, err := middlewares.BuildCommandMiddlewares(obsv, evtr)
 			if err != nil {
 				return err
 			}

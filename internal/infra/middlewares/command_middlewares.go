@@ -8,9 +8,9 @@ import (
 	observabilityinfra "github.com/bruli-lab/stowmark/internal/infra/observability"
 )
 
-func BuildCommandMiddlewares(obsv *observabilityinfra.OTLPObservability) (cqs.CommandHandlerMiddleware, error) {
+func BuildCommandMiddlewares(obsv *observabilityinfra.OTLPObservability, evtr *app.EventsTracing) (cqs.CommandHandlerMiddleware, error) {
 	loggerMdw := app.NewLoggerCommandMiddleware(obsv.Logger)
-	tracerMdw := app.NewTracerCommandMiddleware(obsv.TracerProvider)
+	tracerMdw := app.NewTracerCommandMiddleware(obsv.TracerProvider, evtr)
 	meterMdw, err := app.NewMeterCommandMiddleware(obsv.MeterProvider)
 	if err != nil {
 		return nil, fmt.Errorf("create meter middleware: %w", err)

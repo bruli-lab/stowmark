@@ -26,7 +26,8 @@ func newKeyGenerateCommand() *cobra.Command {
 			}()
 			repo := disk.NewAsymmetricKeyPairRepository()
 			svc := encryption.NewCreateAsymmetricKeyPair(repo)
-			multiMdw, err := middlewares.BuildCommandMiddlewares(obsv)
+			evtr := app.NewEventsTracing()
+			multiMdw, err := middlewares.BuildCommandMiddlewares(obsv, evtr)
 			if err != nil {
 				return err
 			}
