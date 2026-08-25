@@ -13,12 +13,14 @@ type CreateSnapshotTracer struct {
 }
 
 func (c CreateSnapshotTracer) Trace(span trace.Span, ev event.Event) {
-	createEv, _ := ev.(*CreateSnapshotEvent)
-	slog.Error(
-		"invalid create snapshot event",
-		slog.String("event", ev.EventName()),
-		slog.String("snapshot_id", createEv.SnapshotID),
-	)
+	createEv, ok := ev.(*CreateSnapshotEvent)
+	if !ok {
+		slog.Error(
+			"invalid create snapshot event",
+			slog.String("event", ev.EventName()),
+			slog.String("snapshot_id", createEv.SnapshotID),
+		)
+	}
 	span.SetAttributes(
 		attribute.String("snapshot.id", createEv.SnapshotID),
 		attribute.Int("snapshot.file_count", createEv.FileCount),

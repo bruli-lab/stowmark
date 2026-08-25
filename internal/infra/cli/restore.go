@@ -60,7 +60,9 @@ func newSnapshotRestoreCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			restSnapshotTracer := app.NewRestoreSnapshotTracer(obsv.Logger)
 			evtr := app.NewEventsTracing()
+			evtr.Add(app.RestoreSnapshotCommandName, restSnapshotTracer)
 			multiMdw, err := middlewares.BuildCommandMiddlewares(obsv, evtr)
 			if err != nil {
 				return err
@@ -166,8 +168,8 @@ func executeRestore(cmd *cobra.Command, mdw cqs.CommandHandlerMiddleware, manife
 		folderRepo,
 		decryptKeySvc,
 	)
-	hadler := mdw(app.NewRestoreSnapshot(svc))
-	events, err := hadler.Handle(cmd.Context(), app.RestoreSnapshotCommand{
+	handler := mdw(app.NewRestoreSnapshot(svc))
+	events, err := handler.Handle(cmd.Context(), app.RestoreSnapshotCommand{
 		SnapshotID:      snapshotID,
 		RepositoryPath:  repositoryPath,
 		PrivateKeyPath:  privateKey,

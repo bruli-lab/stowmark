@@ -27,7 +27,9 @@ func (h *Handler) RestoreSnapshot(ctx context.Context, snapshotID string, destin
 		h.folderRepository,
 		decryptKeySvc,
 	)
+	restoreSnapshotTracer := app.NewRestoreSnapshotTracer(obsv.Logger)
 	evtr := app.NewEventsTracing()
+	evtr.Add(app.RestoreSnapshotCommandName, restoreSnapshotTracer)
 	mdw, err := middlewares.BuildCommandMiddlewares(obsv, evtr)
 	if err != nil {
 		return nil, err
