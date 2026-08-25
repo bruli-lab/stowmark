@@ -8,7 +8,10 @@ import (
 )
 
 func builtObservability(ctx context.Context) (*observabilityinfra.OTLPObservability, error) {
-	conf := config.NewObservabilityConfig()
+	conf, err := config.NewObservabilityConfig()
+	if err != nil {
+		return nil, err
+	}
 	obsv, err := observabilityinfra.New(ctx, conf)
 	if err != nil {
 		return nil, err

@@ -16,6 +16,12 @@ var ErrMissingEncryptionConfigToEncrypt = errors.New("missing encryption config 
 
 var defaultCreateWorkers = runtime.GOMAXPROCS(0) * 2
 
+type FileSavedSize int64
+
+func (s FileSavedSize) Int64() int64 {
+	return int64(s)
+}
+
 type Create struct {
 	sourceRepo      SourceRepository
 	manifestRepo    ManifestRepository
@@ -77,14 +83,15 @@ func (c *Create) Do(ctx context.Context, repoPath, sourcePath string, privateKey
 
 	indexes := make(chan int)
 
+	var savedFiles []File
+
 	worker := func() {
 		defer wg.Done()
 		for i := range indexes {
-			originalSize := files[i].Size()
-
+			var savedFileSize FileSavedSize
 			calculatedFile, err := calculator.Calculate(ctx, &files[i], conf.Compression())
 			if err == nil {
-				err = c.saveFileObjects(ctx, calculatedFile, conf.Compression(), symmetricKey, generation)
+				savedFileSize, err = c.saveFileObjects(ctx, calculatedFile, conf.Compression(), symmetricKey, generation)
 			}
 			if err != nil {
 				mu.Lock()
@@ -96,8 +103,10 @@ func (c *Create) Do(ctx context.Context, repoPath, sourcePath string, privateKey
 				continue
 			}
 
-			atomic.AddInt64(&totalSize, originalSize)
-			files[i] = *calculatedFile
+			atomic.AddInt64(&totalSize, savedFileSize.Int64())
+			if savedFileSize.Int64() > 0 {
+				savedFiles = append(savedFiles, *calculatedFile)
+			}
 		}
 	}
 
@@ -126,22 +135,24 @@ feed:
 	if err := c.manifestRepo.Save(ctx, manifest); err != nil {
 		return nil, err
 	}
-
-	return NewCreateResult(manifest.Id(), len(manifest.Files()), totalSize), nil
+	return NewCreateResult(manifest.Id(), len(savedFiles), totalSize), nil
 }
 
-func (c *Create) saveFileObjects(ctx context.Context, file *File, comp *repository.Compression, key []byte, generation uint64) error {
+func (c *Create) saveFileObjects(ctx context.Context, file *File, comp *repository.Compression, key []byte, generation uint64) (FileSavedSize, error) {
 	if len(file.Chunks()) == 0 {
-		return c.saveObject(ctx, file.Path(), file.Hash(), comp, key, generation)
+		return c.saveObject(ctx, file, comp, key, generation)
 	}
 
+	var savedChunksSize FileSavedSize
 	for _, chunk := range file.Chunks() {
-		if err := c.saveChunk(ctx, file.Path(), chunk, comp, key, generation); err != nil {
-			return err
+		savedSize, err := c.saveChunk(ctx, file.Path(), chunk, comp, key, generation)
+		if err != nil {
+			return 0, err
 		}
+		savedChunksSize += savedSize
 	}
 
-	return nil
+	return savedChunksSize, nil
 }
 
 func (c *Create) getSymmetricKey(ctx context.Context, encryptionConfig *encryption.EncryptionConfig, privateKeyPath *string) ([]byte, error) {
@@ -159,30 +170,36 @@ func (c *Create) getSymmetricKey(ctx context.Context, encryptionConfig *encrypti
 	return nil, nil
 }
 
-func (c *Create) saveObject(ctx context.Context, filePath, hash string, comp *repository.Compression, key []byte, generation uint64) error {
-	exists, err := c.objectRepo.AlreadyExists(ctx, hash, key, generation)
+func (c *Create) saveObject(ctx context.Context, file *File, comp *repository.Compression, key []byte, generation uint64) (FileSavedSize, error) {
+	exists, err := c.objectRepo.AlreadyExists(ctx, file.Hash(), key, generation)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	if exists {
-		return nil
+		return 0, nil
 	}
 
-	return c.objectRepo.Save(ctx, filePath, hash, comp, key, generation)
+	if err := c.objectRepo.Save(ctx, file.Path(), file.Hash(), comp, key, generation); err != nil {
+		return 0, err
+	}
+	return FileSavedSize(file.Size()), nil
 }
 
-func (c *Create) saveChunk(ctx context.Context, filePath string, chunk Chunk, comp *repository.Compression, symmetricKey []byte, generation uint64) error {
+func (c *Create) saveChunk(ctx context.Context, filePath string, chunk Chunk, comp *repository.Compression, symmetricKey []byte, generation uint64) (FileSavedSize, error) {
 	exists, err := c.objectRepo.AlreadyExists(ctx, chunk.Hash(), symmetricKey, generation)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	if exists {
-		return nil
+		return 0, nil
 	}
 
-	return c.objectRepo.SaveChunk(ctx, filePath, chunk.Hash(), chunk.Offset(), chunk.Size(), comp, symmetricKey, generation)
+	if err := c.objectRepo.SaveChunk(ctx, filePath, chunk.Hash(), chunk.Offset(), chunk.Size(), comp, symmetricKey, generation); err != nil {
+		return 0, err
+	}
+	return FileSavedSize(chunk.Size()), nil
 }
 
 func NewCreate(

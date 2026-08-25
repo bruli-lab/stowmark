@@ -17,7 +17,8 @@ func (h *Handler) ReKey(ctx context.Context, privateKeyPath, publicKeyPath strin
 		_ = obsv.Shutdown(ctx)
 	}()
 	svc := snapshot.NewReKey(h.folderRepository, h.symmetricKeyRepository, h.asymmetricKeyPaiRepository, h.objectRepository)
-	mdw, err := middlewares.BuildCommandMiddlewares(obsv)
+	evtr := app.NewEventsTracing()
+	mdw, err := middlewares.BuildCommandMiddlewares(obsv, evtr)
 	if err != nil {
 		return err
 	}

@@ -28,7 +28,12 @@ func (r RestoreFile) Handle(ctx context.Context, cmd cqs.Command) ([]event.Event
 	if !ok {
 		return nil, cqs.NewInvalidCommandError(RestoreFileCommandName, cmd.Name())
 	}
-	return nil, r.svc.Restore(ctx, co.SnapshotID, co.FilePath, co.RepositoryPath, co.DestinationPath, co.PrivateKeyPath)
+	if err := r.svc.Restore(ctx, co.SnapshotID, co.FilePath, co.RepositoryPath, co.DestinationPath, co.PrivateKeyPath); err != nil {
+		return nil, err
+	}
+	return []event.Event{
+		NewRestoreSnapshotEvent(co.SnapshotID, 1, nil, true),
+	}, nil
 }
 
 func NewRestoreFile(svc *snapshot.RestoreFile) *RestoreFile {

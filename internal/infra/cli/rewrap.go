@@ -33,7 +33,8 @@ func newKeyRewrapCommand() *cobra.Command {
 			symmetricRepo := encrypt.NewSymmetricRepository()
 			folderRepo := disk.NewFolderRepositoryRepository()
 			svc := repository.NewRewrap(folderRepo, symmetricRepo, asymmetricRepo)
-			multiMdw, err := middlewares.BuildCommandMiddlewares(obsv)
+			evtr := app.NewEventsTracing()
+			multiMdw, err := middlewares.BuildCommandMiddlewares(obsv, evtr)
 			if err != nil {
 				return err
 			}

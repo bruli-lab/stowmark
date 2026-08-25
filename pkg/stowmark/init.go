@@ -48,7 +48,8 @@ func (h *Handler) Init(ctx context.Context, comp *Compression, formatVersion int
 	defer func() {
 		_ = obsv.Shutdown(ctx)
 	}()
-	mdw, err := middlewares.BuildCommandMiddlewares(obsv)
+	evtr := app.NewEventsTracing()
+	mdw, err := middlewares.BuildCommandMiddlewares(obsv, evtr)
 	if err != nil {
 		return err
 	}

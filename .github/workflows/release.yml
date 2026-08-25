@@ -196,3 +196,59 @@ jobs:
             @semantic-release/exec
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  windows-installer:
+    name: Windows installer
+    needs:
+      - release
+
+    if: needs.release.outputs.released == 'true'
+    runs-on: windows-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build Windows executable
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist\windows | Out-Null
+          go build -o dist\windows\stowmark.exe ./cmd/cli
+
+      - name: Build Windows installer
+        shell: pwsh
+        env:
+          APP_VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          $compiler = (Get-Command iscc.exe).Source
+          & $compiler `
+            "/DAppVersion=$env:APP_VERSION" `
+            "/DSourceExe=$env:GITHUB_WORKSPACE\dist\windows\stowmark.exe" `
+            "/DOutputDir=$env:GITHUB_WORKSPACE\dist\windows" `
+            packaging\windows\stowmark.iss
+
+      - name: Upload Windows installer
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APP_VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          $installer = "dist\windows\stowmark_$($env:APP_VERSION)_windows_amd64_setup.exe"
+          $checksum = (Get-FileHash -Algorithm SHA256 $installer).Hash.ToLowerInvariant()
+          $filename = Split-Path -Leaf $installer
+          "$checksum  $filename" | Set-Content -NoNewline "$installer.sha256"
+
+          gh release upload `
+            "v$env:APP_VERSION" `
+            $installer `
+            "$installer.sha256" `
+            --clobber
