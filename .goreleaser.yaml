@@ -17,6 +17,31 @@ builds:
       - amd64
       - arm64
 
+  - id: stowmark_cli_windows
+    main: ./cmd/cli
+    binary: stowmark
+
+    env:
+      - CGO_ENABLED=0
+
+    goos:
+      - windows
+
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: stowmark_archives
+    ids:
+      - stowmark_cli
+      - stowmark_cli_windows
+
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+
 nfpms:
   - id: stowmark_deb
     package_name: stowmark

@@ -46,8 +46,9 @@ the source path, creation time and references to its files.
 - Remote repositories in Google Cloud Storage using Application Default Credentials.
 - Remote repositories over WebDAV using username and password authentication.
 - Optional OpenTelemetry observability through an OTLP-compatible collector.
-- Linux builds for `amd64` and `arm64`.
+- Linux and Windows builds for `amd64` and `arm64`.
 - Debian packages generated with GoReleaser.
+- Windows installer for `amd64`.
 
 ## Installation
 
@@ -59,6 +60,23 @@ and install it with:
 
 ```bash
 sudo dpkg -i stowmark_*.deb
+```
+
+### Windows
+
+Download the `amd64` installer from the
+[latest GitHub release](https://github.com/bruli-lab/stowmark/releases/latest),
+run it and open a new PowerShell window:
+
+```powershell
+stowmark --help
+```
+
+Portable ZIP files are also available for `amd64` and `arm64`. Extract the ZIP
+and run `stowmark.exe` directly:
+
+```powershell
+.\stowmark.exe --help
 ```
 
 ### Build from source
@@ -761,8 +779,9 @@ Releases are created from `main` using Semantic Release and GoReleaser.
 
 A successful release produces:
 
-- Linux binaries for `amd64` and `arm64`.
+- Linux and Windows binaries for `amd64` and `arm64`.
 - Debian packages.
+- A Windows installer for `amd64`.
 - SHA-256 checksums.
 - A GitHub release with the generated assets.
 
