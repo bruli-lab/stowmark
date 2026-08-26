@@ -14,6 +14,12 @@ const projects = [
     summary: document.querySelector("#console-release-summary"),
     grid: document.querySelector("#console-download-grid"),
     error: document.querySelector("#console-release-error")
+  },
+  {
+    repository: "stowmark-observability",
+    summary: document.querySelector("#observability-release-summary"),
+    grid: document.querySelector("#observability-download-grid"),
+    error: document.querySelector("#observability-release-error")
   }
 ];
 
