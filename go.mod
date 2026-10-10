@@ -4,12 +4,12 @@ go 1.27.0
 
 require (
 	cloud.google.com/go/storage v1.67.1
-	github.com/aws/aws-sdk-go-v2 v1.47.0
+	github.com/aws/aws-sdk-go-v2 v1.47.3
 	github.com/aws/aws-sdk-go-v2/config v1.33.5
-	github.com/aws/aws-sdk-go-v2/credentials v1.20.5
+	github.com/aws/aws-sdk-go-v2/credentials v1.20.9
 	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.3.16
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.107.4
-	github.com/aws/smithy-go v1.28.1
+	github.com/aws/smithy-go v1.28.5
 	github.com/bruli-lab/go-core v1.8.0
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/cloudsoda/go-smb2 v0.0.0-20260918041005-0c5d69b69701
@@ -57,18 +57,18 @@ require (
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.57.0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.19 // indirect
-	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.20.0 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/configsources v1.5.3 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.8.3 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/v4a v1.5.3 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.19 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.20.3 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.5.6 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.8.6 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/v4a v1.5.6 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.21 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.9.32 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.14.3 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.14.6 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.40 // indirect
-	github.com/aws/aws-sdk-go-v2/service/signin v1.10.0 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sso v1.38.0 // indirect
-	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.43.0 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sts v1.51.0 // indirect
+	github.com/aws/aws-sdk-go-v2/service/signin v1.10.4 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sso v1.38.4 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.43.4 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sts v1.51.4 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/bitfield/gotestdox v0.2.2 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
