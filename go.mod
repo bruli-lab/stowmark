@@ -22,7 +22,7 @@ require (
 	github.com/stretchr/testify v1.12.1
 	github.com/studio-b12/gowebdav v0.13.0
 	github.com/testcontainers/testcontainers-go v0.44.0
-	github.com/ulikunitz/xz v0.5.16
+	github.com/ulikunitz/xz v0.5.17
 	go.opentelemetry.io/contrib/bridges/otelslog v0.20.1
 	go.opentelemetry.io/otel v1.46.0
 	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc v0.21.0
