@@ -12,7 +12,7 @@ require (
 	github.com/aws/smithy-go v1.28.6
 	github.com/bruli-lab/go-core v1.8.0
 	github.com/caarlos0/env/v11 v11.4.1
-	github.com/cloudsoda/go-smb2 v0.0.0-20260918041005-0c5d69b69701
+	github.com/cloudsoda/go-smb2 v0.0.0-20261029174947-95daac2ef783
 	github.com/google/uuid v1.6.0
 	github.com/klauspost/compress v1.19.2
 	github.com/moby/moby/api v1.55.0
