@@ -12,9 +12,9 @@ require (
 	github.com/aws/smithy-go v1.28.7
 	github.com/bruli-lab/go-core v1.8.0
 	github.com/caarlos0/env/v11 v11.4.1
-	github.com/cloudsoda/go-smb2 v0.0.0-20261029174947-95daac2ef783
+	github.com/cloudsoda/go-smb2 v0.0.0-20261105190815-95be04a983b8
 	github.com/google/uuid v1.6.0
-	github.com/klauspost/compress v1.19.2
+	github.com/klauspost/compress v1.20.2
 	github.com/moby/moby/api v1.55.0
 	github.com/pierrec/lz4/v4 v4.1.33
 	github.com/pkg/sftp v1.13.11
@@ -79,7 +79,7 @@ require (
 	github.com/charmbracelet/x/ansi v0.9.2 // indirect
 	github.com/charmbracelet/x/cellbuf v0.0.13 // indirect
 	github.com/charmbracelet/x/term v0.2.1 // indirect
-	github.com/cloudsoda/sddl v0.0.0-20250224235906-926454e91efc // indirect
+	github.com/cloudsoda/sddl v0.0.0-20261105185302-1c8f96799263 // indirect
 	github.com/cncf/xds/go v0.0.0-20260202195803-dba9d589def2 // indirect
 	github.com/containerd/errdefs v1.0.0 // indirect
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
@@ -153,7 +153,7 @@ require (
 	go.opentelemetry.io/proto/otlp v1.11.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/mod v0.41.0 // indirect
-	golang.org/x/net v0.61.0 // indirect
+	golang.org/x/net v0.62.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/telemetry v0.0.0-20260924152758-ed294f943157 // indirect
