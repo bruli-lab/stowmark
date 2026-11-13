@@ -11,7 +11,7 @@ import (
 func BuildQueryMiddlewares(obsv *observabilityinfra.OTLPObservability) (cqs.QueryHandlerMiddleware, error) {
 	loggerMdw := app.NewLoggerQueryMiddleware(obsv.Logger)
 	tracerMdw := app.NewTracerQueryMiddleware(obsv.TracerProvider)
-	meterMdw, err := app.NewMeterQueryMiddleware(obsv.MeterProvider)
+	meterMdw, err := NewMeterQueryMiddleware(obsv.MeterProvider)
 	if err != nil {
 		return nil, fmt.Errorf("create meter middleware: %w", err)
 	}

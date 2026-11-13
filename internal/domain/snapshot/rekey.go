@@ -81,7 +81,7 @@ func (r *ReKey) Do(ctx context.Context, repositoryPath, privateKeyPath, publicKe
 			return
 		}
 
-		cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 		defer cancel()
 
 		cleanupErr := r.objectRepo.AbortRekey(cleanupCtx, newGeneration)

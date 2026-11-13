@@ -53,12 +53,11 @@ func TestCreateAsymmetricKeyPair_Create(t *testing.T) {
 			}
 			svc := encryption.NewCreateAsymmetricKeyPair(repo)
 			err := svc.Create(t.Context(), tt.args.keyPairs)
-			if err != nil {
-				require.ErrorAs(t, err, &tt.expectedErr)
-			}
 			if tt.expectedErr != nil {
-				require.Error(t, err)
+				require.ErrorIs(t, err, tt.expectedErr)
+				return
 			}
+			require.NoError(t, err)
 		})
 	}
 }

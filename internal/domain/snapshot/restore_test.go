@@ -69,13 +69,11 @@ func TestRestore_Restore(t *testing.T) {
 
 			svc := snapshot.NewRestore(manifestRepo, objectRepo, folderRepo, encryption.NewDecryptSymmetricKey(symmetricRepo, asymmetricRepo))
 			result, err := svc.Restore(t.Context(), tt.args.snapshotID, "repository-path", tt.args.destinationPath, tt.args.privateKey)
-			if err != nil {
-				require.ErrorAs(t, err, &tt.expectedErr)
+			if tt.expectedErr != nil {
+				require.ErrorIs(t, err, tt.expectedErr)
 				return
 			}
-			if tt.expectedErr != nil {
-				require.Error(t, err)
-			}
+			require.NoError(t, err)
 			require.Equal(t, tt.args.snapshotID, result.SnapshotID())
 			require.Equal(t, tt.expectedSuccess, result.IsSuccess())
 			require.Len(t, result.Failed(), tt.expectedFailedLen)

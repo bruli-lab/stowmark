@@ -106,10 +106,11 @@ func TestHashCalculatorFactory_Handle(t *testing.T) {
 				return
 			}
 			file, err := calc.Calculate(t.Context(), tt.args.file, nil)
-			if err != nil {
-				require.ErrorAs(t, err, &tt.expectedErr)
+			if tt.expectedErr != nil {
+				require.ErrorIs(t, err, tt.expectedErr)
 				return
 			}
+			require.NoError(t, err)
 			require.NotNil(t, file, "file should not be nil")
 		})
 	}

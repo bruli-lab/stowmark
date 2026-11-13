@@ -7,6 +7,9 @@ builds:
     main: ./cmd/cli
     binary: stowmark
 
+    ldflags:
+      - -s -w -X github.com/bruli-lab/stowmark/internal/infra/cli.version={{ .Version }}
+
     env:
       - CGO_ENABLED=0
 
@@ -20,6 +23,9 @@ builds:
   - id: stowmark_cli_windows
     main: ./cmd/cli
     binary: stowmark
+
+    ldflags:
+      - -s -w -X github.com/bruli-lab/stowmark/internal/infra/cli.version={{ .Version }}
 
     env:
       - CGO_ENABLED=0

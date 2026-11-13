@@ -1,14 +1,20 @@
 name: Setup Go and Task
 
-description: Setup Go, cache modules and install Task
+description: Setup Go from go.mod, cache modules and install Task
+
+inputs:
+  task-version:
+    description: Task version to install
+    required: false
+    default: 'v3.54.0' # renovate: task
 
 runs:
   using: composite
   steps:
-    - name: Set up Go 1.27.2
+    - name: Set up Go from go.mod
       uses: actions/setup-go@v7
       with:
-        go-version: '1.27.3'
+        go-version-file: go.mod
         cache: false
 
     - name: Cache Go modules
@@ -23,6 +29,8 @@ runs:
 
     - name: Install Task
       shell: bash
+      env:
+        TASK_VERSION: ${{ inputs.task-version }}
       run: |
-        go install github.com/go-task/task/v3/cmd/task@latest
+        go install "github.com/go-task/task/v3/cmd/task@${TASK_VERSION}"
         echo "$HOME/go/bin" >> "$GITHUB_PATH"

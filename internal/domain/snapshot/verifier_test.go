@@ -164,13 +164,11 @@ func TestVerifier_Verify(t *testing.T) {
 			}
 			svc := snapshot.NewVerifier(objectRepo, manifestRepo, folderRepo, encryption.NewDecryptSymmetricKey(symmetricRepo, asymmetricRepo))
 			got, err := svc.Verify(t.Context(), tt.args.repositoryPath, tt.args.snapshotID, tt.args.privateKey)
-			if err != nil {
-				require.ErrorAs(t, err, &tt.expectedErr)
+			if tt.expectedErr != nil {
+				require.ErrorIs(t, err, tt.expectedErr)
 				return
 			}
-			if tt.expectedErr != nil {
-				require.Error(t, err)
-			}
+			require.NoError(t, err)
 			require.Equal(t, tt.expectedSuccess, got.IsSuccess())
 			require.Equal(t, tt.args.snapshotID, got.SnapshotID())
 			require.Len(t, got.Failed(), tt.expectedFailedLen)

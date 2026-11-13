@@ -18,6 +18,11 @@ linters:
     - misspell
     - unconvert
     - dupl
+    - depguard
+    - errorlint
+    - testifylint
+    - contextcheck
+    - noctx
 
   settings:
     dupl:
@@ -37,16 +42,42 @@ linters:
         - performance
         - style
 
+    depguard:
+      rules:
+        domain:
+          files:
+            - "**/internal/domain/**"
+          deny:
+            - pkg: github.com/bruli-lab/stowmark/internal/app
+              desc: the domain must not depend on the application layer
+            - pkg: github.com/bruli-lab/stowmark/internal/infra
+              desc: the domain must not depend on infrastructure
+            - pkg: github.com/bruli-lab/stowmark/internal/config
+              desc: the domain must not read configuration
+            - pkg: github.com/bruli-lab/stowmark/pkg
+              desc: the domain must not depend on the public API
+        app:
+          files:
+            - "**/internal/app/**"
+          deny:
+            - pkg: github.com/bruli-lab/stowmark/internal/infra
+              desc: the application layer must depend on ports, not on infrastructure
+            - pkg: github.com/bruli-lab/stowmark/internal/config
+              desc: the application layer must not read configuration
+            - pkg: github.com/bruli-lab/stowmark/pkg
+              desc: the application layer must not depend on the public API
+
   exclusions:
     rules:
       - path: '_test\.go$'
         linters:
           - dupl
-issues:
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - errcheck
+          - errcheck
+
+formatters:
+  enable:
+    - gofumpt
+    - goimports
 
 output:
   formats:

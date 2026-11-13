@@ -1,4 +1,4 @@
-package app
+package middlewares
 
 import (
 	"context"
@@ -10,6 +10,8 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 )
+
+const instrumentationName = "github.com/bruli-lab/stowmark/internal/infra/middlewares"
 
 func NewMeterCommandMiddleware(provider metric.MeterProvider) (cqs.CommandHandlerMiddleware, error) {
 	meter := provider.Meter(instrumentationName)

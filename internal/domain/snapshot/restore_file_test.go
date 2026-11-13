@@ -49,7 +49,7 @@ func TestRestoreFile_Restore(t *testing.T) {
 			name:        "and find file returns error, then it returns a restore file error",
 			args:        args{filePath: "source/path4"},
 			manifest:    new(fixtures.ManifestBuilder{Files: files}.Build()),
-			expectedErr: snapshot.RestoreFileError{},
+			expectedErr: snapshot.ErrFileNotInSnapshot,
 		},
 		{
 			name:        "and restore object returns error, then it returns same error",
@@ -93,12 +93,11 @@ func TestRestoreFile_Restore(t *testing.T) {
 			}
 			svc := snapshot.NewRestoreFile(manifestRepo, objectRepo, folderRepo, encryption.NewDecryptSymmetricKey(symmetricRepo, asymmetricRepo))
 			err := svc.Restore(t.Context(), uuid.NewString(), tt.args.filePath, "repository-path", tt.args.destinationPath, tt.args.privateKey)
-			if err != nil {
-				require.ErrorAs(t, err, &tt.expectedErr)
-			}
 			if tt.expectedErr != nil {
-				require.Error(t, err)
+				require.ErrorIs(t, err, tt.expectedErr)
+				return
 			}
+			require.NoError(t, err)
 		})
 	}
 }

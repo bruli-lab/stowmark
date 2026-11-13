@@ -287,13 +287,11 @@ func TestReKey_Do(t *testing.T) {
 			svc := snapshot.NewReKey(folderRepo, symmetricRepo, asymmetricRepo, objectRepo)
 			err := svc.Do(t.Context(), tt.args.repositoryPath, tt.args.privateKeyPath, tt.args.publicKeyPath)
 			require.Len(t, objectRepo.AbortRekeyCalls(), tt.abortCalls)
-			if err != nil {
-				require.ErrorAs(t, err, &tt.expectedErr)
+			if tt.expectedErr != nil {
+				require.ErrorIs(t, err, tt.expectedErr)
 				return
 			}
-			if tt.expectedErr != nil {
-				require.Error(t, err)
-			}
+			require.NoError(t, err)
 		})
 	}
 }

@@ -106,13 +106,11 @@ func TestInit_Do(t *testing.T) {
 			}
 			svc := repository.NewInit(repo)
 			_, err := svc.Do(t.Context(), tt.args.r, false)
-			if err != nil {
-				require.ErrorAs(t, err, &tt.expectedErr)
+			if tt.expectedErr != nil {
+				require.ErrorIs(t, err, tt.expectedErr)
 				return
 			}
-			if tt.expectedErr != nil {
-				require.Error(t, err)
-			}
+			require.NoError(t, err)
 		})
 	}
 }

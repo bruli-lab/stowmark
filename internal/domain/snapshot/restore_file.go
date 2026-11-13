@@ -2,11 +2,14 @@ package snapshot
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 )
+
+var ErrFileNotInSnapshot = errors.New("file not found in snapshot")
 
 type RestoreFile struct {
 	manifestRepo  ManifestRepository
@@ -56,7 +59,7 @@ func (r *RestoreFile) findFile(man *Manifest, filePath string) (*File, error) {
 			return &f, nil
 		}
 	}
-	return nil, NewRestoreFileError("file not found: " + filePath + "")
+	return nil, fmt.Errorf("%w: %s", ErrFileNotInSnapshot, filePath)
 }
 
 func NewRestoreFile(
@@ -70,16 +73,4 @@ func NewRestoreFile(
 		objectRepo:    objectRepo,
 		symKeyHandler: newSymmetricKeyHandler(folderRepo, decryptKeySvc),
 	}
-}
-
-type RestoreFileError struct {
-	msg string
-}
-
-func (r RestoreFileError) Error() string {
-	return fmt.Sprintf("failed to restore file: %s", r.msg)
-}
-
-func NewRestoreFileError(msg string) *RestoreFileError {
-	return &RestoreFileError{msg: msg}
 }

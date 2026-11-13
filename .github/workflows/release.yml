@@ -27,6 +27,12 @@ jobs:
       - name: Setup Go and Task
         uses: ./.github/actions/setup-go-task
 
+      - name: Check formatting
+        run: task fmt-check
+
+      - name: Check go.mod and go.sum
+        run: task tidy-check
+
       - name: Lint
         run: task lint
 
@@ -99,10 +105,14 @@ jobs:
         run: |
           set -euo pipefail
 
-          curl -fsSLo trivy.tar.gz \
-            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          release_url="https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}"
+          archive="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
 
-          tar -xzf trivy.tar.gz trivy
+          curl -fsSLo "${archive}" "${release_url}/${archive}"
+          curl -fsSLo trivy_checksums.txt "${release_url}/trivy_${TRIVY_VERSION}_checksums.txt"
+          grep " ${archive}\$" trivy_checksums.txt | sha256sum --check --strict -
+
+          tar -xzf "${archive}" trivy
           sudo install -m 0755 trivy /usr/local/bin/trivy
 
           trivy --version
@@ -221,9 +231,12 @@ jobs:
 
       - name: Build Windows executable
         shell: pwsh
+        env:
+          CGO_ENABLED: '0'
+          APP_VERSION: ${{ needs.release.outputs.version }}
         run: |
           New-Item -ItemType Directory -Force dist\windows | Out-Null
-          go build -o dist\windows\stowmark.exe ./cmd/cli
+          go build -ldflags "-s -w -X github.com/bruli-lab/stowmark/internal/infra/cli.version=$env:APP_VERSION" -o dist\windows\stowmark.exe ./cmd/cli
 
       - name: Build Windows installer
         shell: pwsh

@@ -9,6 +9,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var version = "dev"
+
 func Execute() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -16,6 +18,7 @@ func Execute() error {
 	rootCmd := &cobra.Command{
 		Use:           "stowmark",
 		Short:         "Immutable snapshot backup tool",
+		Version:       version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}

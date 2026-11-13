@@ -226,10 +226,11 @@ func TestCreate_Do(t *testing.T) {
 				decryptSvc,
 			)
 			result, err := svc.Do(t.Context(), tt.args.repoPath, tt.args.sourcePath, tt.args.privateKey)
-			if err != nil {
-				require.ErrorAs(t, err, &tt.expectedErr)
+			if tt.expectedErr != nil {
+				require.ErrorIs(t, err, tt.expectedErr)
 				return
 			}
+			require.NoError(t, err)
 			require.NotEmpty(t, result.Id())
 			require.Equal(t, tt.expectedFileCount, result.FileCount())
 			require.Equal(t, tt.expectedTotalSize, result.TotalSize())

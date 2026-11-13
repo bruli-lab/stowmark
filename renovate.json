@@ -1,3 +1,72 @@
 {
-  "$schema": "https://docs.renovatebot.com/renovate-schema.json"
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigests",
+    ":semanticCommits"
+  ],
+  "postUpdateOptions": [
+    "gomodTidy"
+  ],
+  "packageRules": [
+    {
+      "description": "Keep the go directive in go.mod up to date; CI reads the Go version from go.mod",
+      "matchDatasources": [
+        "golang-version"
+      ],
+      "rangeStrategy": "bump"
+    },
+    {
+      "description": "Group AWS SDK modules in a single pull request",
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchPackageNames": [
+        "github.com/aws/**"
+      ],
+      "groupName": "aws-sdk-go-v2"
+    },
+    {
+      "description": "Group OpenTelemetry modules in a single pull request",
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchPackageNames": [
+        "go.opentelemetry.io/**"
+      ],
+      "groupName": "opentelemetry"
+    },
+    {
+      "description": "Group Google Cloud modules in a single pull request",
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchPackageNames": [
+        "cloud.google.com/**",
+        "google.golang.org/**"
+      ],
+      "groupName": "google-cloud"
+    },
+    {
+      "description": "Group GitHub Actions updates",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "groupName": "github-actions"
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Task version installed by the setup-go-task action",
+      "managerFilePatterns": [
+        "/^\\.github/actions/setup-go-task/action\\.yml$/"
+      ],
+      "matchStrings": [
+        "default: '(?<currentValue>v[0-9.]+)' # renovate: task"
+      ],
+      "depNameTemplate": "github.com/go-task/task/v3",
+      "datasourceTemplate": "go"
+    }
+  ]
 }

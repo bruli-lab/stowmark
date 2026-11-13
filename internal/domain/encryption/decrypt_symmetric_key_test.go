@@ -56,10 +56,11 @@ func TestDecryptSymmetricKey_Decrypt(t *testing.T) {
 			}
 			svc := encryption.NewDecryptSymmetricKey(symmetricRepo, asymmetricRepo)
 			got, err := svc.Decrypt(t.Context(), tt.args.privateKeyPath, tt.args.encodedKey)
-			if err != nil {
-				require.ErrorAs(t, err, &tt.expectedErr)
+			if tt.expectedErr != nil {
+				require.ErrorIs(t, err, tt.expectedErr)
 				return
 			}
+			require.NoError(t, err)
 			require.Equal(t, tt.expectedKey, got)
 			got2, err := svc.Decrypt(t.Context(), tt.args.privateKeyPath, tt.args.encodedKey)
 			require.NoError(t, err)

@@ -39,23 +39,55 @@ tasks:
       - task --list
 
   fmt:
-    desc: Formating Go with gofumpt
+    desc: Format Go code with gofumpt
     cmds:
       - |
         set -euo pipefail
         echo "👉 Formatting code with gofumpt..."
         go tool gofumpt -w .
 
+  fmt-check:
+    desc: Fail if any Go file is not formatted with gofumpt
+    cmds:
+      - |
+        set -euo pipefail
+        echo "👉 Checking gofumpt formatting..."
+        unformatted="$(go tool gofumpt -l .)"
+        if [ -n "$unformatted" ]; then
+          echo "These files are not formatted with gofumpt:"
+          echo "$unformatted"
+          exit 1
+        fi
+
   fix:
-    desc: fixing code
+    desc: Apply go fix modernizations
     cmds:
       - |
         set -euo pipefail
         echo "👉 Running go fix..."
         go fix -v ./...
 
+  tidy:
+    desc: Tidy go.mod and go.sum
+    cmds:
+      - go mod tidy
+
+  tidy-check:
+    desc: Fail if go.mod or go.sum are not tidy, and verify module checksums
+    cmds:
+      - |
+        set -euo pipefail
+        echo "👉 Checking go.mod and go.sum..."
+        go mod tidy -diff
+        go mod verify
+
+  generate:
+    desc: Regenerate moq mocks
+    cmds:
+      - go generate ./...
+
   security:
-    desc: Check vulnerabilities
+    desc: Check vulnerabilities with govulncheck
     cmds:
       - |
         set -euo pipefail
@@ -63,7 +95,9 @@ tasks:
         go tool govulncheck ./...
 
   install-lint:
-    desc: Instal·lar golangci-lint
+    desc: Install golangci-lint {{.GOLANGCI_LINT_VERSION}}
+    status:
+      - golangci-lint version 2>/dev/null | grep -q "version {{trimPrefix "v" .GOLANGCI_LINT_VERSION}} "
     cmds:
       - |
         set -euo pipefail
@@ -71,7 +105,7 @@ tasks:
         go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@{{.GOLANGCI_LINT_VERSION}}
 
   lint:
-    desc: Executing golangci-lint
+    desc: Run golangci-lint (linters and formatters)
     deps:
       - install-lint
     cmds:
@@ -81,7 +115,7 @@ tasks:
         golangci-lint run ./...
 
   unit-test:
-    desc: Executing unit tests amb race, coverage i tparse
+    desc: Run unit tests with race detector, coverage and tparse
     cmds:
       - |
         set -euo pipefail
@@ -89,31 +123,52 @@ tasks:
         go test -race ./... -json -cover -coverprofile=coverage.out | go tool tparse -all
 
   integration-test:
-    desc: Run integration tests
+    desc: Run integration tests (needs Docker) with coverage and tparse
     cmds:
       - |
         set -euo pipefail
         echo "🧪 Running integration tests..."
-        go tool gotestsum \
-          --format testname \
-          -- \
+        go test \
           -tags=integration \
           -count=1 \
-          ./pkg/stowmark
+          -json \
+          -coverpkg=./internal/...,./pkg/... \
+          -coverprofile=coverage-integration.out \
+          ./pkg/stowmark | go tool tparse -all
+
+  coverage:
+    desc: Show unit test coverage per function
+    deps:
+      - unit-test
+    cmds:
+      - go tool cover -func=coverage.out
 
   check:
-    desc: Executing fmt, security, lint i test
-    deps:
-      - fmt
-      - fix
-      - security
-      - lint
-      - unit-test
+    desc: Format, fix, tidy and then run security, lint and unit tests in order
+    cmds:
+      - task: fmt
+      - task: fix
+      - task: tidy
+      - task: security
+      - task: lint
+      - task: unit-test
+
+  ci:
+    desc: Run the same read-only checks as the CI pipeline
+    cmds:
+      - task: fmt-check
+      - task: tidy-check
+      - task: security
+      - task: lint
+      - task: unit-test
 
   build:
-    desc: Compiling binary
+    desc: Compile the stowmark binary with the version from git
+    vars:
+      VERSION:
+        sh: git describe --tags --always --dirty 2>/dev/null || echo dev
     cmds:
       - |
         set -euo pipefail
-        echo "Compiling stowmark binary..."
-        go build -o stowmark ./cmd/cli
+        echo "Compiling stowmark {{.VERSION}}..."
+        go build -ldflags "-s -w -X github.com/bruli-lab/stowmark/internal/infra/cli.version={{.VERSION}}" -o stowmark ./cmd/cli

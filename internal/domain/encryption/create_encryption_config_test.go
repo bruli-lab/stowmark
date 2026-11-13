@@ -72,13 +72,11 @@ func TestCreateEncryptionConfig_Create(t *testing.T) {
 			}
 			svc := encryption.NewCreateEncryptionConfig(asymmetricKeyPairRepo, symmetricRepo)
 			config, err := svc.Create(t.Context(), tt.args.publicKeyPath)
-			if err != nil {
-				require.ErrorAs(t, err, &tt.expectedErr)
+			if tt.expectedErr != nil {
+				require.ErrorIs(t, err, tt.expectedErr)
 				return
 			}
-			if tt.expectedErr != nil {
-				require.Error(t, err)
-			}
+			require.NoError(t, err)
 			require.NotNil(t, config)
 			require.NotEmpty(t, config.EncryptedKey())
 			require.NotEmpty(t, config.PublicKeyFingerprint())
