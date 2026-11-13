@@ -256,12 +256,12 @@ func TestObjectRepository_RestoreObject(t *testing.T) {
 			encrypted: true,
 		},
 		{
-			name:        "with an object replaced by another one, then it returns a hash mismatch error and removes the restored file",
+			name:        "with an object replaced by another one, then it returns a hash mismatch error and keeps the previous file",
 			tamper:      true,
 			expectedErr: object.ErrHashMismatch,
 		},
 		{
-			name:        "with an encrypted object replaced by another one, then it returns a hash mismatch error and removes the restored file",
+			name:        "with an encrypted object replaced by another one, then it returns a hash mismatch error and keeps the previous file",
 			encrypted:   true,
 			tamper:      true,
 			expectedErr: object.ErrHashMismatch,
@@ -295,7 +295,11 @@ func TestObjectRepository_RestoreObject(t *testing.T) {
 				require.NoError(t, os.Rename(otherPath, originalPath))
 			}
 
-			destination := filepath.Join(t.TempDir(), "restored", "file.bin")
+			destinationDirectory := filepath.Join(t.TempDir(), "restored")
+			require.NoError(t, os.MkdirAll(destinationDirectory, 0o755))
+			destination := filepath.Join(destinationDirectory, "file.bin")
+			previous := []byte("previous content")
+			require.NoError(t, os.WriteFile(destination, previous, 0o600))
 			size := int64(len(original))
 			file := fixtures.FileBuilder{Path: &destination, Size: &size, Hash: &hash}.Build()
 
@@ -303,7 +307,10 @@ func TestObjectRepository_RestoreObject(t *testing.T) {
 
 			if tt.expectedErr != nil {
 				require.ErrorIs(t, err, tt.expectedErr)
-				require.NoFileExists(t, destination)
+				kept, readErr := os.ReadFile(destination)
+				require.NoError(t, readErr)
+				require.Equal(t, previous, kept)
+				require.Len(t, repositoryFiles(t, destinationDirectory), 1)
 				return
 			}
 			require.NoError(t, err)

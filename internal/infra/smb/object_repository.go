@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"os"
 	"path"
-	"path/filepath"
 	"sort"
 
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
@@ -356,83 +355,9 @@ func (o ObjectRepository) AlreadyExists(ctx context.Context, hash string, symmet
 }
 
 func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Compression, obj *snapshot.File, symmetricKey []byte, generation uint64) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-
-	if comp == nil {
-		return errors.New("compression configuration is required")
-	}
-
-	if obj == nil {
-		return errors.New("snapshot object is required")
-	}
-
-	hashes, err := object.GetHashes(obj)
-	if err != nil {
-		return err
-	}
-
-	destinationPath := obj.Path()
-
-	if err := os.MkdirAll(
-		filepath.Dir(destinationPath),
-		0o755,
-	); err != nil {
-		return fmt.Errorf("create destination directory for %q: %w", destinationPath, err)
-	}
-
-	destination, err := os.OpenFile(
-		destinationPath,
-		os.O_WRONLY|os.O_CREATE|os.O_TRUNC,
-		0o644,
-	)
-	if err != nil {
-		return fmt.Errorf("create restored file %q: %w", destinationPath, err)
-	}
-
-	restoreCompleted := false
-	destinationClosed := false
-
-	defer func() {
-		if !destinationClosed {
-			_ = destination.Close()
-		}
-
-		if !restoreCompleted {
-			_ = os.Remove(destinationPath)
-		}
-	}()
-
-	var restoredSize int64
-
-	for index, hash := range hashes {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-
-		written, err := o.restoreObjectPart(ctx, comp, hash, destination, symmetricKey, generation)
-		if err != nil {
-			return fmt.Errorf("restore SMB part %d/%d of %q: %w", index+1, len(hashes), destinationPath, err)
-		}
-
-		restoredSize += written
-	}
-
-	if restoredSize != obj.Size() {
-		return fmt.Errorf("restored size mismatch for %q: expected %d, restored %d", destinationPath, obj.Size(), restoredSize)
-	}
-
-	if err := destination.Close(); err != nil {
-		destinationClosed = true
-
-		return fmt.Errorf("close restored file %q: %w", destinationPath, err)
-	}
-
-	destinationClosed = true
-	restoreCompleted = true
-
-	return nil
+	return object.RestoreFile(ctx, comp, obj, func(ctx context.Context, hash string, destination io.Writer) (int64, error) {
+		return o.restoreObjectPart(ctx, comp, hash, destination, symmetricKey, generation)
+	})
 }
 
 func (o ObjectRepository) restoreObjectPart(ctx context.Context, comp *repository.Compression, hash string, destination io.Writer, symmetricKey []byte, generation uint64) (int64, error) {
