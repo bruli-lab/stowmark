@@ -28,6 +28,7 @@ type ObjectRepository struct {
 	repositoryPath     string
 	handlersFactory    *compression.HandlersFactory
 	encoder            *object.Encoder
+	pipeline           *object.Pipeline
 	encryptionHandler  *encrypt.AESGCMHandler
 	mu                 *sync.Mutex
 	createdDirectories map[string]struct{}
@@ -578,35 +579,9 @@ func (o *ObjectRepository) restoreObjectPart(ctx context.Context, comp *reposito
 		_ = source.Close()
 	}()
 
-	reader := io.Reader(source)
-
-	if len(symmetricKey) > 0 {
-		reader, err = o.encryptionHandler.Decode(reader, symmetricKey)
-		if err != nil {
-			return 0, fmt.Errorf("decrypt object %q: %w", remotePath, err)
-		}
-	}
-
-	handler, err := o.handlersFactory.GetHandler(comp.CompType())
+	written, err := o.pipeline.Read(ctx, destination, source, comp, symmetricKey, hash)
 	if err != nil {
-		return 0, fmt.Errorf("get compression handler %q: %w", comp.CompType(), err)
-	}
-
-	decoded, err := handler.Decode(reader)
-	if err != nil {
-		return 0, fmt.Errorf("decode WebDAV object %q using %q: %w", remotePath, comp.CompType(), err)
-	}
-
-	if decoded.Closer != nil {
-		defer decoded.Closer()
-	}
-
-	written, err := io.Copy(destination, model.ContextReader{
-		Ctx:    ctx,
-		Reader: decoded.Reader,
-	})
-	if err != nil {
-		return written, fmt.Errorf("copy decoded WebDAV object %q: %w", remotePath, err)
+		return written, fmt.Errorf("restore object %q: %w", remotePath, err)
 	}
 
 	return written, nil
@@ -619,6 +594,7 @@ func NewObjectRepository(client *gowebdav.Client, repositoryPath string) *Object
 		repositoryPath:     repositoryPath,
 		handlersFactory:    handlersFactory,
 		encoder:            object.NewEncoder(handlersFactory),
+		pipeline:           object.NewPipeline(handlersFactory),
 		encryptionHandler:  encrypt.NewAESGCMHandler(),
 		mu:                 new(sync.Mutex),
 		createdDirectories: make(map[string]struct{}),

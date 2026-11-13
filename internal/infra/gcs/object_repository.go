@@ -526,35 +526,9 @@ func (o ObjectRepository) restoreObjectPart(ctx context.Context, comp *repositor
 		_ = source.Close()
 	}()
 
-	reader := io.Reader(source)
-
-	if len(symmetricKey) > 0 {
-		reader, err = o.encryptionHandler.Decode(source, symmetricKey)
-		if err != nil {
-			return 0, fmt.Errorf("decrypt object %q: %w", objectPath, err)
-		}
-	}
-
-	handler, err := o.handlersFactory.GetHandler(comp.CompType())
+	written, err := o.pipeline.Read(ctx, destination, source, comp, symmetricKey, hash)
 	if err != nil {
-		return 0, fmt.Errorf("get compression handler %q: %w", comp.CompType(), err)
-	}
-
-	decoded, err := handler.Decode(reader)
-	if err != nil {
-		return 0, fmt.Errorf("decode object %q using %q: %w", objectPath, comp.CompType(), err)
-	}
-
-	if decoded.Closer != nil {
-		defer decoded.Closer()
-	}
-
-	written, err := io.Copy(destination, model.ContextReader{
-		Ctx:    ctx,
-		Reader: decoded.Reader,
-	})
-	if err != nil {
-		return written, fmt.Errorf("copy decoded object %q from bucket %q: %w", objectPath, o.bucket, err)
+		return written, fmt.Errorf("restore object %q: %w", objectPath, err)
 	}
 
 	return written, nil

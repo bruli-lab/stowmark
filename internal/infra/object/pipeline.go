@@ -86,6 +86,57 @@ func (p Pipeline) Write(
 	return nil
 }
 
+func (p Pipeline) Read(
+	ctx context.Context,
+	destination io.Writer,
+	source io.Reader,
+	comp *repository.Compression,
+	key []byte,
+	expectedHash string,
+) (int64, error) {
+	if comp == nil {
+		return 0, ErrCompressionRequired
+	}
+
+	handler, err := p.handlersFactory.GetHandler(comp.CompType())
+	if err != nil {
+		return 0, err
+	}
+
+	input := source
+	if len(key) > 0 {
+		input, err = p.encryptionHandler.Decode(source, key)
+		if err != nil {
+			return 0, fmt.Errorf("decrypt object: %w", err)
+		}
+	}
+
+	hasher := sha256.New()
+	compressed := io.TeeReader(model.ContextReader{Ctx: ctx, Reader: input}, hasher)
+
+	decoded, err := handler.Decode(compressed)
+	if err != nil {
+		return 0, fmt.Errorf("create %q decompression reader: %w", comp.CompType(), err)
+	}
+	defer decoded.Closer()
+
+	written, err := io.Copy(destination, decoded.Reader)
+	if err != nil {
+		return written, fmt.Errorf("decompress object: %w", err)
+	}
+
+	if _, err := io.Copy(io.Discard, compressed); err != nil {
+		return written, fmt.Errorf("read remaining object data: %w", err)
+	}
+
+	calculatedHash := hex.EncodeToString(hasher.Sum(nil))
+	if calculatedHash != expectedHash {
+		return written, fmt.Errorf("%w: expected %s, calculated %s", ErrHashMismatch, expectedHash, calculatedHash)
+	}
+
+	return written, nil
+}
+
 func NewPipeline(handlersFactory *compression.HandlersFactory) *Pipeline {
 	return &Pipeline{
 		handlersFactory:   handlersFactory,

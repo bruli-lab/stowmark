@@ -169,3 +169,133 @@ func TestPipeline_Write_RoundTrip(t *testing.T) {
 		require.Equal(t, data, restored)
 	})
 }
+
+func encodeObject(t *testing.T, comp *repository.Compression, key, data []byte) (encoded []byte, hash string) {
+	t.Helper()
+
+	hash = compressedHash(t, comp, data)
+	var buffer bytes.Buffer
+	err := object.NewPipeline(compression.NewHandlersFactory()).Write(context.Background(), &buffer, bytes.NewReader(data), comp, key, hash)
+	require.NoError(t, err)
+
+	return buffer.Bytes(), hash
+}
+
+func TestPipeline_Read(t *testing.T) {
+	t.Parallel()
+
+	data := bytes.Repeat([]byte("stowmark restore "), 2048)
+	compressionTypes := []repository.CompressionType{
+		repository.NoneCompressionType,
+		repository.GzipCompressionType,
+		repository.ZstdCompressionType,
+		repository.Lz4CompressionType,
+		repository.XzCompressionType,
+	}
+
+	for _, compressionType := range compressionTypes {
+		for _, encrypted := range []bool{false, true} {
+			t.Run(`Given a Pipeline and an object written with `+compressionType.String()+`,
+			when Read method is called with the object hash,
+			then it returns the original data`, func(t *testing.T) {
+				t.Parallel()
+
+				comp, err := repository.NewCompression(compressionType, nil)
+				require.NoError(t, err)
+				var key []byte
+				if encrypted {
+					key = newSymmetricKey(t)
+				}
+				encoded, hash := encodeObject(t, comp, key, data)
+
+				var restored bytes.Buffer
+				written, err := object.NewPipeline(compression.NewHandlersFactory()).Read(context.Background(), &restored, bytes.NewReader(encoded), comp, key, hash)
+
+				require.NoError(t, err)
+				require.Equal(t, int64(len(data)), written)
+				require.Equal(t, data, restored.Bytes())
+			})
+		}
+	}
+}
+
+func TestPipeline_Read_Errors(t *testing.T) {
+	t.Parallel()
+
+	data := bytes.Repeat([]byte("original "), 1024)
+	other := bytes.Repeat([]byte("replaced "), 1024)
+	none, err := repository.NewCompression(repository.NoneCompressionType, nil)
+	require.NoError(t, err)
+	zstd, err := repository.NewCompression(repository.ZstdCompressionType, nil)
+	require.NoError(t, err)
+	key := newSymmetricKey(t)
+
+	tests := []struct {
+		name        string
+		comp        *repository.Compression
+		key         []byte
+		object      func(t *testing.T) (encoded []byte, hash string)
+		ctx         func() context.Context
+		expectedErr error
+	}{
+		{
+			name: "without compression configuration, then it returns a compression required error",
+			object: func(t *testing.T) ([]byte, string) {
+				return encodeObject(t, none, nil, data)
+			},
+			expectedErr: object.ErrCompressionRequired,
+		},
+		{
+			name: "with a corrupted object, then it returns a hash mismatch error",
+			comp: none,
+			object: func(t *testing.T) ([]byte, string) {
+				encoded, hash := encodeObject(t, none, nil, data)
+				corrupted := bytes.Clone(encoded)
+				corrupted[len(corrupted)/2] ^= 0xff
+				return corrupted, hash
+			},
+			expectedErr: object.ErrHashMismatch,
+		},
+		{
+			name: "with an encrypted object replaced by another valid object, then it returns a hash mismatch error",
+			comp: zstd,
+			key:  key,
+			object: func(t *testing.T) ([]byte, string) {
+				_, hash := encodeObject(t, zstd, key, data)
+				replaced, _ := encodeObject(t, zstd, key, other)
+				return replaced, hash
+			},
+			expectedErr: object.ErrHashMismatch,
+		},
+		{
+			name: "with a canceled context, then it returns a context canceled error",
+			comp: zstd,
+			object: func(t *testing.T) ([]byte, string) {
+				return encodeObject(t, zstd, nil, data)
+			},
+			ctx: func() context.Context {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+				return ctx
+			},
+			expectedErr: context.Canceled,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(`Given a Pipeline,
+		when Read method is called `+tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := context.Background()
+			if tt.ctx != nil {
+				ctx = tt.ctx()
+			}
+			encoded, hash := tt.object(t)
+
+			_, err := object.NewPipeline(compression.NewHandlersFactory()).Read(ctx, io.Discard, bytes.NewReader(encoded), tt.comp, tt.key, hash)
+
+			require.ErrorIs(t, err, tt.expectedErr)
+		})
+	}
+}

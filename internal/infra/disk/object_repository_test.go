@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
+	"github.com/bruli-lab/stowmark/internal/fixtures"
 	"github.com/bruli-lab/stowmark/internal/infra/compression"
 	"github.com/bruli-lab/stowmark/internal/infra/disk"
 	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
@@ -233,4 +234,82 @@ func TestObjectRepository_ListEncryptedObjects(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, []string{hash}, hashes)
 	})
+}
+
+func TestObjectRepository_RestoreObject(t *testing.T) {
+	t.Parallel()
+
+	original := bytes.Repeat([]byte("original "), 2048)
+	replaced := bytes.Repeat([]byte("replaced "), 2048)
+
+	tests := []struct {
+		name        string
+		encrypted   bool
+		tamper      bool
+		expectedErr error
+	}{
+		{
+			name: "with an intact object, then it restores the original content",
+		},
+		{
+			name:      "with an intact encrypted object, then it restores the original content",
+			encrypted: true,
+		},
+		{
+			name:        "with an object replaced by another one, then it returns a hash mismatch error and removes the restored file",
+			tamper:      true,
+			expectedErr: object.ErrHashMismatch,
+		},
+		{
+			name:        "with an encrypted object replaced by another one, then it returns a hash mismatch error and removes the restored file",
+			encrypted:   true,
+			tamper:      true,
+			expectedErr: object.ErrHashMismatch,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(`Given a disk ObjectRepository,
+		when RestoreObject method is called `+tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := context.Background()
+			comp, err := repository.NewCompression(repository.ZstdCompressionType, nil)
+			require.NoError(t, err)
+			repositoryPath := t.TempDir()
+			repo, err := disk.NewObjectRepository(repositoryPath)
+			require.NoError(t, err)
+
+			var key []byte
+			if tt.encrypted {
+				key = newSymmetricKey(t)
+			}
+			hash := compressedHash(t, comp, original)
+			require.NoError(t, repo.Save(ctx, writeSourceFile(t, original), hash, comp, key, 1))
+
+			if tt.tamper {
+				otherHash := compressedHash(t, comp, replaced)
+				require.NoError(t, repo.Save(ctx, writeSourceFile(t, replaced), otherHash, comp, key, 1))
+				originalPath := object.GetObjectsPath(repositoryPath, hash, 1, key, false).ObjectPath
+				otherPath := object.GetObjectsPath(repositoryPath, otherHash, 1, key, false).ObjectPath
+				require.NoError(t, os.Rename(otherPath, originalPath))
+			}
+
+			destination := filepath.Join(t.TempDir(), "restored", "file.bin")
+			size := int64(len(original))
+			file := fixtures.FileBuilder{Path: &destination, Size: &size, Hash: &hash}.Build()
+
+			err = repo.RestoreObject(ctx, comp, &file, key, 1)
+
+			if tt.expectedErr != nil {
+				require.ErrorIs(t, err, tt.expectedErr)
+				require.NoFileExists(t, destination)
+				return
+			}
+			require.NoError(t, err)
+			restored, err := os.ReadFile(destination)
+			require.NoError(t, err)
+			require.Equal(t, original, restored)
+		})
+	}
 }
