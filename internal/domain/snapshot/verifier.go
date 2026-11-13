@@ -12,6 +12,7 @@ import (
 
 	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
+	"golang.org/x/sync/errgroup"
 )
 
 var defaultVerifyWorkers = runtime.GOMAXPROCS(0) * 4
@@ -43,69 +44,47 @@ func (v Verifier) Verify(ctx context.Context, repositoryPath, snapshotID string,
 	}
 	result := NewResult(snapshotID)
 
-	files := manifest.Files()
-
 	workers := v.workers
 	if workers <= 0 {
 		workers = defaultVerifyWorkers
 	}
-	if workers > len(files) {
-		workers = len(files)
-	}
-	if workers < 1 {
-		workers = 1
-	}
 
-	var (
-		wg       sync.WaitGroup
-		mu       sync.Mutex
-		firstErr error
-	)
+	var mu sync.Mutex
 
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	group, groupCtx := errgroup.WithContext(ctx)
+	group.SetLimit(workers)
 
-	jobs := make(chan File)
+	for _, file := range manifest.Files() {
+		if groupCtx.Err() != nil {
+			break
+		}
 
-	worker := func() {
-		defer wg.Done()
-		for file := range jobs {
-			reason, err := v.verifyFile(ctx, &file, symmetricKey, generation)
+		group.Go(func() error {
+			reason, err := v.verifyFile(groupCtx, &file, symmetricKey, generation)
+			if err != nil {
+				return err
+			}
 
 			mu.Lock()
-			switch {
-			case err != nil:
-				if firstErr == nil {
-					firstErr = err
-					cancel()
-				}
-			case reason != "":
+			defer mu.Unlock()
+
+			if reason != "" {
 				result.AddFailed(*NewFailedResult(file.Path(), reason))
-			default:
-				result.AddSuccess()
+				return nil
 			}
-			mu.Unlock()
-		}
+
+			result.AddSuccess()
+
+			return nil
+		})
 	}
 
-	wg.Add(workers)
-	for i := 0; i < workers; i++ {
-		go worker()
+	if err := group.Wait(); err != nil {
+		return nil, err
 	}
 
-	for _, file := range files {
-		select {
-		case jobs <- file:
-		case <-ctx.Done():
-			goto drained
-		}
-	}
-drained:
-	close(jobs)
-	wg.Wait()
-
-	if firstErr != nil {
-		return nil, firstErr
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 
 	return result, nil

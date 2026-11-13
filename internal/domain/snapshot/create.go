@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"runtime"
-	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
+	"golang.org/x/sync/errgroup"
 )
 
 var ErrMissingEncryptionConfigToEncrypt = errors.New("missing encryption config to encrypt")
@@ -59,75 +59,50 @@ func (c *Create) Do(ctx context.Context, repoPath, sourcePath string, privateKey
 		generation = conf.Encryption().Generation()
 	}
 
-	var totalSize int64
-
 	workers := c.workers
 	if workers <= 0 {
 		workers = defaultCreateWorkers
 	}
-	if workers > len(files) {
-		workers = len(files)
-	}
-	if workers < 1 {
-		workers = 1
-	}
-
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
 
 	var (
-		wg       sync.WaitGroup
-		mu       sync.Mutex
-		firstErr error
+		totalSize  atomic.Int64
+		savedFiles atomic.Int64
 	)
 
-	indexes := make(chan int)
+	group, groupCtx := errgroup.WithContext(ctx)
+	group.SetLimit(workers)
 
-	var savedFiles []File
-
-	worker := func() {
-		defer wg.Done()
-		for i := range indexes {
-			var savedFileSize FileSavedSize
-			calculatedFile, err := calculator.Calculate(ctx, &files[i], conf.Compression())
-			if err == nil {
-				savedFileSize, err = c.saveFileObjects(ctx, calculatedFile, conf.Compression(), symmetricKey, generation)
-			}
-			if err != nil {
-				mu.Lock()
-				if firstErr == nil {
-					firstErr = err
-					cancel()
-				}
-				mu.Unlock()
-				continue
-			}
-
-			atomic.AddInt64(&totalSize, savedFileSize.Int64())
-			if savedFileSize.Int64() > 0 {
-				savedFiles = append(savedFiles, *calculatedFile)
-			}
-		}
-	}
-
-	wg.Add(workers)
-	for i := 0; i < workers; i++ {
-		go worker()
-	}
-
-feed:
 	for i := range files {
-		select {
-		case indexes <- i:
-		case <-ctx.Done():
-			break feed
+		if groupCtx.Err() != nil {
+			break
 		}
-	}
-	close(indexes)
-	wg.Wait()
 
-	if firstErr != nil {
-		return nil, firstErr
+		group.Go(func() error {
+			calculatedFile, err := calculator.Calculate(groupCtx, &files[i], conf.Compression())
+			if err != nil {
+				return err
+			}
+
+			savedSize, err := c.saveFileObjects(groupCtx, calculatedFile, conf.Compression(), symmetricKey, generation)
+			if err != nil {
+				return err
+			}
+
+			totalSize.Add(savedSize.Int64())
+			if savedSize.Int64() > 0 {
+				savedFiles.Add(1)
+			}
+
+			return nil
+		})
+	}
+
+	if err := group.Wait(); err != nil {
+		return nil, err
+	}
+
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 
 	manifest := NewManifest(newID(), files, time.Now().UTC(), source.AbsolutePath(), conf.Compression())
@@ -135,7 +110,7 @@ feed:
 	if err := c.manifestRepo.Save(ctx, manifest); err != nil {
 		return nil, err
 	}
-	return NewCreateResult(manifest.Id(), len(savedFiles), totalSize), nil
+	return NewCreateResult(manifest.Id(), int(savedFiles.Load()), totalSize.Load()), nil
 }
 
 func (c *Create) saveFileObjects(ctx context.Context, file *File, comp *repository.Compression, key []byte, generation uint64) (FileSavedSize, error) {
