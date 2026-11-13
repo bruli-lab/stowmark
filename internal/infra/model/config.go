@@ -46,11 +46,16 @@ func BuildConfigDomain(conf Config) (*repository.Config, error) {
 	}
 	var encryptionConfig *encryption.EncryptionConfig
 	if conf.Encryption != nil {
-		encryptionConfig = encryption.NewEncryptionConfig(
+		encryptionConfig, err = encryption.HydrateEncryptionConfig(
+			conf.Encryption.Type,
+			conf.Encryption.KeyEncryption,
 			conf.Encryption.EncryptedKey,
 			conf.Encryption.PublicKeyFingerprint,
 			conf.Encryption.Generation,
 		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse config encryption %q/%q: %w", conf.Encryption.Type, conf.Encryption.KeyEncryption, err)
+		}
 	}
 	formatVersion, err := repository.ParseFormatVersion(conf.FormatVersion)
 	if err != nil {

@@ -11,6 +11,11 @@ import (
 	"sync"
 )
 
+var (
+	ErrDestinationRequired = errors.New("encryption destination is required")
+	ErrInvalidKeySize      = errors.New("invalid AES-256 key size")
+)
+
 type Encoder struct {
 	Writer io.Writer
 	Closer func() error
@@ -52,11 +57,11 @@ func (h AESGCMHandler) Decode(source io.Reader, key []byte) (io.Reader, error) {
 
 func (h AESGCMHandler) Encode(destination io.Writer, key []byte) (*Encoder, error) {
 	if destination == nil {
-		return nil, errors.New("encryption destination is required")
+		return nil, ErrDestinationRequired
 	}
 
 	if len(key) != AES256KeySize {
-		return nil, fmt.Errorf("invalid AES-256 key size: got %d bytes, expected %d", len(key), AES256KeySize)
+		return nil, fmt.Errorf("%w: got %d bytes, expected %d", ErrInvalidKeySize, len(key), AES256KeySize)
 	}
 
 	block, err := aes.NewCipher(key)

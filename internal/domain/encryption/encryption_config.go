@@ -1,5 +1,9 @@
 package encryption
 
+import "errors"
+
+var ErrUnsupportedEncryption = errors.New("unsupported encryption")
+
 const (
 	DefaultEncryptionType = "aes-256-gcm"
 	DefaultKeyEncryption  = "rsa-oaep-sha256"
@@ -53,4 +57,15 @@ func NewEncryptionConfig(encryptedKey, publicKeyFingerprint string, generation u
 		publicKeyFingerprint: publicKeyFingerprint,
 		generation:           generation,
 	}
+}
+
+func HydrateEncryptionConfig(
+	encryptionType, keyEncryption, encryptedKey, publicKeyFingerprint string,
+	generation uint64,
+) (*EncryptionConfig, error) {
+	if encryptionType != DefaultEncryptionType || keyEncryption != DefaultKeyEncryption {
+		return nil, ErrUnsupportedEncryption
+	}
+
+	return NewEncryptionConfig(encryptedKey, publicKeyFingerprint, generation), nil
 }

@@ -19,7 +19,10 @@ type SnapshotList struct {
 	svc *snapshot.Listing
 }
 
-func (l SnapshotList) Handle(ctx context.Context, _ cqs.Query) (any, error) {
+func (l SnapshotList) Handle(ctx context.Context, query cqs.Query) (any, error) {
+	if _, ok := query.(SnaphotListQuery); !ok {
+		return nil, cqs.NewInvalidQueryError(ListQueryName, query.Name())
+	}
 	return l.svc.List(ctx)
 }
 

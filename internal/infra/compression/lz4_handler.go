@@ -10,10 +10,10 @@ import (
 type Lz4Handler struct{}
 
 func (l Lz4Handler) Encode(destination io.Writer, level *int) (*WriterCloser, error) {
-	writer := lz4.NewWriter(destination)
 	if level == nil {
-		return nil, fmt.Errorf("level is required")
+		return nil, ErrLevelRequired
 	}
+	writer := lz4.NewWriter(destination)
 	compressionLevel, err := lz4Level(*level)
 	if err != nil {
 		return nil, err
@@ -62,9 +62,6 @@ func lz4Level(level int) (lz4.CompressionLevel, error) {
 	case 9:
 		return lz4.Level9, nil
 	default:
-		return 0, fmt.Errorf(
-			"invalid lz4 compression level %d: expected 0 to 9",
-			level,
-		)
+		return 0, fmt.Errorf("%w for lz4: got %d, expected 0 to 9", ErrInvalidLevel, level)
 	}
 }

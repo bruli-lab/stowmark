@@ -21,6 +21,9 @@ func (z zstdHandler) Decode(origin io.Reader) (*ReaderCloser, error) {
 }
 
 func (z zstdHandler) Encode(destination io.Writer, level *int) (*WriterCloser, error) {
+	if level == nil {
+		return nil, ErrLevelRequired
+	}
 	encoder, err := zstd.NewWriter(destination, zstd.WithEncoderLevel(zstd.EncoderLevelFromZstd(*level)))
 	if err != nil {
 		return nil, fmt.Errorf("create zstd encoder: %w", err)

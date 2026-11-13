@@ -10,6 +10,9 @@ import (
 type GzipHandler struct{}
 
 func (g GzipHandler) Encode(destination io.Writer, level *int) (*WriterCloser, error) {
+	if level == nil {
+		return nil, ErrLevelRequired
+	}
 	writer, err := gzip.NewWriterLevel(destination, *level)
 	if err != nil {
 		return nil, fmt.Errorf("create gzip writer: %w", err)
