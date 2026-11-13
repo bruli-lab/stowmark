@@ -26,6 +26,7 @@ type ObjectRepository struct {
 	repositoryPath    string
 	handlersFactory   *compression.HandlersFactory
 	encryptionHandler *encrypt.AESGCMHandler
+	pipeline          *object.Pipeline
 }
 
 func (o ObjectRepository) ListEncryptedObjects(ctx context.Context, generation uint64) ([]string, error) {
@@ -46,7 +47,7 @@ func (o ObjectRepository) ListEncryptedObjects(ctx context.Context, generation u
 			return err
 		}
 
-		if entry.IsDir() {
+		if entry.IsDir() || isTemporaryFile(entry.Name()) {
 			return nil
 		}
 
@@ -291,15 +292,8 @@ func (o ObjectRepository) Save(ctx context.Context, filePath, hash string, comp 
 		return err
 	}
 
-	dest := object.GetObjectsPath(o.repositoryPath, hash, generation, symmetricKey, false)
-	destinationPath := dest.DirectoryPath
-	objectPath := dest.ObjectPath
-	if err := os.MkdirAll(destinationPath, 0o755); err != nil {
-		return fmt.Errorf(
-			"create object directory %q: %w",
-			filepath.Dir(destinationPath),
-			err,
-		)
+	if len(hash) < 3 {
+		return fmt.Errorf("invalid object hash %q", hash)
 	}
 
 	source, err := os.Open(filePath)
@@ -310,71 +304,7 @@ func (o ObjectRepository) Save(ctx context.Context, filePath, hash string, comp 
 		_ = source.Close()
 	}()
 
-	destination, err := os.OpenFile(
-		objectPath,
-		os.O_WRONLY|os.O_CREATE|os.O_EXCL,
-		0o644,
-	)
-	if err != nil {
-		if errors.Is(err, os.ErrExist) {
-			return nil
-		}
-
-		return fmt.Errorf("create object file %q: %w", objectPath, err)
-	}
-
-	writeCompleted := false
-	defer func() {
-		_ = destination.Close()
-
-		if !writeCompleted {
-			_ = os.Remove(destinationPath)
-		}
-	}()
-
-	encoder, err := o.handlersFactory.GetHandler(comp.CompType())
-	if err != nil {
-		return err
-	}
-
-	output := io.Writer(destination)
-	var closeEncryption func() error
-
-	if len(symmetricKey) > 0 {
-		encrypted, err := o.encryptionHandler.Encode(destination, symmetricKey)
-		if err != nil {
-			return fmt.Errorf("create encryption writer: %w", err)
-		}
-
-		output = encrypted.Writer
-		closeEncryption = encrypted.Closer
-	}
-	writer, err := encoder.Encode(output, comp.Level())
-	if err != nil {
-		if closeEncryption != nil {
-			_ = closeEncryption()
-		}
-		return err
-	}
-	if _, err := io.Copy(writer.Writer, source); err != nil {
-		return fmt.Errorf("copy object: %w", err)
-	}
-
-	if writer.Closer != nil {
-		if err := writer.Closer(); err != nil {
-			return fmt.Errorf(
-				"close destination file %q: %w",
-				destinationPath,
-				err,
-			)
-		}
-	}
-	if closeEncryption != nil {
-		_ = closeEncryption()
-	}
-
-	writeCompleted = true
-	return nil
+	return o.writeObject(ctx, source, hash, comp, symmetricKey, generation)
 }
 
 func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Compression, obj *snapshot.File, symmetricKey []byte, generation uint64) error {
@@ -518,6 +448,7 @@ func (o ObjectRepository) SaveChunk(ctx context.Context, filePath, hash string, 
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+
 	source, err := chunkio.OpenSource(filePath, hash, offset, size, comp)
 	if err != nil {
 		return err
@@ -526,105 +457,23 @@ func (o ObjectRepository) SaveChunk(ctx context.Context, filePath, hash string, 
 		_ = source.Close()
 	}()
 
-	dest := object.GetObjectsPath(o.repositoryPath, hash, generation, key, false)
-	destinationPath := dest.DirectoryPath
-	objectPath := dest.ObjectPath
-	if err := os.MkdirAll(
-		destinationPath,
-		0o755,
-	); err != nil {
-		return fmt.Errorf("create object directory %q: %w", destinationPath, err)
+	section := io.NewSectionReader(source, offset, size)
+	if err := o.writeObject(ctx, section, hash, comp, key, generation); err != nil {
+		return fmt.Errorf("write chunk from %q at offset %d: %w", filePath, offset, err)
 	}
-
-	destination, err := os.Create(objectPath)
-	if err != nil {
-		return fmt.Errorf("create object %q: %w", objectPath, err)
-	}
-
-	success := false
-
-	defer func() {
-		_ = destination.Close()
-
-		if !success {
-			_ = os.Remove(destinationPath)
-		}
-	}()
-
-	handler, err := o.handlersFactory.GetHandler(
-		comp.CompType(),
-	)
-	if err != nil {
-		return err
-	}
-
-	output := io.Writer(destination)
-	var closeEncryption func() error
-
-	if len(key) > 0 {
-		encrypted, err := o.encryptionHandler.Encode(destination, key)
-		if err != nil {
-			return fmt.Errorf("create encryption writer: %w", err)
-		}
-
-		output = encrypted.Writer
-		closeEncryption = encrypted.Closer
-	}
-
-	encoder, err := handler.Encode(
-		output,
-		comp.Level(),
-	)
-	if err != nil {
-		if closeEncryption != nil {
-			_ = closeEncryption()
-		}
-		return err
-	}
-
-	section := io.NewSectionReader(
-		source,
-		offset,
-		size,
-	)
-
-	_, copyErr := io.Copy(
-		encoder.Writer,
-		model.ContextReader{
-			Ctx:    ctx,
-			Reader: section,
-		},
-	)
-	if copyErr != nil {
-		if encoder.Closer != nil {
-			_ = encoder.Closer()
-		}
-		if closeEncryption != nil {
-			_ = closeEncryption()
-		}
-
-		return fmt.Errorf("write chunk from %q at offset %d: %w", filePath, offset, copyErr)
-	}
-
-	if encoder.Closer != nil {
-		if err := encoder.Closer(); err != nil {
-			return fmt.Errorf("finish chunk compression for %q: %w", filePath, err)
-		}
-	}
-
-	if closeEncryption != nil {
-		if err := closeEncryption(); err != nil {
-			return fmt.Errorf("finish chunk encryption for %q: %w", filePath, err)
-		}
-	}
-
-	if err := destination.Close(); err != nil {
-		return fmt.Errorf("close object %q: %w", destinationPath, err)
-	}
-
-	success = true
 
 	return nil
+}
+
+func (o ObjectRepository) writeObject(ctx context.Context, source io.Reader, hash string, comp *repository.Compression, key []byte, generation uint64) error {
+	dest := object.GetObjectsPath(o.repositoryPath, hash, generation, key, false)
+	if err := os.MkdirAll(dest.DirectoryPath, 0o755); err != nil {
+		return fmt.Errorf("create object directory %q: %w", dest.DirectoryPath, err)
+	}
+
+	return writeFileAtomically(dest.ObjectPath, 0o644, func(destination io.Writer) error {
+		return o.pipeline.Write(ctx, destination, source, comp, key, hash)
+	})
 }
 
 func NewObjectRepository(repositoryPath string) (*ObjectRepository, error) {
@@ -637,6 +486,7 @@ func NewObjectRepository(repositoryPath string) (*ObjectRepository, error) {
 		repositoryPath:    absPath,
 		handlersFactory:   handlersFactory,
 		encryptionHandler: encrypt.NewAESGCMHandler(),
+		pipeline:          object.NewPipeline(handlersFactory),
 	}
 	return &repo, nil
 }

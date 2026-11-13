@@ -66,9 +66,9 @@ func (r ManifestRepository) List(ctx context.Context) ([]snapshot.Manifest, erro
 			err,
 		)
 	}
-	manifests := make([]snapshot.Manifest, len(entries))
-	for i, entry := range entries {
-		if entry.IsDir() {
+	manifests := make([]snapshot.Manifest, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() || isTemporaryFile(entry.Name()) {
 			continue
 		}
 		manifestPath := filepath.Join(
@@ -87,7 +87,7 @@ func (r ManifestRepository) List(ctx context.Context) ([]snapshot.Manifest, erro
 		if err != nil {
 			return nil, err
 		}
-		manifests[i] = *man
+		manifests = append(manifests, *man)
 	}
 	slices.SortFunc(manifests, func(a, b snapshot.Manifest) int {
 		return b.CreatedAt().Compare(a.CreatedAt())
@@ -106,7 +106,7 @@ func (r ManifestRepository) Save(ctx context.Context, m *snapshot.Manifest) erro
 	}
 	data = append(data, '\n')
 	manFile := fmt.Sprintf("%s.json", m.Id())
-	return os.WriteFile(filepath.Join(fmt.Sprintf("%s/%s", r.repositoryPath, repository.SnapshotsFolder), manFile), data, 0o644)
+	return writeBytesAtomically(filepath.Join(r.repositoryPath, repository.SnapshotsFolder, manFile), 0o644, data)
 }
 
 func NewManifestRepository(repositoryPath string) (*ManifestRepository, error) {

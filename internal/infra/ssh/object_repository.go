@@ -1,7 +1,6 @@
 package ssh
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -25,8 +24,8 @@ type ObjectRepository struct {
 	client            *sftp.Client
 	handlersFactory   *compression.HandlersFactory
 	repositoryPath    string
-	encoder           *object.Encoder
 	encryptionHandler *encrypt.AESGCMHandler
+	pipeline          *object.Pipeline
 }
 
 func (o ObjectRepository) ListEncryptedObjects(ctx context.Context, generation uint64) ([]string, error) {
@@ -70,7 +69,7 @@ func (o ObjectRepository) ListEncryptedObjects(ctx context.Context, generation u
 				return nil, err
 			}
 
-			if entry.IsDir() || entry.Name() == "" {
+			if entry.IsDir() || entry.Name() == "" || isTemporaryFile(entry.Name()) {
 				continue
 			}
 
@@ -314,57 +313,23 @@ func (o ObjectRepository) SaveChunk(ctx context.Context, filePath, hash string, 
 		_ = source.Close()
 	}()
 
-	encoded, err := o.encoder.Encode(ctx, filePath, hash, offset, size, comp, key, source)
-	if err != nil {
-		return err
+	section := io.NewSectionReader(source, offset, size)
+	if err := o.writeObject(ctx, section, hash, comp, key, generation); err != nil {
+		return fmt.Errorf("write chunk from %q at offset %d: %w", filePath, offset, err)
 	}
 
-	dest := object.GetObjectsPath(o.repositoryPath, hash, generation, key, true)
+	return nil
+}
 
+func (o ObjectRepository) writeObject(ctx context.Context, source io.Reader, hash string, comp *repository.Compression, key []byte, generation uint64) error {
+	dest := object.GetObjectsPath(o.repositoryPath, hash, generation, key, true)
 	if err := o.client.MkdirAll(dest.DirectoryPath); err != nil {
 		return fmt.Errorf("create SSH object directory %q: %w", dest.DirectoryPath, err)
 	}
 
-	destination, err := o.client.OpenFile(
-		dest.ObjectPath,
-		os.O_WRONLY|os.O_CREATE|os.O_TRUNC,
-	)
-	if err != nil {
-		return fmt.Errorf("create SSH object %q: %w", dest.ObjectPath, err)
-	}
-
-	writeCompleted := false
-
-	defer func() {
-		_ = destination.Close()
-
-		if !writeCompleted {
-			_ = o.client.Remove(dest.ObjectPath)
-		}
-	}()
-
-	written, writeErr := io.Copy(
-		destination,
-		model.ContextReader{
-			Ctx:    ctx,
-			Reader: bytes.NewReader(encoded.Bytes()),
-		},
-	)
-
-	if writeErr != nil {
-		return fmt.Errorf("write SSH object %q: %w", dest.ObjectPath, writeErr)
-	}
-
-	if written != int64(encoded.Len()) {
-		return fmt.Errorf("incomplete SSH object write %q: expected %d bytes, wrote %d", dest.ObjectPath, encoded.Len(), written)
-	}
-
-	if err := destination.Close(); err != nil {
-		return fmt.Errorf("close SSH object %q: %w", dest.ObjectPath, err)
-	}
-
-	writeCompleted = true
-	return nil
+	return writeFileAtomically(o.client, dest.ObjectPath, func(destination io.Writer) error {
+		return o.pipeline.Write(ctx, destination, source, comp, key, hash)
+	})
 }
 
 func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Compression, obj *snapshot.File, symmetricKey []byte, generation uint64) error {
@@ -530,20 +495,8 @@ func (o ObjectRepository) Save(ctx context.Context, filePath, hash string, comp 
 		return err
 	}
 
-	if comp == nil {
-		return errors.New("compression configuration is required")
-	}
-
 	if len(hash) < 3 {
 		return fmt.Errorf("invalid object hash %q", hash)
-	}
-
-	dest := object.GetObjectsPath(o.repositoryPath, hash, generation, symmetricKey, true)
-	destinationDirectory := dest.DirectoryPath
-	destinationPath := dest.ObjectPath
-
-	if err := o.client.MkdirAll(destinationDirectory); err != nil {
-		return fmt.Errorf("create remote object directory %q: %w", destinationDirectory, err)
 	}
 
 	source, err := os.Open(filePath)
@@ -554,71 +507,7 @@ func (o ObjectRepository) Save(ctx context.Context, filePath, hash string, comp 
 		_ = source.Close()
 	}()
 
-	destination, err := o.client.OpenFile(destinationPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL)
-	if err != nil {
-		if os.IsExist(err) {
-			return nil
-		}
-
-		return fmt.Errorf("create remote object file %q: %w", destinationPath, err)
-	}
-
-	writeCompleted := false
-
-	defer func() {
-		_ = destination.Close()
-
-		if !writeCompleted {
-			_ = o.client.Remove(destinationPath)
-		}
-	}()
-
-	handler, err := o.handlersFactory.GetHandler(comp.CompType())
-	if err != nil {
-		return fmt.Errorf("get compression handler %q: %w", comp.CompType(), err)
-	}
-
-	output := io.Writer(destination)
-	var closeEncryption func() error
-
-	if len(symmetricKey) > 0 {
-		encrypted, err := o.encryptionHandler.Encode(destination, symmetricKey)
-		if err != nil {
-			return fmt.Errorf("create encryption writer: %w", err)
-		}
-
-		output = encrypted.Writer
-		closeEncryption = encrypted.Closer
-	}
-	encoded, err := handler.Encode(output, comp.Level())
-	if err != nil {
-		if closeEncryption != nil {
-			_ = closeEncryption()
-		}
-		return fmt.Errorf("encode remote object %q using %q: %w", destinationPath, comp.CompType(), err)
-	}
-
-	if _, err := io.Copy(encoded.Writer, model.ContextReader{Ctx: ctx, Reader: source}); err != nil {
-		return fmt.Errorf("write local file %q to remote object %q: %w", filePath, destinationPath, err)
-	}
-
-	if encoded.Closer != nil {
-		if err := encoded.Closer(); err != nil {
-			return fmt.Errorf("close %q encoder for remote object %q: %w", comp.CompType(), destinationPath, err)
-		}
-	}
-
-	if closeEncryption != nil {
-		_ = closeEncryption()
-	}
-
-	if err := destination.Close(); err != nil {
-		return fmt.Errorf("close remote object file %q: %w", destinationPath, err)
-	}
-
-	writeCompleted = true
-
-	return nil
+	return o.writeObject(ctx, source, hash, comp, symmetricKey, generation)
 }
 
 func NewObjectRepository(repositoryPath string, client *sftp.Client) *ObjectRepository {
@@ -627,7 +516,7 @@ func NewObjectRepository(repositoryPath string, client *sftp.Client) *ObjectRepo
 		repositoryPath:    repositoryPath,
 		handlersFactory:   handlersFactory,
 		client:            client,
-		encoder:           object.NewEncoder(handlersFactory),
 		encryptionHandler: encrypt.NewAESGCMHandler(),
+		pipeline:          object.NewPipeline(handlersFactory),
 	}
 }

@@ -35,6 +35,7 @@ type ObjectRepository struct {
 	handlersFactory   *compression.HandlersFactory
 	encoder           *object.Encoder
 	encryptionHandler *encrypt.AESGCMHandler
+	pipeline          *object.Pipeline
 }
 
 func (o ObjectRepository) ListEncryptedObjects(ctx context.Context, generation uint64) ([]string, error) {
@@ -411,53 +412,8 @@ func (o ObjectRepository) Save(ctx context.Context, filePath, hash string, comp 
 		_ = os.Remove(temporaryPath)
 	}()
 
-	output := io.Writer(temporary)
-	var closeEncryption func() error
-
-	handler, err := o.handlersFactory.GetHandler(comp.CompType())
-	if err != nil {
-		return err
-	}
-
-	if len(symmetricKey) > 0 {
-		encrypted, err := o.encryptionHandler.Encode(temporary, symmetricKey)
-		if err != nil {
-			return fmt.Errorf("create encryption writer: %w", err)
-		}
-
-		output = encrypted.Writer
-		closeEncryption = encrypted.Closer
-	}
-
-	encoded, err := handler.Encode(output, comp.Level())
-	if err != nil {
-		if closeEncryption != nil {
-			_ = closeEncryption()
-		}
-		return fmt.Errorf("encode object %q using %q: %w", filePath, comp.CompType(), err)
-	}
-
-	_, copyErr := io.Copy(
-		encoded.Writer,
-		model.ContextReader{
-			Ctx:    ctx,
-			Reader: source,
-		},
-	)
-	if copyErr != nil {
-		if closeEncryption != nil {
-			_ = closeEncryption()
-		}
-		return fmt.Errorf("encode object %q: %w", filePath, copyErr)
-	}
-
-	if encoded.Closer != nil {
-		if err := encoded.Closer(); err != nil {
-			return fmt.Errorf("close encoded object %q: %w", filePath, err)
-		}
-	}
-	if closeEncryption != nil {
-		_ = closeEncryption()
+	if err := o.pipeline.Write(ctx, temporary, source, comp, symmetricKey, hash); err != nil {
+		return fmt.Errorf("encode object %q: %w", filePath, err)
 	}
 
 	objectInfo, err := temporary.Stat()
@@ -670,6 +626,7 @@ func NewObjectRepository(client *s3.Client, bucket, repositoryPath string) *Obje
 		handlersFactory:   handlersFactory,
 		encoder:           object.NewEncoder(handlersFactory),
 		encryptionHandler: encrypt.NewAESGCMHandler(),
+		pipeline:          object.NewPipeline(handlersFactory),
 	}
 }
 

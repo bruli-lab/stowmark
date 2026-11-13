@@ -1,7 +1,6 @@
 package smb
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -26,8 +25,8 @@ type ObjectRepository struct {
 	repositoryPath    string
 	share             *smb2.Share
 	handlersFactory   *compression.HandlersFactory
-	encoder           *object.Encoder
 	encryptionHandler *encrypt.AESGCMHandler
+	pipeline          *object.Pipeline
 }
 
 func (o ObjectRepository) ListEncryptedObjects(ctx context.Context, generation uint64) ([]string, error) {
@@ -79,7 +78,7 @@ func (o ObjectRepository) ListEncryptedObjects(ctx context.Context, generation u
 				continue
 			}
 
-			if entry.Name() == "" {
+			if entry.Name() == "" || isTemporaryFile(entry.Name()) {
 				continue
 			}
 
@@ -285,6 +284,7 @@ func (o ObjectRepository) SaveChunk(ctx context.Context, filePath, hash string, 
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+
 	source, err := chunkio.OpenSource(filePath, hash, offset, size, comp)
 	if err != nil {
 		return err
@@ -293,48 +293,9 @@ func (o ObjectRepository) SaveChunk(ctx context.Context, filePath, hash string, 
 		_ = source.Close()
 	}()
 
-	encoded, err := o.encoder.Encode(ctx, filePath, hash, offset, size, comp, key, source)
-	if err != nil {
-		return err
-	}
-
-	dest := object.GetObjectsPath(o.repositoryPath, hash, generation, key, true)
-
-	objectDirectory := dest.DirectoryPath
-	objectPath := dest.ObjectPath
-
-	if err := o.share.MkdirAll(
-		objectDirectory,
-		0o755,
-	); err != nil {
-		return fmt.Errorf("create SMB object directory %q: %w", objectDirectory, err)
-	}
-
-	destination, err := o.share.OpenFile(
-		objectPath,
-		os.O_WRONLY|os.O_CREATE|os.O_TRUNC,
-		0o644,
-	)
-	if err != nil {
-		return fmt.Errorf("create SMB object %q: %w", objectPath, err)
-	}
-
-	_, writeErr := io.Copy(
-		destination,
-		model.ContextReader{
-			Ctx:    ctx,
-			Reader: bytes.NewReader(encoded.Bytes()),
-		},
-	)
-
-	closeErr := destination.Close()
-
-	if writeErr != nil {
-		return fmt.Errorf("write SMB object %q: %w", objectPath, writeErr)
-	}
-
-	if closeErr != nil {
-		return fmt.Errorf("close SMB object %q: %w", objectPath, closeErr)
+	section := io.NewSectionReader(source, offset, size)
+	if err := o.writeObject(ctx, section, hash, comp, key, generation); err != nil {
+		return fmt.Errorf("write chunk from %q at offset %d: %w", filePath, offset, err)
 	}
 
 	return nil
@@ -349,14 +310,6 @@ func (o ObjectRepository) Save(ctx context.Context, filePath, hash string, comp 
 		return fmt.Errorf("invalid object hash %q", hash)
 	}
 
-	dest := object.GetObjectsPath(o.repositoryPath, hash, generation, symmetricKey, true)
-	destinationPath := dest.DirectoryPath
-	objectPath := dest.ObjectPath
-
-	if err := o.share.MkdirAll(destinationPath, 0o755); err != nil {
-		return fmt.Errorf("create object directory %q: %w", destinationPath, err)
-	}
-
 	source, err := os.Open(filePath)
 	if err != nil {
 		return fmt.Errorf("open source file %q: %w", filePath, err)
@@ -365,90 +318,19 @@ func (o ObjectRepository) Save(ctx context.Context, filePath, hash string, comp 
 		_ = source.Close()
 	}()
 
-	destination, err := o.share.OpenFile(
-		objectPath,
-		os.O_WRONLY|os.O_CREATE|os.O_EXCL,
-		0o644,
-	)
-	if err != nil {
-		if errors.Is(err, os.ErrExist) {
-			return nil
-		}
+	return o.writeObject(ctx, source, hash, comp, symmetricKey, generation)
+}
 
-		return fmt.Errorf("create object file %q: %w", objectPath, err)
+func (o ObjectRepository) writeObject(ctx context.Context, source io.Reader, hash string, comp *repository.Compression, key []byte, generation uint64) error {
+	dest := object.GetObjectsPath(o.repositoryPath, hash, generation, key, true)
+	share := o.share.WithContext(ctx)
+	if err := share.MkdirAll(dest.DirectoryPath, 0o755); err != nil {
+		return fmt.Errorf("create SMB object directory %q: %w", dest.DirectoryPath, err)
 	}
 
-	writeCompleted := false
-	destinationClosed := false
-
-	defer func() {
-		if !destinationClosed {
-			_ = destination.Close()
-		}
-
-		if !writeCompleted {
-			_ = o.share.Remove(destinationPath)
-		}
-	}()
-
-	handler, err := o.handlersFactory.GetHandler(comp.CompType())
-	if err != nil {
-		return err
-	}
-
-	output := io.Writer(destination)
-	var closeEncryption func() error
-
-	if len(symmetricKey) > 0 {
-		encrypted, err := o.encryptionHandler.Encode(destination, symmetricKey)
-		if err != nil {
-			return fmt.Errorf("create encryption writer: %w", err)
-		}
-
-		output = encrypted.Writer
-		closeEncryption = encrypted.Closer
-	}
-
-	writer, err := handler.Encode(output, comp.Level())
-	if err != nil {
-		if closeEncryption != nil {
-			_ = closeEncryption()
-		}
-		return fmt.Errorf("create encoder for object %q: %w", destinationPath, err)
-	}
-
-	if _, err := io.Copy(
-		writer.Writer,
-		model.ContextReader{
-			Ctx:    ctx,
-			Reader: source,
-		},
-	); err != nil {
-		if closeEncryption != nil {
-			_ = closeEncryption()
-		}
-		return fmt.Errorf("write object %q: %w", destinationPath, err)
-	}
-
-	if writer.Closer != nil {
-		if err := writer.Closer(); err != nil {
-			return fmt.Errorf("close encoder for object %q: %w", destinationPath, err)
-		}
-	}
-	if closeEncryption != nil {
-		_ = closeEncryption()
-	}
-
-	if err := destination.Close(); err != nil {
-		destinationClosed = true
-
-		return fmt.Errorf("close object file %q: %w", destinationPath, err)
-	}
-
-	destinationClosed = true
-	writeCompleted = true
-
-	return nil
+	return writeFileAtomically(share, dest.ObjectPath, func(destination io.Writer) error {
+		return o.pipeline.Write(ctx, destination, source, comp, key, hash)
+	})
 }
 
 func (o ObjectRepository) AlreadyExists(ctx context.Context, hash string, symmetricKey []byte, generation uint64) (bool, error) {
@@ -616,12 +498,11 @@ func (o ObjectRepository) restoreObjectPart(ctx context.Context, comp *repositor
 
 func NewObjectRepository(repositoryPath string, share *smb2.Share) *ObjectRepository {
 	handlersFactory := compression.NewHandlersFactory()
-	encoder := object.NewEncoder(handlersFactory)
 	return &ObjectRepository{
 		repositoryPath:    repositoryPath,
 		share:             share,
 		handlersFactory:   handlersFactory,
-		encoder:           encoder,
 		encryptionHandler: encrypt.NewAESGCMHandler(),
+		pipeline:          object.NewPipeline(handlersFactory),
 	}
 }

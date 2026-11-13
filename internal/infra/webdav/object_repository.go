@@ -319,6 +319,8 @@ func (o *ObjectRepository) SaveChunk(ctx context.Context, filePath, hash string,
 	}
 
 	if info.Size() != int64(encoded.Len()) {
+		_ = o.client.Remove(dest.ObjectPath)
+
 		return fmt.Errorf("WebDAV object %q size mismatch after writing: expected %d, got %d", dest.ObjectPath, encoded.Len(), info.Size())
 	}
 
@@ -372,6 +374,8 @@ func (o *ObjectRepository) Save(ctx context.Context, filePath, hash string, comp
 		bytes.NewReader(encoded.Bytes()),
 		0o644,
 	); err != nil {
+		_ = o.client.Remove(dest.ObjectPath)
+
 		return fmt.Errorf(
 			"write WebDAV object %q: %w",
 			dest.ObjectPath,
@@ -393,6 +397,12 @@ func (o *ObjectRepository) Save(ctx context.Context, filePath, hash string, comp
 			"WebDAV object path %q is a directory",
 			dest.ObjectPath,
 		)
+	}
+
+	if info.Size() != int64(encoded.Len()) {
+		_ = o.client.Remove(dest.ObjectPath)
+
+		return fmt.Errorf("WebDAV object %q size mismatch after writing: expected %d, got %d", dest.ObjectPath, encoded.Len(), info.Size())
 	}
 
 	return nil

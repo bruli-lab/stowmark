@@ -53,8 +53,15 @@ func (f FolderRepositoryRepository) CreateConfig(ctx context.Context, repository
 	}
 
 	configPath := path.Join(repositoryPath, model.ConfigFile)
-	if err := f.client.Write(configPath, data, 0o644); err != nil {
-		return fmt.Errorf("write WebDAV config %q: %w", configPath, err)
+	temporaryPath := path.Join(repositoryPath, "."+model.ConfigFile+".tmp")
+	if err := f.client.Write(temporaryPath, data, 0o644); err != nil {
+		_ = f.client.Remove(temporaryPath)
+		return fmt.Errorf("write WebDAV temporary config %q: %w", temporaryPath, err)
+	}
+
+	if err := f.client.Rename(temporaryPath, configPath, true); err != nil {
+		_ = f.client.Remove(temporaryPath)
+		return fmt.Errorf("replace WebDAV config %q: %w", configPath, err)
 	}
 
 	return nil

@@ -2,8 +2,6 @@ package gcs
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -32,6 +30,7 @@ type ObjectRepository struct {
 	repositoryPath    string
 	handlersFactory   *compression.HandlersFactory
 	encryptionHandler *encrypt.AESGCMHandler
+	pipeline          *object.Pipeline
 }
 
 func (o ObjectRepository) ListEncryptedObjects(ctx context.Context, generation uint64) ([]string, error) {
@@ -272,111 +271,11 @@ func (o ObjectRepository) SaveChunk(ctx context.Context, filePath, hash string, 
 	}()
 
 	dest := object.GetObjectsPath(o.repositoryPath, hash, generation, key, true)
-	objectPath := dest.ObjectPath
+	obj := o.client.Bucket(o.bucket).Object(dest.ObjectPath)
+	section := io.NewSectionReader(source, offset, size)
 
-	uploadCtx, cancelUpload := context.WithCancel(ctx)
-	defer cancelUpload()
-
-	writer := o.client.
-		Bucket(o.bucket).
-		Object(objectPath).
-		NewWriter(uploadCtx)
-
-	abortUpload := func() {
-		cancelUpload()
-		_ = writer.Close()
-	}
-
-	hasher := sha256.New()
-
-	output := io.Writer(writer)
-	var closeEncryption func() error
-
-	if len(key) > 0 {
-		encrypted, err := o.encryptionHandler.Encode(writer, key)
-		if err != nil {
-			abortUpload()
-
-			return fmt.Errorf("create encryption writer for object %q: %w", objectPath, err)
-		}
-
-		output = encrypted.Writer
-		closeEncryption = encrypted.Closer
-	}
-
-	compressionDestination := io.MultiWriter(
-		output,
-		hasher,
-	)
-
-	handler, err := o.handlersFactory.GetHandler(comp.CompType())
-	if err != nil {
-		abortUpload()
-
-		return fmt.Errorf("get compression handler %q: %w", comp.CompType(), err)
-	}
-
-	encoder, err := handler.Encode(
-		compressionDestination,
-		comp.Level(),
-	)
-	if err != nil {
-		abortUpload()
-
-		return fmt.Errorf("create compression encoder for chunk %q: %w", hash, err)
-	}
-
-	section := io.NewSectionReader(
-		source,
-		offset,
-		size,
-	)
-
-	_, copyErr := io.Copy(
-		encoder.Writer,
-		model.ContextReader{
-			Ctx:    uploadCtx,
-			Reader: section,
-		},
-	)
-	if copyErr != nil {
-		cancelUpload()
-
-		if encoder.Closer != nil {
-			_ = encoder.Closer()
-		}
-
-		_ = writer.Close()
-
-		return fmt.Errorf("write chunk %q from %q at offset %d: %w", hash, filePath, offset, copyErr)
-	}
-
-	if encoder.Closer != nil {
-		if err := encoder.Closer(); err != nil {
-			abortUpload()
-
-			return fmt.Errorf("finish compression for chunk %q: %w", hash, err)
-		}
-	}
-
-	calculatedHash := hex.EncodeToString(hasher.Sum(nil))
-
-	if calculatedHash != hash {
-		abortUpload()
-
-		return fmt.Errorf("chunk hash mismatch: expected %s, calculated %s", hash, calculatedHash)
-	}
-
-	if closeEncryption != nil {
-		if err := closeEncryption(); err != nil {
-			abortUpload()
-
-			return fmt.Errorf("finish encryption for chunk %q: %w", hash, err)
-		}
-	}
-
-	if err := writer.Close(); err != nil {
-		return fmt.Errorf("close object %q in bucket %q: %w", objectPath, o.bucket, err)
+	if err := o.upload(ctx, obj, section, comp, key, hash); err != nil {
+		return fmt.Errorf("write chunk %q from %q at offset %d: %w", hash, filePath, offset, err)
 	}
 
 	return nil
@@ -415,79 +314,33 @@ func (o ObjectRepository) Save(ctx context.Context, filePath, hash string, comp 
 		_ = source.Close()
 	}()
 
-	handler, err := o.handlersFactory.GetHandler(comp.CompType())
-	if err != nil {
-		return err
-	}
-
-	writeCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	destination := obj.
-		If(storage.Conditions{
-			DoesNotExist: true,
-		}).
-		NewWriter(writeCtx)
-
-	destination.ContentType = "application/octet-stream"
-
-	output := io.Writer(destination)
-	var closeEncryption func() error
-
-	if len(symmetricKey) > 0 {
-		encrypted, err := o.encryptionHandler.Encode(destination, symmetricKey)
-		if err != nil {
-			return fmt.Errorf("create encryption writer: %w", err)
-		}
-
-		output = encrypted.Writer
-		closeEncryption = encrypted.Closer
-	}
-
-	encoded, err := handler.Encode(output, comp.Level())
-	if err != nil {
-		if closeEncryption != nil {
-			_ = closeEncryption()
-		}
-		cancel()
-
-		return fmt.Errorf("create encoder for object %q: %w", objectPath, err)
-	}
-
-	if _, err := io.Copy(encoded.Writer, source); err != nil {
-		cancel()
-
-		if encoded.Closer != nil {
-			_ = encoded.Closer()
-			if closeEncryption != nil {
-				_ = closeEncryption()
-			}
-		}
-
-		return fmt.Errorf("copy object %q: %w", objectPath, err)
-	}
-
-	if encoded.Closer != nil {
-		if err := encoded.Closer(); err != nil {
-			cancel()
-
-			return fmt.Errorf("close encoder for object %q: %w", objectPath, err)
-		}
-	}
-
-	if closeEncryption != nil {
-		_ = closeEncryption()
-	}
-
-	if err := destination.Close(); err != nil {
+	conditional := obj.If(storage.Conditions{DoesNotExist: true})
+	if err := o.upload(ctx, conditional, source, comp, symmetricKey, hash); err != nil {
 		if isPreconditionFailed(err) {
 			return nil
 		}
 
-		return fmt.Errorf("close object %q in bucket %q: %w", objectPath, o.bucket, err)
+		return fmt.Errorf("write object %q in bucket %q: %w", objectPath, o.bucket, err)
 	}
 
 	return nil
+}
+
+func (o ObjectRepository) upload(ctx context.Context, obj *storage.ObjectHandle, source io.Reader, comp *repository.Compression, key []byte, hash string) error {
+	uploadCtx, cancelUpload := context.WithCancel(ctx)
+	defer cancelUpload()
+
+	writer := obj.NewWriter(uploadCtx)
+	writer.ContentType = "application/octet-stream"
+
+	if err := o.pipeline.Write(uploadCtx, writer, source, comp, key, hash); err != nil {
+		cancelUpload()
+		_ = writer.Close()
+
+		return err
+	}
+
+	return writer.Close()
 }
 
 func (o ObjectRepository) AlreadyExists(ctx context.Context, hash string, symmetricKey []byte, generation uint64) (bool, error) {
@@ -708,12 +561,14 @@ func (o ObjectRepository) restoreObjectPart(ctx context.Context, comp *repositor
 }
 
 func NewObjectRepository(repositoryPath, bucket string, client *storage.Client) *ObjectRepository {
+	handlersFactory := compression.NewHandlersFactory()
 	return &ObjectRepository{
 		repositoryPath:    repositoryPath,
 		bucket:            bucket,
 		client:            client,
-		handlersFactory:   compression.NewHandlersFactory(),
+		handlersFactory:   handlersFactory,
 		encryptionHandler: encrypt.NewAESGCMHandler(),
+		pipeline:          object.NewPipeline(handlersFactory),
 	}
 }
 

@@ -53,31 +53,8 @@ func (f FolderRepositoryRepository) CreateConfig(ctx context.Context, folderPath
 	}
 
 	configPath := path.Join(folderPath, model.ConfigFile)
-	share := f.share.WithContext(ctx)
-
-	file, err := share.OpenFile(
-		configPath,
-		os.O_WRONLY|os.O_CREATE,
-		0o644,
-	)
-	if err != nil {
-		return fmt.Errorf("open config %q: %w", configPath, err)
-	}
-
-	if _, err := file.WriteAt(data, 0); err != nil {
-		_ = file.Close()
-
+	if err := writeBytesAtomically(f.share.WithContext(ctx), configPath, data); err != nil {
 		return fmt.Errorf("write config %q: %w", configPath, err)
-	}
-
-	if err := file.Truncate(int64(len(data))); err != nil {
-		_ = file.Close()
-
-		return fmt.Errorf("truncate config %q: %w", configPath, err)
-	}
-
-	if err := file.Close(); err != nil {
-		return fmt.Errorf("close config %q: %w", configPath, err)
 	}
 
 	return nil
