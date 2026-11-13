@@ -5,17 +5,54 @@ import (
 
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
+	"github.com/bruli-lab/stowmark/internal/infra/blob"
 )
 
 type Repositories interface {
 	FolderRepository() repository.FolderRepository
 	RepositoryPath() string
+	BlobStore() (blob.Store, error)
 	ObjectRepository() (snapshot.ObjectRepository, error)
 	ManifestRepository() (snapshot.ManifestRepository, error)
 	Close() error
 }
 
+type backend interface {
+	FolderRepository() repository.FolderRepository
+	RepositoryPath() string
+	BlobStore() (blob.Store, error)
+	Close() error
+}
+
+type blobRepositories struct {
+	backend
+}
+
+func (b blobRepositories) ObjectRepository() (snapshot.ObjectRepository, error) {
+	store, err := b.BlobStore()
+	if err != nil {
+		return nil, err
+	}
+	return blob.NewObjectRepository(store), nil
+}
+
+func (b blobRepositories) ManifestRepository() (snapshot.ManifestRepository, error) {
+	store, err := b.BlobStore()
+	if err != nil {
+		return nil, err
+	}
+	return blob.NewManifestRepository(store), nil
+}
+
 func NewHandler(ctx context.Context, value string) (Repositories, error) {
+	selected, err := newBackend(ctx, value)
+	if err != nil {
+		return nil, err
+	}
+	return blobRepositories{backend: selected}, nil
+}
+
+func newBackend(ctx context.Context, value string) (backend, error) {
 	repoType, err := repository.ParseRepositoryType(value)
 	if err != nil {
 		return nil, err
@@ -34,5 +71,5 @@ func NewHandler(ctx context.Context, value string) (Repositories, error) {
 	case repository.Gcs:
 		return NewGCSRepositories(ctx, value)
 	}
-	return nil, nil
+	return nil, repository.ErrInvalidRepositoryPath
 }

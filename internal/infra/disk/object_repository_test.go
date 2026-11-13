@@ -10,13 +10,13 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/fixtures"
 	"github.com/bruli-lab/stowmark/internal/infra/compression"
-	"github.com/bruli-lab/stowmark/internal/infra/disk"
 	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
 	"github.com/bruli-lab/stowmark/internal/infra/object"
 	"github.com/stretchr/testify/require"
@@ -128,7 +128,7 @@ func TestObjectRepository_Save(t *testing.T) {
 				key = newSymmetricKey(t)
 			}
 
-			repo, err := disk.NewObjectRepository(repositoryPath)
+			repo, err := newObjectRepository(repositoryPath)
 			require.NoError(t, err)
 
 			err = repo.Save(ctx, sourcePath, tt.hash, comp, key, 1)
@@ -175,7 +175,7 @@ func TestObjectRepository_SaveChunk(t *testing.T) {
 		comp, err := repository.NewCompression(repository.NoneCompressionType, nil)
 		require.NoError(t, err)
 		repositoryPath := t.TempDir()
-		repo, err := disk.NewObjectRepository(repositoryPath)
+		repo, err := newObjectRepository(repositoryPath)
 		require.NoError(t, err)
 
 		err = repo.SaveChunk(context.Background(), writeSourceFile(t, data), strings.Repeat("cd", sha256.Size), 0, 1024, comp, newSymmetricKey(t), 1)
@@ -193,7 +193,7 @@ func TestObjectRepository_SaveChunk(t *testing.T) {
 		comp, err := repository.NewCompression(repository.NoneCompressionType, nil)
 		require.NoError(t, err)
 		repositoryPath := t.TempDir()
-		repo, err := disk.NewObjectRepository(repositoryPath)
+		repo, err := newObjectRepository(repositoryPath)
 		require.NoError(t, err)
 		chunk := data[1024:2048]
 		hash := compressedHash(t, comp, chunk)
@@ -221,12 +221,12 @@ func TestObjectRepository_ListEncryptedObjects(t *testing.T) {
 		require.NoError(t, err)
 		hash := compressedHash(t, comp, data)
 		repositoryPath := t.TempDir()
-		repo, err := disk.NewObjectRepository(repositoryPath)
+		repo, err := newObjectRepository(repositoryPath)
 		require.NoError(t, err)
 		key := newSymmetricKey(t)
 		require.NoError(t, repo.Save(ctx, writeSourceFile(t, data), hash, comp, key, 1))
 
-		leftover := filepath.Join(object.EncryptedGenerationPath(repositoryPath, 1, false), hash[:2], "."+hash[2:]+".tmp-123")
+		leftover := filepath.Join(repositoryPath, "objects", "encrypted", "1", hash[:2], "."+hash[2:]+".tmp-123")
 		require.NoError(t, os.WriteFile(leftover, []byte("partial"), 0o600))
 
 		hashes, err := repo.ListEncryptedObjects(ctx, 1)
@@ -277,7 +277,7 @@ func TestObjectRepository_RestoreObject(t *testing.T) {
 			comp, err := repository.NewCompression(repository.ZstdCompressionType, nil)
 			require.NoError(t, err)
 			repositoryPath := t.TempDir()
-			repo, err := disk.NewObjectRepository(repositoryPath)
+			repo, err := newObjectRepository(repositoryPath)
 			require.NoError(t, err)
 
 			var key []byte
@@ -290,8 +290,8 @@ func TestObjectRepository_RestoreObject(t *testing.T) {
 			if tt.tamper {
 				otherHash := compressedHash(t, comp, replaced)
 				require.NoError(t, repo.Save(ctx, writeSourceFile(t, replaced), otherHash, comp, key, 1))
-				originalPath := object.GetObjectsPath(repositoryPath, hash, 1, key, false).ObjectPath
-				otherPath := object.GetObjectsPath(repositoryPath, otherHash, 1, key, false).ObjectPath
+				originalPath := objectPath(repositoryPath, hash, key, 1)
+				otherPath := objectPath(repositoryPath, otherHash, key, 1)
 				require.NoError(t, os.Rename(otherPath, originalPath))
 			}
 
@@ -319,4 +319,11 @@ func TestObjectRepository_RestoreObject(t *testing.T) {
 			require.Equal(t, original, restored)
 		})
 	}
+}
+
+func objectPath(repositoryPath, hash string, key []byte, generation uint64) string {
+	if len(key) == 0 {
+		return filepath.Join(repositoryPath, "objects", hash[:2], hash[2:])
+	}
+	return filepath.Join(repositoryPath, "objects", "encrypted", strconv.FormatUint(generation, 10), hash[:2], hash[2:])
 }

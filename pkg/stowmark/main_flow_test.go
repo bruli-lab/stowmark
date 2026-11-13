@@ -6,8 +6,14 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
+	"sync/atomic"
 	"testing"
 
+	"github.com/bruli-lab/stowmark/internal/infra/blob"
+	"github.com/bruli-lab/stowmark/internal/infra/blob/blobtest"
+	"github.com/bruli-lab/stowmark/internal/infra/repositories"
 	"github.com/bruli-lab/stowmark/pkg/stowmark"
 	"github.com/stretchr/testify/require"
 )
@@ -101,4 +107,46 @@ func mainFlow(t *testing.T, ctx context.Context, folders Folders, formatVersion 
 
 	err = handler.ReKey(ctx, newKeys.PrivateKey(), newKeys.PublicKey())
 	require.NoError(t, err)
+
+	rekeyed, err := handler.VerifySnapshot(ctx, created.ID, new(newKeys.PrivateKey()))
+	require.NoError(t, err)
+	require.True(t, rekeyed.IsSuccess)
+	require.Empty(t, rekeyed.Failed)
+
+	rekeyedRestore := filepath.Join(t.TempDir(), "rekeyed-restore")
+	restored, err = handler.RestoreSnapshot(ctx, created.ID, &rekeyedRestore, new(newKeys.PrivateKey()))
+	require.NoError(t, err)
+	require.True(t, restored.IsSuccess)
+	requireDirectoriesEqual(t, folders.Source, rekeyedRestore)
+
+	store := blobStore(t, ctx, folders.Repository)
+	encryptedKeys, err := store.List(ctx, "objects/encrypted")
+	require.NoError(t, err)
+	require.NotEmpty(t, encryptedKeys)
+	generations := map[string]struct{}{}
+	for _, key := range encryptedKeys {
+		generations[strings.SplitN(key, "/", 4)[2]] = struct{}{}
+	}
+	require.Len(t, generations, 1, "the previous encrypted generation must be deleted after rekey")
+
+	var contractRepositories atomic.Int64
+	t.Run("blob store contract", func(t *testing.T) {
+		blobtest.RunStoreContract(t, func(t *testing.T) blob.Store {
+			return blobStore(t, ctx, fmt.Sprintf("%s-contract-%d", folders.Repository, contractRepositories.Add(1)))
+		})
+	})
+}
+
+func blobStore(t *testing.T, ctx context.Context, repositoryURL string) blob.Store {
+	t.Helper()
+
+	repos, err := repositories.NewHandler(ctx, repositoryURL)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_ = repos.Close()
+	})
+	store, err := repos.BlobStore()
+	require.NoError(t, err)
+
+	return store
 }

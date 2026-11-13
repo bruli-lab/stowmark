@@ -9,7 +9,6 @@ import (
 
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
-	"github.com/bruli-lab/stowmark/internal/infra/disk"
 	"github.com/stretchr/testify/require"
 )
 
@@ -32,7 +31,7 @@ func TestManifestRepository_SaveAndList(t *testing.T) {
 		files := []snapshot.File{*snapshot.NewFile("/source/a.txt", 3)}
 		manifest := snapshot.NewManifest("20261113T120000Z-abcdef12", files, time.Now().UTC(), "/source", comp)
 
-		repo, err := disk.NewManifestRepository(repositoryPath)
+		repo, err := newManifestRepository(repositoryPath)
 		require.NoError(t, err)
 		require.NoError(t, repo.Save(ctx, manifest))
 

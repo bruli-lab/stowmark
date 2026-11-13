@@ -3,9 +3,10 @@ package repositories
 import (
 	"context"
 
+	"github.com/bruli-lab/stowmark/internal/infra/blob"
+
 	"github.com/bruli-lab/stowmark/internal/config"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
-	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/smb"
 	"github.com/cloudsoda/go-smb2"
 )
@@ -28,12 +29,8 @@ func (s SmbRepositories) RepositoryPath() string {
 	return s.repositoryPath
 }
 
-func (s SmbRepositories) ObjectRepository() (snapshot.ObjectRepository, error) {
-	return smb.NewObjectRepository(s.repositoryPath, s.share), nil
-}
-
-func (s SmbRepositories) ManifestRepository() (snapshot.ManifestRepository, error) {
-	return smb.NewManifestRepository(s.repositoryPath, s.share), nil
+func (s SmbRepositories) BlobStore() (blob.Store, error) {
+	return smb.NewBlobStore(s.share, s.repositoryPath), nil
 }
 
 func NewSmbRepositories(ctx context.Context, repositoryPath string) (*SmbRepositories, error) {
