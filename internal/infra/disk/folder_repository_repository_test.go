@@ -5,8 +5,10 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/bruli-lab/stowmark/internal/domain/encryption"
+	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/fixtures"
 	"github.com/bruli-lab/stowmark/internal/infra/disk"
 	"github.com/bruli-lab/stowmark/internal/infra/model"
@@ -45,6 +47,42 @@ func TestFolderRepositoryRepository_CreateConfig(t *testing.T) {
 		require.NotNil(t, stored.Encryption())
 		require.Equal(t, "encrypted-key", stored.Encryption().EncryptedKey())
 		require.Equal(t, uint64(2), stored.Encryption().Generation())
+	})
+
+	t.Run(`Given a FolderRepositoryRepository with a config created in the past,
+	when the config is read and written again,
+	then it keeps the original creation date`, func(t *testing.T) {
+		t.Parallel()
+
+		ctx := context.Background()
+		repositoryPath := t.TempDir()
+		repo := disk.NewFolderRepositoryRepository()
+		createdAt := time.Date(2025, time.March, 1, 10, 0, 0, 0, time.UTC)
+		base := fixtures.ConfigBuilder{}.Build(t)
+		original := repository.HydrateConfig(base.Id(), base.FormatVersion(), createdAt, base.Compression(), nil)
+		require.NoError(t, repo.CreateConfig(ctx, repositoryPath, original))
+
+		stored, err := repo.GetConfig(ctx, repositoryPath)
+		require.NoError(t, err)
+		require.NoError(t, repo.CreateConfig(ctx, repositoryPath, stored))
+		reloaded, err := repo.GetConfig(ctx, repositoryPath)
+		require.NoError(t, err)
+
+		require.True(t, createdAt.Equal(reloaded.CreatedAt()))
+	})
+
+	t.Run(`Given a FolderRepositoryRepository and a config written by a newer format version,
+	when GetConfig method is called,
+	then it returns an unsupported format version error`, func(t *testing.T) {
+		t.Parallel()
+
+		repositoryPath := t.TempDir()
+		config := `{"id":"8f6b0b8e-4a8e-4bb8-9a59-8a3a2f0b9c11","format_version":9,"created_at":"2026-01-01T00:00:00Z","compression":{"type":"none"}}`
+		require.NoError(t, os.WriteFile(filepath.Join(repositoryPath, model.ConfigFile), []byte(config), 0o600))
+
+		_, err := disk.NewFolderRepositoryRepository().GetConfig(context.Background(), repositoryPath)
+
+		require.ErrorIs(t, err, repository.ErrUnsupportedFormatVersion)
 	})
 
 	t.Run(`Given a FolderRepositoryRepository and a repository path that does not exist,

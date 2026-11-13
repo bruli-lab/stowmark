@@ -35,7 +35,11 @@ func (h *Handler) Init(ctx context.Context, comp *Compression, formatVersion int
 			return err
 		}
 	}
-	conf := repository.NewConfig(uuid.New(), repository.ParseFormatVersion(formatVersion), compre, encryptionConfig)
+	version, err := repository.ParseFormatVersionOrCurrent(formatVersion)
+	if err != nil {
+		return err
+	}
+	conf := repository.NewConfig(uuid.New(), version, compre, encryptionConfig)
 	repo, err := repository.NewRepository(h.repositoryPath, conf)
 	if err != nil {
 		return err
@@ -58,15 +62,15 @@ func (h *Handler) Init(ctx context.Context, comp *Compression, formatVersion int
 		Repository: repo,
 		Force:      force,
 	})
+	if err != nil {
+		return err
+	}
 	if len(events) != 1 {
 		return fmt.Errorf("unexpected number of init events: %d", len(events))
 	}
 	result, ok := events[0].(*app.InitEvent)
 	if !ok {
 		return fmt.Errorf("unexpected event type: %T", events[0])
-	}
-	if err != nil {
-		return err
 	}
 	for _, warning := range result.Warnings {
 		slog.Warn(warning)

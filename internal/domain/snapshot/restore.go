@@ -38,7 +38,10 @@ func (r *Restore) Restore(
 	result := NewResult(snapshotID)
 	for _, f := range man.Files() {
 		if destinationPath != nil {
-			f.ChangeSourcePath(man.Source(), *destinationPath)
+			if err := f.ChangeSourcePath(man.Source(), *destinationPath); err != nil {
+				result.AddFailed(*NewFailedResult(f.Path(), err.Error()))
+				continue
+			}
 		}
 		if err := r.objectRepo.RestoreObject(ctx, man.compression, &f, symmetricKey, generation); err != nil {
 			result.AddFailed(*NewFailedResult(f.Path(), err.Error()))

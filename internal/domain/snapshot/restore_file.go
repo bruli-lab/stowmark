@@ -40,7 +40,9 @@ func (r *RestoreFile) Restore(
 		return err
 	}
 	if destinationPath != nil {
-		file.ChangeSourcePath(man.Source(), *destinationPath)
+		if err := file.ChangeSourcePath(man.Source(), *destinationPath); err != nil {
+			return err
+		}
 	}
 	if err := r.objectRepo.RestoreObject(ctx, man.compression, file, symmetricKey, generation); err != nil {
 		return err

@@ -28,7 +28,7 @@ type FileBuilder struct {
 }
 
 func (b FileBuilder) Build() snapshot.File {
-	path := fixtures.SetData("path", b.Path)
+	path := fixtures.SetData("source/path", b.Path)
 	size := fixtures.SetData(20, b.Size)
 	hash := fixtures.SetData(uuid.NewString(), b.Hash)
 	fi := snapshot.File{}

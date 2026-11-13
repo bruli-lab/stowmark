@@ -41,10 +41,20 @@ func NewConfig(
 	comp *Compression,
 	encryptionConfig *encryption.EncryptionConfig,
 ) *Config {
+	return HydrateConfig(id, version, time.Now().UTC(), comp, encryptionConfig)
+}
+
+func HydrateConfig(
+	id uuid.UUID,
+	version FormatVersion,
+	createdAt time.Time,
+	comp *Compression,
+	encryptionConfig *encryption.EncryptionConfig,
+) *Config {
 	return &Config{
 		id:            id,
 		formatVersion: version,
-		createdAt:     time.Now().UTC(),
+		createdAt:     createdAt,
 		compression:   comp,
 		encryption:    encryptionConfig,
 	}

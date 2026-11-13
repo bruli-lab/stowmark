@@ -1,6 +1,12 @@
 package snapshot
 
-import "strings"
+import (
+	"errors"
+	"fmt"
+	"path/filepath"
+)
+
+var ErrPathOutsideSource = errors.New("file path is outside the snapshot source")
 
 type File struct {
 	path   string
@@ -33,8 +39,13 @@ func (f *File) AddChunks(c []Chunk) {
 	f.chunks = c
 }
 
-func (f *File) ChangeSourcePath(source, destination string) {
-	f.path = strings.ReplaceAll(f.path, source, destination)
+func (f *File) ChangeSourcePath(source, destination string) error {
+	relativePath, err := filepath.Rel(source, f.path)
+	if err != nil || !filepath.IsLocal(relativePath) {
+		return fmt.Errorf("%w: %q is not inside %q", ErrPathOutsideSource, f.path, source)
+	}
+	f.path = filepath.Join(destination, relativePath)
+	return nil
 }
 
 func (f *File) Hydrate(path, hash string, size int64, chunks []Chunk) {

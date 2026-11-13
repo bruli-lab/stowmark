@@ -3,9 +3,12 @@ package repository
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 
 	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 )
+
+var ErrRepositoryNotEncrypted = errors.New("repository is not encrypted")
 
 type Rewrap struct {
 	folderRepository  FolderRepository
@@ -17,6 +20,9 @@ func (r Rewrap) Do(ctx context.Context, repositoryPath, oldPrivateKeyPath, newPu
 	conf, err := r.folderRepository.GetConfig(ctx, repositoryPath)
 	if err != nil {
 		return err
+	}
+	if conf.Encryption() == nil {
+		return ErrRepositoryNotEncrypted
 	}
 	privateKey, err := r.asymmetricKeyRepo.ReadRSAPrivateKey(ctx, oldPrivateKeyPath)
 	if err != nil {

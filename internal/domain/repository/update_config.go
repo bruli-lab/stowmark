@@ -16,5 +16,5 @@ func updateConfig(previous, newConfig *Config, force bool, result *InitResult) *
 	default:
 		encryptionConfig = newConfig.encryption
 	}
-	return NewConfig(previous.Id(), previous.formatVersion, newConfig.compression, encryptionConfig)
+	return HydrateConfig(previous.Id(), previous.formatVersion, previous.createdAt, newConfig.compression, encryptionConfig)
 }

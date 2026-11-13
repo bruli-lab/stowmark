@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"log/slog"
 
 	"github.com/bruli-lab/go-core/event"
@@ -15,11 +16,12 @@ type CreateSnapshotTracer struct {
 func (c CreateSnapshotTracer) Trace(span trace.Span, ev event.Event) {
 	createEv, ok := ev.(*CreateSnapshotEvent)
 	if !ok {
-		slog.Error(
+		c.logger.Error(
 			"invalid create snapshot event",
 			slog.String("event", ev.EventName()),
-			slog.String("snapshot_id", createEv.SnapshotID),
+			slog.String("type", fmt.Sprintf("%T", ev)),
 		)
+		return
 	}
 	span.SetAttributes(
 		attribute.String("snapshot.id", createEv.SnapshotID),

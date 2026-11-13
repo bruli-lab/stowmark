@@ -130,3 +130,23 @@ func Test_updateConfig(t *testing.T) {
 		})
 	}
 }
+
+func TestUpdateConfig_KeepsCreatedAt(t *testing.T) {
+	t.Parallel()
+
+	t.Run(`Given an updateConfig function and a previous config created in the past,
+	when it is called with a new config,
+	then it keeps the creation date of the previous config`, func(t *testing.T) {
+		t.Parallel()
+
+		createdAt := time.Date(2025, time.March, 1, 10, 0, 0, 0, time.UTC)
+		previous := HydrateConfig(uuid.New(), FormatVersionTwo, createdAt, &Compression{compType: NoneCompressionType}, nil)
+		newConfig := NewConfig(uuid.New(), FormatVersionTwo, &Compression{compType: ZstdCompressionType}, nil)
+
+		got := updateConfig(previous, newConfig, false, &InitResult{})
+
+		require.Equal(t, createdAt, got.CreatedAt())
+		require.Equal(t, previous.Id(), got.Id())
+		require.Equal(t, ZstdCompressionType, got.Compression().CompType())
+	})
+}

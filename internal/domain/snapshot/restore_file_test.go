@@ -22,9 +22,9 @@ func TestRestoreFile_Restore(t *testing.T) {
 		privateKey      *string
 	}
 	files := []snapshot.File{
-		fixtures.FileBuilder{Path: new("path1")}.Build(),
-		fixtures.FileBuilder{Path: new("path2")}.Build(),
-		fixtures.FileBuilder{Path: new("path3")}.Build(),
+		fixtures.FileBuilder{Path: new("source/path1")}.Build(),
+		fixtures.FileBuilder{Path: new("source/path2")}.Build(),
+		fixtures.FileBuilder{Path: new("source/path3")}.Build(),
 	}
 	config := fixtures.ConfigBuilder{
 		EncryptionConfig: encryption.NewEncryptionConfig("abc", "def", uint64(1)),
@@ -47,20 +47,20 @@ func TestRestoreFile_Restore(t *testing.T) {
 		},
 		{
 			name:        "and find file returns error, then it returns a restore file error",
-			args:        args{filePath: "path4"},
+			args:        args{filePath: "source/path4"},
 			manifest:    new(fixtures.ManifestBuilder{Files: files}.Build()),
 			expectedErr: snapshot.RestoreFileError{},
 		},
 		{
 			name:        "and restore object returns error, then it returns same error",
-			args:        args{filePath: "path3"},
+			args:        args{filePath: "source/path3"},
 			manifest:    new(fixtures.ManifestBuilder{Files: files}.Build()),
 			expectedErr: errTest,
 			objectErr:   errTest,
 		},
 		{
 			name:         "and restore object return nil, then it returns nil",
-			args:         args{filePath: "path3", destinationPath: new("destinationPath")},
+			args:         args{filePath: "source/path3", destinationPath: new("destinationPath")},
 			manifest:     new(fixtures.ManifestBuilder{Files: files}.Build()),
 			config:       &config,
 			privateKey:   &rsa.PrivateKey{},

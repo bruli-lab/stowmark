@@ -42,6 +42,16 @@ func TestRewrap_Do(t *testing.T) {
 			expectedErr:  errTest,
 		},
 		{
+			name: "and the repository is not encrypted, then it returns a repository not encrypted error",
+			args: args{
+				repositoryPath:    "path",
+				oldPrivateKeyPath: "old",
+				newPublicKeyPath:  "new",
+			},
+			config:      new(fixtures.ConfigBuilder{}.Build(t)),
+			expectedErr: repository.ErrRepositoryNotEncrypted,
+		},
+		{
 			name: "and read private key returns error, then it returns same error",
 			args: args{
 				repositoryPath:    "path",
@@ -177,12 +187,11 @@ func TestRewrap_Do(t *testing.T) {
 			}
 			svc := repository.NewRewrap(folderRepo, symmetricRepo, asymmetricRepo)
 			err := svc.Do(t.Context(), tt.args.repositoryPath, tt.args.oldPrivateKeyPath, tt.args.newPublicKeyPath)
-			if err != nil {
-				require.ErrorAs(t, err, &tt.expectedErr)
-			}
 			if tt.expectedErr != nil {
-				require.Error(t, err)
+				require.ErrorIs(t, err, tt.expectedErr)
+				return
 			}
+			require.NoError(t, err)
 		})
 	}
 }

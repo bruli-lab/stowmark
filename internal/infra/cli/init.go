@@ -47,7 +47,12 @@ func newInitCommand() *cobra.Command {
 				return fmt.Errorf("invalid compression type: %w", err)
 			}
 
-			comp, err := repository.NewCompression(*compType, &level)
+			var compressionLevel *int
+			if cmd.Flags().Changed("level") {
+				compressionLevel = &level
+			}
+
+			comp, err := repository.NewCompression(*compType, compressionLevel)
 			if err != nil {
 				return fmt.Errorf("create compression configuration: %w", err)
 			}
@@ -66,9 +71,14 @@ func newInitCommand() *cobra.Command {
 				}
 			}
 
+			version, err := repository.ParseFormatVersionOrCurrent(formatVersion)
+			if err != nil {
+				return err
+			}
+
 			re, err := repository.NewRepository(
 				repoHand.RepositoryPath(),
-				repository.NewConfig(id, repository.ParseFormatVersion(formatVersion), comp, encryptionConfig),
+				repository.NewConfig(id, version, comp, encryptionConfig),
 			)
 			if err != nil {
 				return fmt.Errorf("create repository: %w", err)
@@ -129,28 +139,28 @@ func newInitCommand() *cobra.Command {
 		&compressionType,
 		"compression",
 		repository.NoneCompressionType.String(),
-		"compression type: none, zstd",
+		"compression type: none, gzip, zstd, lz4, xz",
 	)
 
 	cmd.Flags().StringVar(
 		&publicKey,
 		"public-key",
 		"",
-		"public key for encryption:",
+		"path to the public key used to encrypt the repository",
 	)
 
 	cmd.Flags().IntVar(
 		&formatVersion,
 		"version",
 		0,
-		"format version for config file",
+		"repository format version (1 or 2); defaults to the current version",
 	)
 
 	cmd.Flags().IntVar(
 		&level,
 		"level",
 		0,
-		"compression level: 0 for none, 1-22 for zstd",
+		"compression level (gzip 1-9, zstd 1-22, lz4 0-9); defaults to the algorithm default",
 	)
 	cmd.Flags().BoolVar(
 		&force,
