@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 
 	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/bootstrap"
@@ -35,8 +36,10 @@ func newUnlockCommand() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				_, err = fmt.Fprintf(cmd.OutOrStdout(), "Removed %d lock(s), %d active lock(s) left\n", removed, len(active))
-				return err
+				return render(cmd, unlockDocument{Removed: removed, Active: len(active)}, func(output io.Writer) error {
+					_, err := fmt.Fprintf(output, "Removed %d lock(s), %d active lock(s) left\n", removed, len(active))
+					return err
+				})
 			})
 		},
 	}

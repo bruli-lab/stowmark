@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"io"
 
 	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/bootstrap"
@@ -45,17 +46,17 @@ func newSnapshotCreateCommand() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				_, _ = fmt.Fprintf(
-					cmd.OutOrStdout(),
-					"Snapshot created: %s\nFiles: %d\nSize: %d bytes\n",
-					result.SnapshotID(),
-					result.FileCount(),
-					result.TotalSize(),
-				)
-				for _, skipped := range result.SkippedFiles() {
-					_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "WARNING: %s skipped: %s is not supported\n", skipped.Path(), skipped.Kind())
-				}
-				return nil
+				return render(cmd, newCreateDocument(result), func(output io.Writer) error {
+					if _, err := fmt.Fprintf(output, "Snapshot created: %s\nFiles: %d\nSize: %d bytes\n",
+						result.SnapshotID(), result.FileCount(), result.TotalSize(),
+					); err != nil {
+						return err
+					}
+					for _, skipped := range result.SkippedFiles() {
+						_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "WARNING: %s skipped: %s is not supported\n", skipped.Path(), skipped.Kind())
+					}
+					return nil
+				})
 			})
 		},
 	}

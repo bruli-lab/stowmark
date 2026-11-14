@@ -51,7 +51,9 @@ func newCheckCommand() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("failed to check repository: %w", err)
 				}
-				if err := printCheckReport(cmd.OutOrStdout(), report); err != nil {
+				if err := render(cmd, newCheckDocument(report), func(output io.Writer) error {
+					return printCheckReport(output, report)
+				}); err != nil {
 					return err
 				}
 				if report.HasErrors() {

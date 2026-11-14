@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 
 	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/bootstrap"
@@ -83,8 +84,10 @@ func executeRestoreFile(cmd *cobra.Command, repo *bootstrap.Repository, snapshot
 	}); err != nil {
 		return err
 	}
-	_, err := fmt.Fprintf(cmd.OutOrStdout(), "Restored file %q from snapshot %q\n", filePath, snapshotID)
-	return err
+	return render(cmd, restoredFileDocument{SnapshotID: snapshotID, File: filePath}, func(output io.Writer) error {
+		_, err := fmt.Fprintf(output, "Restored file %q from snapshot %q\n", filePath, snapshotID)
+		return err
+	})
 }
 
 func executeRestore(cmd *cobra.Command, repo *bootstrap.Repository, snapshotID string, destination, privateKey *string) error {
@@ -101,7 +104,7 @@ func executeRestore(cmd *cobra.Command, repo *bootstrap.Repository, snapshotID s
 	if err != nil {
 		return err
 	}
-	if err := printResult(cmd.OutOrStdout(), result.SnapshotID(), result.TotalFiles(), failedResults(result.Failed()), result.IsSuccess()); err != nil {
+	if err := renderResult(cmd, result.SnapshotID(), result.TotalFiles(), result.Failed(), result.IsSuccess()); err != nil {
 		return err
 	}
 	if !result.IsSuccess() {

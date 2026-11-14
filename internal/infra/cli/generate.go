@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 
 	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/bootstrap"
@@ -24,8 +25,10 @@ func newKeyGenerateCommand() *cobra.Command {
 				if _, err := runtime.GenerateKey().Handle(cmd.Context(), app.GenerateKeyCommand{Keys: keys}); err != nil {
 					return fmt.Errorf("failed to create key pair: %w", err)
 				}
-				_, err := fmt.Fprintf(cmd.OutOrStdout(), "Create asymmetric key pair in %q\n", folder)
-				return err
+				return render(cmd, keyPairDocument{PrivateKey: keys.PrivateKey(), PublicKey: keys.PublicKey()}, func(output io.Writer) error {
+					_, err := fmt.Fprintf(output, "Create asymmetric key pair in %q\n", folder)
+					return err
+				})
 			})
 		},
 	}

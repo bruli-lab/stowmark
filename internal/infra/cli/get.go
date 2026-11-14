@@ -31,7 +31,9 @@ func newSnapshotGetCommand() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				return printManifest(cmd.OutOrStdout(), manifest)
+				return render(cmd, newManifestDocument(manifest), func(output io.Writer) error {
+					return printManifest(output, manifest)
+				})
 			})
 		},
 	}
@@ -62,9 +64,9 @@ func printManifest(
 ) error {
 	writer := tabwriter.NewWriter(
 		output,
-		0, // amplada mínima
-		4, // amplada del tabulador
-		2, // espais entre columnes
+		0,
+		4,
+		2,
 		' ',
 		0,
 	)

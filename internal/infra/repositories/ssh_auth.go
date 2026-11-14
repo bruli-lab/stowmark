@@ -41,8 +41,7 @@ func privateKeySigner(path, passphrase string) (gossh.Signer, error) {
 	} else {
 		signer, err = gossh.ParsePrivateKeyWithPassphrase(data, []byte(passphrase))
 	}
-	var missing *gossh.PassphraseMissingError
-	if errors.As(err, &missing) {
+	if _, ok := errors.AsType[*gossh.PassphraseMissingError](err); ok {
 		return nil, ErrSSHPassphraseRequired
 	}
 	if err != nil {

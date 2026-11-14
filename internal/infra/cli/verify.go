@@ -37,7 +37,7 @@ func newSnapshotVerifyCommand() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				if err := printResult(cmd.OutOrStdout(), result.SnapshotID(), result.TotalFiles(), failedResults(result.Failed()), result.IsSuccess()); err != nil {
+				if err := renderResult(cmd, result.SnapshotID(), result.TotalFiles(), result.Failed(), result.IsSuccess()); err != nil {
 					return err
 				}
 				if !result.IsSuccess() {

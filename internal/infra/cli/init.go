@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 
 	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/bootstrap"
@@ -55,12 +56,14 @@ func newInitCommand() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Initialized Stowmark repository at %q\n", repo.Path())
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Repository ID: %s\n", result.RepositoryID())
-				for _, warning := range result.Warnings() {
-					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "WARNING: %s\n", warning)
-				}
-				return nil
+				return render(cmd, newInitDocument(repo.Path(), result), func(output io.Writer) error {
+					_, _ = fmt.Fprintf(output, "Initialized Stowmark repository at %q\n", repo.Path())
+					_, _ = fmt.Fprintf(output, "Repository ID: %s\n", result.RepositoryID())
+					for _, warning := range result.Warnings() {
+						_, _ = fmt.Fprintf(output, "WARNING: %s\n", warning)
+					}
+					return nil
+				})
 			})
 		},
 	}

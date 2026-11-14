@@ -8,6 +8,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"github.com/bruli-lab/go-core/event"
 	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/bootstrap"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
@@ -32,9 +33,13 @@ func newPruneCommand() *cobra.Command {
 			privateKey := optionalPath(privateKeyPath)
 			return withRepository(cmd, repositoryPath, func(repo *bootstrap.Repository) error {
 				if dryRun {
-					return runPrunePlan(cmd.Context(), cmd.OutOrStdout(), repo, privateKey)
+					return runPrunePlan(cmd, repo, privateKey)
 				}
-				return runPrune(cmd.Context(), cmd.OutOrStdout(), repo, privateKey)
+				result, err := runPrune(cmd.Context(), repo, privateKey)
+				if err != nil {
+					return err
+				}
+				return render(cmd, result, result.print)
 			})
 		},
 	}
@@ -47,15 +52,20 @@ func newPruneCommand() *cobra.Command {
 	return cmd
 }
 
-func runPrunePlan(ctx context.Context, output io.Writer, repo *bootstrap.Repository, privateKey *string) error {
-	plan, err := app.QueryResult[*snapshot.PrunePlan](repo.PrunePlan().Handle(ctx, app.PrunePlanQuery{
+func runPrunePlan(cmd *cobra.Command, repo *bootstrap.Repository, privateKey *string) error {
+	plan, err := app.QueryResult[*snapshot.PrunePlan](repo.PrunePlan().Handle(cmd.Context(), app.PrunePlanQuery{
 		RepositoryPath: repo.Path(),
 		PrivateKeyPath: privateKey,
 	}))
 	if err != nil {
 		return fmt.Errorf("failed to plan prune: %w", err)
 	}
+	return render(cmd, newPrunePlanDocument(plan), func(output io.Writer) error {
+		return printPrunePlan(output, plan)
+	})
+}
 
+func printPrunePlan(output io.Writer, plan *snapshot.PrunePlan) error {
 	writer := tabwriter.NewWriter(output, 0, 4, 2, ' ', 0)
 	if _, err := fmt.Fprintf(writer,
 		"STORED OBJECTS:\t%d\nREFERENCED OBJECTS:\t%d\nWOULD REMOVE:\t%d (%s)\nOLD KEY GENERATIONS:\t%s\n",
@@ -70,39 +80,50 @@ func runPrunePlan(ctx context.Context, output io.Writer, repo *bootstrap.Reposit
 	return printMissingObjects(output, len(plan.Missing()))
 }
 
-func runPrune(ctx context.Context, output io.Writer, repo *bootstrap.Repository, privateKey *string) error {
+func runPrune(ctx context.Context, repo *bootstrap.Repository, privateKey *string) (*pruneDocument, error) {
 	events, err := repo.PruneRepository().Handle(ctx, app.PruneRepositoryCommand{
 		RepositoryPath: repo.Path(),
 		PrivateKeyPath: privateKey,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to prune repository: %w", err)
+		return nil, fmt.Errorf("failed to prune repository: %w", err)
 	}
+	return newPruneDocument(events), nil
+}
 
-	removed := 0
-	var freed int64
+func newPruneDocument(events []event.Event) *pruneDocument {
+	result := &pruneDocument{RemovedKeyGenerations: []uint64{}}
 	for _, pruned := range app.EventsOf[*snapshot.ObjectsPruned](events) {
-		removed += pruned.Removed()
-		freed += pruned.FreedBytes()
-	}
-	if _, err := fmt.Fprintf(output, "Removed %d unreferenced object(s), freed %s\n", removed, formatBytes(freed)); err != nil {
-		return err
+		result.RemovedObjects += pruned.Removed()
+		result.FreedBytes += pruned.FreedBytes()
 	}
 	for _, generations := range app.EventsOf[*snapshot.GenerationsRemoved](events) {
-		if _, err := fmt.Fprintf(output, "Removed old key generation(s): %s\n", formatGenerations(generations.Generations())); err != nil {
-			return err
-		}
+		result.RemovedKeyGenerations = append(result.RemovedKeyGenerations, generations.Generations()...)
 	}
 	for _, temporaries := range app.EventsOf[*snapshot.TemporariesRemoved](events) {
-		if _, err := fmt.Fprintf(output, "Removed %d temporary file(s) left by interrupted writes\n", temporaries.Removed()); err != nil {
+		result.RemovedTemporaryFiles += temporaries.Removed()
+	}
+	for _, detected := range app.EventsOf[*snapshot.MissingObjectsDetected](events) {
+		result.MissingObjects += len(detected.Hashes())
+	}
+	return result
+}
+
+func (p *pruneDocument) print(output io.Writer) error {
+	if _, err := fmt.Fprintf(output, "Removed %d unreferenced object(s), freed %s\n", p.RemovedObjects, formatBytes(p.FreedBytes)); err != nil {
+		return err
+	}
+	if len(p.RemovedKeyGenerations) > 0 {
+		if _, err := fmt.Fprintf(output, "Removed old key generation(s): %s\n", formatGenerations(p.RemovedKeyGenerations)); err != nil {
 			return err
 		}
 	}
-	missing := 0
-	for _, detected := range app.EventsOf[*snapshot.MissingObjectsDetected](events) {
-		missing += len(detected.Hashes())
+	if p.RemovedTemporaryFiles > 0 {
+		if _, err := fmt.Fprintf(output, "Removed %d temporary file(s) left by interrupted writes\n", p.RemovedTemporaryFiles); err != nil {
+			return err
+		}
 	}
-	return printMissingObjects(output, missing)
+	return printMissingObjects(output, p.MissingObjects)
 }
 
 func formatGenerations(generations []uint64) string {

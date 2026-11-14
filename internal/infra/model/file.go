@@ -47,7 +47,7 @@ func (f *File) domain() (snapshot.File, error) {
 	return file.WithMetadata(snapshot.NewMetadata(mode, modTime)), nil
 }
 
-func unixMode(mode fs.FileMode) uint32 {
+func UnixMode(mode fs.FileMode) uint32 {
 	unix := uint32(mode.Perm())
 	if mode&fs.ModeSetuid != 0 {
 		unix |= unixSetuid

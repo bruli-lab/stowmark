@@ -41,6 +41,7 @@ the source path, creation time and references to its files.
 - Integrity verification using SHA-256 hashes.
 - Retention policies (`forget`) and garbage collection of unreferenced objects (`prune`).
 - Whole repository integrity checks (`check`), optionally reading all or part of the data.
+- JSON output (`--json`) for scripting.
 - Local repositories with no external service required.
 - Remote repositories over SSH/SFTP using public-key authentication.
 - Remote repositories over SMB using password authentication.
@@ -507,6 +508,35 @@ stowmark --help
 stowmark snapshot --help
 stowmark snapshot create --help
 ```
+
+### JSON output
+
+Every command accepts `--json` to print its result as one JSON document on stdout, for scripts and monitoring:
+
+```bash
+stowmark snapshot list --repo /backups/stowmark --json | jq -r '.[0].id'
+stowmark check --repo /backups/stowmark --json | jq '.missing_objects'
+```
+
+```json
+{
+  "snapshot_id": "20260314T101500Z-1a2b3c4d",
+  "files": 1250,
+  "size": 73400320,
+  "skipped": []
+}
+```
+
+- Field names use `snake_case`. Sizes are in bytes and times are RFC 3339 in UTC.
+- Lists are always arrays, never `null`, so `jq '.failed | length'` works without checks.
+- `snapshot get` includes, for each entry, its `kind` (`file`, `dir` or `symlink`), and in format version 3
+  repositories its `mode` as unix octal (`"0640"`) and its `modified_at`.
+- `forget --prune` returns `{"forgotten": [...], "prune": {...}}`; the dry runs of `forget` and `prune` return the
+  plan.
+- Logs go to stderr, so stdout only holds the document. Warnings are fields of the document (`skipped` in
+  `snapshot create`, `warnings` in `init`). Errors are not JSON: the command prints the
+  error to stderr and exits with a non-zero status. `snapshot verify`, `snapshot restore` and `check` print the
+  document first when the result has problems, so the failing files or objects can still be read from stdout.
 
 ## Encryption
 

@@ -16,6 +16,10 @@ func Execute() error {
 	defer stop()
 	context.AfterFunc(ctx, stop)
 
+	return newRootCommand().ExecuteContext(ctx)
+}
+
+func newRootCommand() *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:           "stowmark",
 		Short:         "Immutable snapshot backup tool",
@@ -31,6 +35,7 @@ func Execute() error {
 	rootCmd.AddCommand(newForgetCommand())
 	rootCmd.AddCommand(newPruneCommand())
 	rootCmd.AddCommand(newCheckCommand())
+	addJSONFlag(rootCmd)
 
-	return rootCmd.ExecuteContext(ctx)
+	return rootCmd
 }

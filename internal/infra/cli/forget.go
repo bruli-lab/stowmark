@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"strings"
@@ -43,7 +42,7 @@ func newForgetCommand() *cobra.Command {
 			privateKey := optionalPath(privateKeyPath)
 			return withRepository(cmd, repositoryPath, func(repo *bootstrap.Repository) error {
 				if dryRun {
-					return runForgetPlan(cmd.Context(), cmd.OutOrStdout(), repo, policy, privateKey)
+					return runForgetPlan(cmd, repo, policy, privateKey)
 				}
 				events, err := repo.ForgetSnapshots().Handle(cmd.Context(), app.ForgetSnapshotsCommand{
 					RepositoryPath: repo.Path(),
@@ -53,16 +52,25 @@ func newForgetCommand() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("failed to forget snapshots: %w", err)
 				}
-				if err := printForgotten(cmd.OutOrStdout(), app.EventsOf[*snapshot.SnapshotForgotten](events)); err != nil {
-					return err
+				forgotten := app.EventsOf[*snapshot.SnapshotForgotten](events)
+				result := forgetDocument{Forgotten: newForgottenDocuments(forgotten)}
+				if prune {
+					if result.Prune, err = runPrune(cmd.Context(), repo, privateKey); err != nil {
+						return err
+					}
 				}
-				if !prune {
-					return nil
-				}
-				if _, err := fmt.Fprintln(cmd.OutOrStdout()); err != nil {
-					return err
-				}
-				return runPrune(cmd.Context(), cmd.OutOrStdout(), repo, privateKey)
+				return render(cmd, result, func(output io.Writer) error {
+					if err := printForgotten(output, forgotten); err != nil {
+						return err
+					}
+					if result.Prune == nil {
+						return nil
+					}
+					if _, err := fmt.Fprintln(output); err != nil {
+						return err
+					}
+					return result.Prune.print(output)
+				})
 			})
 		},
 	}
@@ -83,8 +91,8 @@ func newForgetCommand() *cobra.Command {
 	return cmd
 }
 
-func runForgetPlan(ctx context.Context, output io.Writer, repo *bootstrap.Repository, policy *snapshot.RetentionPolicy, privateKey *string) error {
-	decisions, err := app.QueryResult[[]snapshot.RetentionDecision](repo.ForgetPlan().Handle(ctx, app.ForgetPlanQuery{
+func runForgetPlan(cmd *cobra.Command, repo *bootstrap.Repository, policy *snapshot.RetentionPolicy, privateKey *string) error {
+	decisions, err := app.QueryResult[[]snapshot.RetentionDecision](repo.ForgetPlan().Handle(cmd.Context(), app.ForgetPlanQuery{
 		RepositoryPath: repo.Path(),
 		PrivateKeyPath: privateKey,
 		Policy:         policy,
@@ -92,6 +100,12 @@ func runForgetPlan(ctx context.Context, output io.Writer, repo *bootstrap.Reposi
 	if err != nil {
 		return fmt.Errorf("failed to plan forget: %w", err)
 	}
+	return render(cmd, newRetentionDocuments(decisions), func(output io.Writer) error {
+		return printForgetPlan(output, decisions)
+	})
+}
+
+func printForgetPlan(output io.Writer, decisions []snapshot.RetentionDecision) error {
 	if len(decisions) == 0 {
 		_, err := fmt.Fprintln(output, "No snapshots found.")
 		return err
@@ -122,7 +136,7 @@ func runForgetPlan(ctx context.Context, output io.Writer, repo *bootstrap.Reposi
 	if err := writer.Flush(); err != nil {
 		return err
 	}
-	_, err = fmt.Fprintf(output, "\nWould keep %d snapshot(s) and forget %d snapshot(s)\n", len(decisions)-forgotten, forgotten)
+	_, err := fmt.Fprintf(output, "\nWould keep %d snapshot(s) and forget %d snapshot(s)\n", len(decisions)-forgotten, forgotten)
 	return err
 }
 

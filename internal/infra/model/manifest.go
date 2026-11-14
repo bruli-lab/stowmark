@@ -94,7 +94,7 @@ func NewManifest(m *snapshot.Manifest) Manifest {
 			files[i].Kind = string(f.Kind())
 		}
 		if metadata, ok := f.Metadata(); ok {
-			mode := unixMode(metadata.Mode())
+			mode := UnixMode(metadata.Mode())
 			modTime := metadata.ModTime()
 			files[i].Mode = &mode
 			files[i].ModTime = &modTime

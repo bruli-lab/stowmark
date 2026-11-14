@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"text/tabwriter"
 
 	"github.com/bruli-lab/stowmark/internal/app"
@@ -31,22 +32,9 @@ func newSnapshotListCommand() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				if len(snapshots) == 0 {
-					_, err = fmt.Fprintln(cmd.OutOrStdout(), "No snapshots found.")
-					return err
-				}
-				writer := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
-				if _, err := fmt.Fprintln(writer, "ID\tCREATED AT\tFILES\tSIZE\tSOURCE"); err != nil {
-					return err
-				}
-				for _, item := range snapshots {
-					if _, err := fmt.Fprintf(writer, "%s\t%s\t%d\t%s\t%s\n",
-						item.ID(), formatLocal(item.CreatedAt()), item.Files(), formatBytes(item.Size()), item.Source(),
-					); err != nil {
-						return err
-					}
-				}
-				return writer.Flush()
+				return render(cmd, newSnapshotDocuments(snapshots), func(output io.Writer) error {
+					return printSnapshots(output, snapshots)
+				})
 			})
 		},
 	}
@@ -62,6 +50,25 @@ func newSnapshotListCommand() *cobra.Command {
 	_ = cmd.MarkFlagRequired("repo")
 
 	return cmd
+}
+
+func printSnapshots(output io.Writer, snapshots []snapshot.ManifestResume) error {
+	if len(snapshots) == 0 {
+		_, err := fmt.Fprintln(output, "No snapshots found.")
+		return err
+	}
+	writer := tabwriter.NewWriter(output, 0, 4, 2, ' ', 0)
+	if _, err := fmt.Fprintln(writer, "ID\tCREATED AT\tFILES\tSIZE\tSOURCE"); err != nil {
+		return err
+	}
+	for _, item := range snapshots {
+		if _, err := fmt.Fprintf(writer, "%s\t%s\t%d\t%s\t%s\n",
+			item.ID(), formatLocal(item.CreatedAt()), item.Files(), formatBytes(item.Size()), item.Source(),
+		); err != nil {
+			return err
+		}
+	}
+	return writer.Flush()
 }
 
 func formatBytes(size int64) string {
