@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/bruli-lab/go-core/cqs"
-	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 )
 
 const SnapshotGetQueryName = "manifest-get"
@@ -18,17 +17,17 @@ func (s ManifestGetQuery) Name() string {
 }
 
 type ManifestGet struct {
-	svc *snapshot.GetManifest
+	manifestRepo ManifestRepository
 }
 
-func (m ManifestGet) Handle(ctx context.Context, query cqs.Query) (any, error) {
+func (m *ManifestGet) Handle(ctx context.Context, query cqs.Query) (any, error) {
 	q, ok := query.(ManifestGetQuery)
 	if !ok {
 		return nil, cqs.NewInvalidQueryError(SnapshotGetQueryName, query.Name())
 	}
-	return m.svc.Get(ctx, q.SnapshotID)
+	return m.manifestRepo.Get(ctx, q.SnapshotID)
 }
 
-func NewManifestGet(svc *snapshot.GetManifest) *ManifestGet {
-	return &ManifestGet{svc: svc}
+func NewManifestGet(manifestRepo ManifestRepository) *ManifestGet {
+	return &ManifestGet{manifestRepo: manifestRepo}
 }

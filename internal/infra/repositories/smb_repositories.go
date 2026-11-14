@@ -3,10 +3,11 @@ package repositories
 import (
 	"context"
 
+	"github.com/bruli-lab/stowmark/internal/app"
+
 	"github.com/bruli-lab/stowmark/internal/infra/blob"
 
 	"github.com/bruli-lab/stowmark/internal/config"
-	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/infra/smb"
 	"github.com/cloudsoda/go-smb2"
 )
@@ -21,7 +22,7 @@ func (s SmbRepositories) Close() error {
 	return s.conn.Close()
 }
 
-func (s SmbRepositories) FolderRepository() repository.FolderRepository {
+func (s SmbRepositories) FolderRepository() app.FolderRepository {
 	return smb.NewFolderRepositoryRepository(s.share)
 }
 

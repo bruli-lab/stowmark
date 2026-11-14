@@ -1,11 +1,14 @@
-package snapshot_test
+package app_test
 
 import (
 	"context"
 	"crypto/rsa"
 	"errors"
+	"fmt"
 	"io"
 	"testing"
+
+	"github.com/bruli-lab/stowmark/internal/app"
 
 	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
@@ -15,7 +18,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestVerifier_Verify(t *testing.T) {
+func TestVerifySnapshot_Handle(t *testing.T) {
+	t.Parallel()
 	errTest := errors.New("test error")
 	hash := uuid.NewString()
 	manifest := fixtures.ManifestBuilder{Files: []snapshot.File{
@@ -89,7 +93,7 @@ func TestVerifier_Verify(t *testing.T) {
 			name:        "with private key, and config has not encryption, then it returns a mission encryption config to encrypt error",
 			args:        args{privateKey: new("private-key")},
 			config:      new(fixtures.ConfigBuilder{}.Build(t)),
-			expectedErr: snapshot.ErrMissingEncryptionConfigToEncrypt,
+			expectedErr: app.ErrMissingEncryptionConfigToEncrypt,
 		},
 		{
 			name:        "with private key, and decrypt returns an error, then it returns same error",
@@ -139,31 +143,35 @@ func TestVerifier_Verify(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		t.Run(`Given a Verifier service,
-		when Verify method is called `+tt.name, func(t *testing.T) {
+		t.Run(`Given a VerifySnapshot query handler,
+		when Handle method is called `+tt.name, func(t *testing.T) {
 			t.Parallel()
-			objectRepo := &snapshot.ObjectRepositoryMock{}
+			objectRepo := &app.ObjectRepositoryMock{}
 			objectRepo.ReadObjectFunc = func(_ context.Context, _ string, _ []byte, _ uint64) (io.ReadCloser, error) {
 				return tt.reader, tt.readObjectErr
 			}
-			manifestRepo := &snapshot.ManifestRepositoryMock{}
+			manifestRepo := &app.ManifestRepositoryMock{}
 			manifestRepo.GetFunc = func(_ context.Context, _ string) (*snapshot.Manifest, error) {
 				return tt.manifest, tt.getManifestErr
 			}
-			folderRepo := &repository.FolderRepositoryMock{}
+			folderRepo := &app.FolderRepositoryMock{}
 			folderRepo.GetConfigFunc = func(_ context.Context, _ string) (*repository.Config, error) {
 				return tt.config, tt.getConfigErr
 			}
-			symmetricRepo := &encryption.SymmetricKeyRepositoryMock{}
+			symmetricRepo := &app.SymmetricKeyRepositoryMock{}
 			symmetricRepo.DecodeAndDecryptSymmetricKeyFunc = func(_ context.Context, _ *rsa.PrivateKey, _ string) ([]byte, error) {
 				return []byte("abc"), nil
 			}
-			asymmetricRepo := &encryption.AsymmetricKeyPairRepositoryMock{}
+			asymmetricRepo := &app.AsymmetricKeyPairRepositoryMock{}
 			asymmetricRepo.ReadRSAPrivateKeyFunc = func(_ context.Context, _ string) (*rsa.PrivateKey, error) {
 				return new(rsa.PrivateKey{}), tt.readErr
 			}
-			svc := snapshot.NewVerifier(objectRepo, manifestRepo, folderRepo, encryption.NewDecryptSymmetricKey(symmetricRepo, asymmetricRepo))
-			got, err := svc.Verify(t.Context(), tt.args.repositoryPath, tt.args.snapshotID, tt.args.privateKey)
+			handler := app.NewVerifySnapshot(manifestRepo, objectRepo, folderRepo, asymmetricRepo, symmetricRepo)
+			got, err := verifySnapshot(t.Context(), handler, app.VerifySnapshotQuery{
+				SnapshotID:     tt.args.snapshotID,
+				RepositoryPath: tt.args.repositoryPath,
+				PrivateKeyPath: tt.args.privateKey,
+			})
 			if tt.expectedErr != nil {
 				require.ErrorIs(t, err, tt.expectedErr)
 				return
@@ -174,4 +182,16 @@ func TestVerifier_Verify(t *testing.T) {
 			require.Len(t, got.Failed(), tt.expectedFailedLen)
 		})
 	}
+}
+
+func verifySnapshot(ctx context.Context, handler *app.VerifySnapshot, query app.VerifySnapshotQuery) (*snapshot.Result, error) {
+	result, err := handler.Handle(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	verified, ok := result.(*snapshot.Result)
+	if !ok {
+		return nil, fmt.Errorf("unexpected result type: %T", result)
+	}
+	return verified, nil
 }

@@ -16,16 +16,24 @@ func (l SnaphotListQuery) Name() string {
 }
 
 type SnapshotList struct {
-	svc *snapshot.Listing
+	manifestRepo ManifestRepository
 }
 
-func (l SnapshotList) Handle(ctx context.Context, query cqs.Query) (any, error) {
+func (l *SnapshotList) Handle(ctx context.Context, query cqs.Query) (any, error) {
 	if _, ok := query.(SnaphotListQuery); !ok {
 		return nil, cqs.NewInvalidQueryError(ListQueryName, query.Name())
 	}
-	return l.svc.List(ctx)
+	manifests, err := l.manifestRepo.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	resumes := make([]snapshot.ManifestResume, len(manifests))
+	for i := range manifests {
+		resumes[i] = *manifests[i].Resume()
+	}
+	return resumes, nil
 }
 
-func NewSnapshotList(svc *snapshot.Listing) *SnapshotList {
-	return &SnapshotList{svc: svc}
+func NewSnapshotList(manifestRepo ManifestRepository) *SnapshotList {
+	return &SnapshotList{manifestRepo: manifestRepo}
 }

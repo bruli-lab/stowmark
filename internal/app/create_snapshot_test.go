@@ -1,10 +1,13 @@
-package snapshot_test
+package app_test
 
 import (
 	"context"
 	"crypto/rsa"
 	"errors"
+	"fmt"
 	"testing"
+
+	"github.com/bruli-lab/stowmark/internal/app"
 
 	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
@@ -14,7 +17,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestCreate_Do(t *testing.T) {
+func TestCreateSnapshot_Handle(t *testing.T) {
+	t.Parallel()
 	errTest := errors.New("test error")
 	config := fixtures.ConfigBuilder{}.Build(t)
 	oneConfig := fixtures.ConfigBuilder{FormatVersion: new(repository.FormatVersionOne)}.Build(t)
@@ -76,7 +80,7 @@ func TestCreate_Do(t *testing.T) {
 		{
 			name:        "with private key but no encryption config, then it returns an missing encryption config to encrypt error",
 			args:        args{repoPath: "path", sourcePath: "path", privateKey: new("private-key")},
-			expectedErr: snapshot.ErrMissingEncryptionConfigToEncrypt,
+			expectedErr: app.ErrMissingEncryptionConfigToEncrypt,
 			source: new(fixtures.SourceBuilder{Files: []snapshot.File{
 				fixtures.FileBuilder{}.Build(),
 			}}.Build()),
@@ -181,21 +185,21 @@ func TestCreate_Do(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		t.Run(`Given a Create service,
-		when Do method is called `+tt.name, func(t *testing.T) {
+		t.Run(`Given a CreateSnapshot command handler,
+		when Handle method is called `+tt.name, func(t *testing.T) {
 			t.Parallel()
-			sourceRepo := &snapshot.SourceRepositoryMock{}
+			sourceRepo := &app.SourceRepositoryMock{}
 			sourceRepo.ExploreFunc = func(_ context.Context, _ string) (*snapshot.Source, error) {
 				return tt.source, tt.exploreErr
 			}
 			sourceRepo.CalculateHashFunc = func(_ context.Context, _ string, _ *repository.Compression) (string, error) {
 				return tt.hash, tt.calculateHashErr
 			}
-			manifestRepo := &snapshot.ManifestRepositoryMock{}
+			manifestRepo := &app.ManifestRepositoryMock{}
 			manifestRepo.SaveFunc = func(_ context.Context, _ *snapshot.Manifest) error {
 				return tt.saveManifestErr
 			}
-			objRepo := &snapshot.ObjectRepositoryMock{}
+			objRepo := &app.ObjectRepositoryMock{}
 			objRepo.SaveFunc = func(_ context.Context, _, _ string, _ *repository.Compression, _ []byte, _ uint64) error {
 				return tt.saveObjErr
 			}
@@ -205,35 +209,48 @@ func TestCreate_Do(t *testing.T) {
 			objRepo.SaveChunkFunc = func(_ context.Context, _, _ string, _ int64, _ int64, _ *repository.Compression, _ []byte, _ uint64) error {
 				return tt.saveChunkErr
 			}
-			folderRepositoryRep := &repository.FolderRepositoryMock{}
+			folderRepositoryRep := &app.FolderRepositoryMock{}
 			folderRepositoryRep.GetConfigFunc = func(_ context.Context, _ string) (*repository.Config, error) {
 				return tt.config, tt.getConfigErr
 			}
-			symmetricRepo := &encryption.SymmetricKeyRepositoryMock{}
+			symmetricRepo := &app.SymmetricKeyRepositoryMock{}
 			symmetricRepo.DecodeAndDecryptSymmetricKeyFunc = func(_ context.Context, _ *rsa.PrivateKey, _ string) ([]byte, error) {
 				return []byte("abc"), tt.decodeErr
 			}
-			asymmetricRepo := &encryption.AsymmetricKeyPairRepositoryMock{}
+			asymmetricRepo := &app.AsymmetricKeyPairRepositoryMock{}
 			asymmetricRepo.ReadRSAPrivateKeyFunc = func(_ context.Context, _ string) (*rsa.PrivateKey, error) {
 				return new(rsa.PrivateKey{}), nil
 			}
-			decryptSvc := encryption.NewDecryptSymmetricKey(symmetricRepo, asymmetricRepo)
-			svc := snapshot.NewCreate(
-				sourceRepo,
-				manifestRepo,
-				objRepo,
-				repository.NewGetConfig(folderRepositoryRep),
-				decryptSvc,
-			)
-			result, err := svc.Do(t.Context(), tt.args.repoPath, tt.args.sourcePath, tt.args.privateKey)
+			handler := app.NewCreateSnapshot(sourceRepo, manifestRepo, objRepo, folderRepositoryRep, asymmetricRepo, symmetricRepo)
+			result, err := createSnapshot(t.Context(), handler, app.CreateSnapshotCommand{
+				RepositoryPath: tt.args.repoPath,
+				SourcePath:     tt.args.sourcePath,
+				PrivateKey:     tt.args.privateKey,
+			})
 			if tt.expectedErr != nil {
 				require.ErrorIs(t, err, tt.expectedErr)
 				return
 			}
 			require.NoError(t, err)
-			require.NotEmpty(t, result.Id())
-			require.Equal(t, tt.expectedFileCount, result.FileCount())
-			require.Equal(t, tt.expectedTotalSize, result.TotalSize())
+			require.Equal(t, app.CreateSnapshotCommandName, result.EventName())
+			require.NotEmpty(t, result.SnapshotID)
+			require.Equal(t, tt.expectedFileCount, result.FileCount)
+			require.Equal(t, tt.expectedTotalSize, result.TotalSize)
 		})
 	}
+}
+
+func createSnapshot(ctx context.Context, handler *app.CreateSnapshot, cmd app.CreateSnapshotCommand) (*app.CreateSnapshotEvent, error) {
+	events, err := handler.Handle(ctx, cmd)
+	if err != nil {
+		return nil, err
+	}
+	if len(events) != 1 {
+		return nil, fmt.Errorf("unexpected number of events: %d", len(events))
+	}
+	result, ok := events[0].(*app.CreateSnapshotEvent)
+	if !ok {
+		return nil, fmt.Errorf("unexpected event type: %T", events[0])
+	}
+	return result, nil
 }

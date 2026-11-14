@@ -38,12 +38,11 @@ func newSnapshotListCommand() *cobra.Command {
 				return err
 			}
 
-			svc := snapshot.NewListing(manifestRepo)
 			multiMdw, err := middlewares.BuildQueryMiddlewares(obsv)
 			if err != nil {
 				return err
 			}
-			handler := multiMdw(app.NewSnapshotList(svc))
+			handler := multiMdw(app.NewSnapshotList(manifestRepo))
 
 			result, err := handler.Handle(cmd.Context(), app.SnaphotListQuery{})
 			snapshots, ok := result.([]snapshot.ManifestResume)

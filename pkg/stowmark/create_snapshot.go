@@ -5,9 +5,6 @@ import (
 	"errors"
 
 	"github.com/bruli-lab/stowmark/internal/app"
-	"github.com/bruli-lab/stowmark/internal/domain/encryption"
-	"github.com/bruli-lab/stowmark/internal/domain/repository"
-	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 )
 
@@ -25,20 +22,20 @@ func (h *Handler) CreateSnapshot(ctx context.Context, source string, privateKey 
 	defer func() {
 		_ = obsv.Shutdown(ctx)
 	}()
-	svc := snapshot.NewCreate(
-		h.sourceRepository,
-		h.manifestRepository,
-		h.objectRepository,
-		repository.NewGetConfig(h.folderRepository),
-		encryption.NewDecryptSymmetricKey(h.symmetricKeyRepository, h.asymmetricKeyPaiRepository),
-	)
 	evtr := app.NewEventsTracing()
 	evtr.Add(app.CreateSnapshotCommandName, app.NewCreateSnapshotTracer(obsv.Logger))
 	mdw, err := middlewares.BuildCommandMiddlewares(obsv, evtr)
 	if err != nil {
 		return nil, err
 	}
-	handler := mdw(app.NewCreateSnapshot(svc))
+	handler := mdw(app.NewCreateSnapshot(
+		h.sourceRepository,
+		h.manifestRepository,
+		h.objectRepository,
+		h.folderRepository,
+		h.asymmetricKeyPaiRepository,
+		h.symmetricKeyRepository,
+	))
 
 	events, err := handler.Handle(ctx, app.CreateSnapshotCommand{
 		RepositoryPath: h.repositoryPath,

@@ -24,14 +24,12 @@ func newKeyGenerateCommand() *cobra.Command {
 			defer func() {
 				_ = obsv.Shutdown(cmd.Context())
 			}()
-			repo := disk.NewAsymmetricKeyPairRepository()
-			svc := encryption.NewCreateAsymmetricKeyPair(repo)
 			evtr := app.NewEventsTracing()
 			multiMdw, err := middlewares.BuildCommandMiddlewares(obsv, evtr)
 			if err != nil {
 				return err
 			}
-			handler := multiMdw(app.NewGenerateKey(svc))
+			handler := multiMdw(app.NewGenerateKey(disk.NewAsymmetricKeyPairRepository()))
 			keys, err := encryption.NewAsymmetricKeyPair(folder)
 			if err != nil {
 				return fmt.Errorf("failed to create key pair: %w", err)

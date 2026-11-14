@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/bruli-lab/stowmark/internal/app"
-	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/disk"
 	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
 	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
@@ -36,18 +35,20 @@ func newKeyReKeyCommand() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to create repository handler: %w", err)
 			}
+			defer func() {
+				_ = repoHandler.Close()
+			}()
 			folderRepo := repoHandler.FolderRepository()
 			objectRepo, err := repoHandler.ObjectRepository()
 			if err != nil {
 				return fmt.Errorf("failed to create object repository: %w", err)
 			}
-			svc := snapshot.NewReKey(folderRepo, symmetricRepo, asymmetricRepo, objectRepo)
 			evtr := app.NewEventsTracing()
 			multiMdw, err := middlewares.BuildCommandMiddlewares(obsv, evtr)
 			if err != nil {
 				return err
 			}
-			handler := multiMdw(app.NewRekeyKey(svc))
+			handler := multiMdw(app.NewRekeyKey(folderRepo, objectRepo, asymmetricRepo, symmetricRepo))
 			_, err = handler.Handle(cmd.Context(), app.RekeyKeyCommand{
 				RepositoryPath: repoHandler.RepositoryPath(),
 				PrivateKeyPath: privateKey,

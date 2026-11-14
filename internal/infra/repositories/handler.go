@@ -3,22 +3,23 @@ package repositories
 import (
 	"context"
 
+	"github.com/bruli-lab/stowmark/internal/app"
+
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
-	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/blob"
 )
 
 type Repositories interface {
-	FolderRepository() repository.FolderRepository
+	FolderRepository() app.FolderRepository
 	RepositoryPath() string
 	BlobStore() (blob.Store, error)
-	ObjectRepository() (snapshot.ObjectRepository, error)
-	ManifestRepository() (snapshot.ManifestRepository, error)
+	ObjectRepository() (app.ObjectRepository, error)
+	ManifestRepository() (app.ManifestRepository, error)
 	Close() error
 }
 
 type backend interface {
-	FolderRepository() repository.FolderRepository
+	FolderRepository() app.FolderRepository
 	RepositoryPath() string
 	BlobStore() (blob.Store, error)
 	Close() error
@@ -28,7 +29,7 @@ type blobRepositories struct {
 	backend
 }
 
-func (b blobRepositories) ObjectRepository() (snapshot.ObjectRepository, error) {
+func (b blobRepositories) ObjectRepository() (app.ObjectRepository, error) {
 	store, err := b.BlobStore()
 	if err != nil {
 		return nil, err
@@ -36,7 +37,7 @@ func (b blobRepositories) ObjectRepository() (snapshot.ObjectRepository, error) 
 	return blob.NewObjectRepository(store), nil
 }
 
-func (b blobRepositories) ManifestRepository() (snapshot.ManifestRepository, error) {
+func (b blobRepositories) ManifestRepository() (app.ManifestRepository, error) {
 	store, err := b.BlobStore()
 	if err != nil {
 		return nil, err

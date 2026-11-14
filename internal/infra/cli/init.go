@@ -4,13 +4,11 @@ import (
 	"fmt"
 
 	"github.com/bruli-lab/stowmark/internal/app"
-	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/infra/disk"
 	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
 	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 	"github.com/bruli-lab/stowmark/internal/infra/repositories"
-	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )
 
@@ -41,7 +39,6 @@ func newInitCommand() *cobra.Command {
 				_ = obsv.Shutdown(cmd.Context())
 				_ = repoHand.Close()
 			}()
-			svc := repository.NewInit(repoHand.FolderRepository())
 			compType, err := repository.ParseCompressionType(compressionType)
 			if err != nil {
 				return fmt.Errorf("invalid compression type: %w", err)
@@ -57,18 +54,9 @@ func newInitCommand() *cobra.Command {
 				return fmt.Errorf("create compression configuration: %w", err)
 			}
 
-			id := uuid.New()
-
-			var encryptionConfig *encryption.EncryptionConfig
-
+			var publicKeyPath *string
 			if publicKey != "" {
-				asymmetricRepo := disk.NewAsymmetricKeyPairRepository()
-				symmetricRepo := encrypt.NewSymmetricRepository()
-				encryptionConfigSvc := encryption.NewCreateEncryptionConfig(asymmetricRepo, symmetricRepo)
-				encryptionConfig, err = encryptionConfigSvc.Create(cmd.Context(), publicKey)
-				if err != nil {
-					return fmt.Errorf("create encryption config: %w", err)
-				}
+				publicKeyPath = &publicKey
 			}
 
 			version, err := repository.ParseFormatVersionOrCurrent(formatVersion)
@@ -76,23 +64,19 @@ func newInitCommand() *cobra.Command {
 				return err
 			}
 
-			re, err := repository.NewRepository(
-				repoHand.RepositoryPath(),
-				repository.NewConfig(id, version, comp, encryptionConfig),
-			)
-			if err != nil {
-				return fmt.Errorf("create repository: %w", err)
-			}
 			evtr := app.NewEventsTracing()
 			multiMdw, err := middlewares.BuildCommandMiddlewares(obsv, evtr)
 			if err != nil {
 				return err
 			}
-			ch := multiMdw(app.NewInit(svc))
+			ch := multiMdw(app.NewInit(repoHand.FolderRepository(), disk.NewAsymmetricKeyPairRepository(), encrypt.NewSymmetricRepository()))
 
 			events, err := ch.Handle(cmd.Context(), app.InitCommand{
-				Repository: re,
-				Force:      force,
+				RepositoryPath: repoHand.RepositoryPath(),
+				Compression:    comp,
+				FormatVersion:  version,
+				PublicKeyPath:  publicKeyPath,
+				Force:          force,
 			})
 			if err != nil {
 				return fmt.Errorf("initialize repository: %w", err)

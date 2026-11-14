@@ -1,8 +1,8 @@
 package repositories
 
 import (
+	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/config"
-	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/infra/blob"
 	"github.com/bruli-lab/stowmark/internal/infra/webdav"
 	"github.com/studio-b12/gowebdav"
@@ -14,7 +14,7 @@ type WebDavRepositories struct {
 	repositoryPath string
 }
 
-func (w WebDavRepositories) FolderRepository() repository.FolderRepository {
+func (w WebDavRepositories) FolderRepository() app.FolderRepository {
 	return webdav.NewFolderRepositoryRepository(w.client)
 }
 

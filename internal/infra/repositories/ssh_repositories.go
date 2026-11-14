@@ -8,10 +8,11 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/bruli-lab/stowmark/internal/app"
+
 	"github.com/bruli-lab/stowmark/internal/infra/blob"
 
 	"github.com/bruli-lab/stowmark/internal/config"
-	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	sshinfra "github.com/bruli-lab/stowmark/internal/infra/ssh"
 	gossh "golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
@@ -28,7 +29,7 @@ func (s *SSHRepositories) RepositoryPath() string {
 	return s.repositoryPath
 }
 
-func (s *SSHRepositories) FolderRepository() repository.FolderRepository {
+func (s *SSHRepositories) FolderRepository() app.FolderRepository {
 	return sshinfra.NewFolderRepositoryRepository(s.client.Sftp())
 }
 

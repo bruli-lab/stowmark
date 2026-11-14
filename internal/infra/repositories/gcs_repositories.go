@@ -3,11 +3,12 @@ package repositories
 import (
 	"context"
 
+	"github.com/bruli-lab/stowmark/internal/app"
+
 	"github.com/bruli-lab/stowmark/internal/infra/blob"
 
 	"cloud.google.com/go/storage"
 	"github.com/bruli-lab/stowmark/internal/config"
-	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/infra/gcs"
 )
 
@@ -17,7 +18,7 @@ type GCSRepositories struct {
 	bucket         string
 }
 
-func (r GCSRepositories) FolderRepository() repository.FolderRepository {
+func (r GCSRepositories) FolderRepository() app.FolderRepository {
 	return gcs.NewFolderRepositoryRepository(r.client, r.bucket)
 }
 

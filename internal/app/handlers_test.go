@@ -30,13 +30,13 @@ func TestCommandHandlers_InvalidCommand(t *testing.T) {
 	t.Parallel()
 
 	handlers := map[string]cqs.CommandHandler{
-		app.CreateSnapshotCommandName:  app.NewCreateSnapshot(nil),
-		app.InitCommandName:            app.NewInit(nil),
+		app.CreateSnapshotCommandName:  app.NewCreateSnapshot(nil, nil, nil, nil, nil, nil),
+		app.InitCommandName:            app.NewInit(nil, nil, nil),
 		app.GenerateKeyCommandName:     app.NewGenerateKey(nil),
-		app.RekeyKeyCommandName:        app.NewRekeyKey(nil),
-		app.RestoreFileCommandName:     app.NewRestoreFile(nil),
-		app.RestoreSnapshotCommandName: app.NewRestoreSnapshot(nil),
-		app.RewrapKeyCommandName:       app.NewRewrapKey(nil),
+		app.RekeyKeyCommandName:        app.NewRekeyKey(nil, nil, nil, nil),
+		app.RestoreFileCommandName:     app.NewRestoreFile(nil, nil, nil, nil, nil),
+		app.RestoreSnapshotCommandName: app.NewRestoreSnapshot(nil, nil, nil, nil, nil),
+		app.RewrapKeyCommandName:       app.NewRewrapKey(nil, nil, nil),
 	}
 
 	for name, handler := range handlers {
@@ -59,7 +59,7 @@ func TestQueryHandlers_InvalidQuery(t *testing.T) {
 	handlers := map[string]cqs.QueryHandler{
 		app.ListQueryName:           app.NewSnapshotList(nil),
 		app.SnapshotGetQueryName:    app.NewManifestGet(nil),
-		app.VerifySnapshotQueryName: app.NewVerifySnapshot(nil),
+		app.VerifySnapshotQueryName: app.NewVerifySnapshot(nil, nil, nil, nil, nil),
 	}
 
 	for name, handler := range handlers {
@@ -122,8 +122,8 @@ func TestSnapshotList_Handle(t *testing.T) {
 		when Handle method is called `+tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			manifestRepo := &snapshot.ManifestRepositoryMock{ListFunc: tt.list}
-			handler := app.NewSnapshotList(snapshot.NewListing(manifestRepo))
+			manifestRepo := &app.ManifestRepositoryMock{ListFunc: tt.list}
+			handler := app.NewSnapshotList(manifestRepo)
 
 			result, err := handler.Handle(context.Background(), app.SnaphotListQuery{})
 
@@ -146,12 +146,12 @@ func TestManifestGet_Handle(t *testing.T) {
 		t.Parallel()
 
 		manifest := manifestWithFiles(t, 5)
-		manifestRepo := &snapshot.ManifestRepositoryMock{
+		manifestRepo := &app.ManifestRepositoryMock{
 			GetFunc: func(context.Context, string) (*snapshot.Manifest, error) {
 				return &manifest, nil
 			},
 		}
-		handler := app.NewManifestGet(snapshot.NewGetManifest(manifestRepo))
+		handler := app.NewManifestGet(manifestRepo)
 
 		result, err := handler.Handle(context.Background(), app.ManifestGetQuery{SnapshotID: manifest.Id()})
 
@@ -220,9 +220,9 @@ func TestRestoreSnapshot_Handle(t *testing.T) {
 		when Handle method is called `+tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			manifestRepo := &snapshot.ManifestRepositoryMock{GetFunc: tt.getManifest}
-			objectRepo := &snapshot.ObjectRepositoryMock{RestoreObjectFunc: tt.restoreObject}
-			handler := app.NewRestoreSnapshot(snapshot.NewRestore(manifestRepo, objectRepo, nil, nil))
+			manifestRepo := &app.ManifestRepositoryMock{GetFunc: tt.getManifest}
+			objectRepo := &app.ObjectRepositoryMock{RestoreObjectFunc: tt.restoreObject}
+			handler := app.NewRestoreSnapshot(manifestRepo, objectRepo, nil, nil, nil)
 
 			events, err := handler.Handle(context.Background(), app.RestoreSnapshotCommand{SnapshotID: "20261113T222314Z-abcdef01"})
 
@@ -239,53 +239,6 @@ func TestRestoreSnapshot_Handle(t *testing.T) {
 			require.Equal(t, tt.expectedEvent.TotalFiles, got.TotalFiles)
 			require.Equal(t, tt.expectedEvent.FailedFiles, got.FailedFiles)
 			require.Equal(t, tt.expectedEvent.IsSuccess, got.IsSuccess)
-		})
-	}
-}
-
-func TestInit_Handle(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name        string
-		createErr   error
-		expectedErr error
-	}{
-		{
-			name:        "and the repository fails, then it returns the repository error",
-			createErr:   errRepository,
-			expectedErr: errRepository,
-		},
-		{
-			name: "and the repository is created, then it returns an init event with the repository id",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(`Given an Init command handler for a new repository,
-		when Handle method is called `+tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			folderRepo := &repository.FolderRepositoryMock{
-				ExistsFunc:       func(context.Context, string) (bool, error) { return false, nil },
-				CreateFolderFunc: func(context.Context, string) error { return tt.createErr },
-				CreateConfigFunc: func(context.Context, string, *repository.Config) error { return nil },
-			}
-			repo := fixtures.RepositoryBuilder{}.Build(t)
-			handler := app.NewInit(repository.NewInit(folderRepo))
-
-			events, err := handler.Handle(context.Background(), app.InitCommand{Repository: &repo})
-
-			if tt.expectedErr != nil {
-				require.ErrorIs(t, err, tt.expectedErr)
-				return
-			}
-			require.NoError(t, err)
-			require.Len(t, events, 1)
-			got, ok := events[0].(*app.InitEvent)
-			require.True(t, ok)
-			require.Equal(t, app.InitCommandName, got.EventName())
-			require.Equal(t, repo.Config().Id().String(), got.RepositoryID)
 		})
 	}
 }
@@ -313,13 +266,13 @@ func TestGenerateKey_Handle(t *testing.T) {
 		when Handle method is called `+tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			keyRepo := &encryption.AsymmetricKeyPairRepositoryMock{
+			keyRepo := &app.AsymmetricKeyPairRepositoryMock{
 				CreatePrivateKeyFunc: func(context.Context, string, *rsa.PrivateKey) error { return tt.createErr },
 				CreatePublicKeyFunc:  func(context.Context, string, *rsa.PublicKey) error { return nil },
 			}
 			keys, err := encryption.NewAsymmetricKeyPair(t.TempDir())
 			require.NoError(t, err)
-			handler := app.NewGenerateKey(encryption.NewCreateAsymmetricKeyPair(keyRepo))
+			handler := app.NewGenerateKey(keyRepo)
 
 			events, err := handler.Handle(context.Background(), app.GenerateKeyCommand{Keys: keys})
 

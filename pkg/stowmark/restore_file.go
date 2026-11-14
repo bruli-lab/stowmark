@@ -4,10 +4,6 @@ import (
 	"context"
 
 	"github.com/bruli-lab/stowmark/internal/app"
-	"github.com/bruli-lab/stowmark/internal/domain/encryption"
-	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
-	"github.com/bruli-lab/stowmark/internal/infra/disk"
-	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
 	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 )
 
@@ -19,13 +15,6 @@ func (h *Handler) RestoreFile(ctx context.Context, snapshotID, filePath string, 
 	defer func() {
 		_ = obsv.Shutdown(ctx)
 	}()
-	decryptKeySvc := encryption.NewDecryptSymmetricKey(encrypt.NewSymmetricRepository(), disk.NewAsymmetricKeyPairRepository())
-	svc := snapshot.NewRestoreFile(
-		h.manifestRepository,
-		h.objectRepository,
-		h.folderRepository,
-		decryptKeySvc,
-	)
 	restoreSnapshotTracer := app.NewRestoreSnapshotTracer(obsv.Logger)
 	evtr := app.NewEventsTracing()
 	evtr.Add(app.RestoreSnapshotCommandName, restoreSnapshotTracer)
@@ -33,7 +22,7 @@ func (h *Handler) RestoreFile(ctx context.Context, snapshotID, filePath string, 
 	if err != nil {
 		return err
 	}
-	handler := mdw(app.NewRestoreFile(svc))
+	handler := mdw(app.NewRestoreFile(h.manifestRepository, h.objectRepository, h.folderRepository, h.asymmetricKeyPaiRepository, h.symmetricKeyRepository))
 	_, err = handler.Handle(ctx, app.RestoreFileCommand{
 		SnapshotID:      snapshotID,
 		FilePath:        filePath,

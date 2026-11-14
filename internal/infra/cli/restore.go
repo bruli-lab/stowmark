@@ -5,9 +5,6 @@ import (
 
 	"github.com/bruli-lab/go-core/cqs"
 	"github.com/bruli-lab/stowmark/internal/app"
-	"github.com/bruli-lab/stowmark/internal/domain/encryption"
-	"github.com/bruli-lab/stowmark/internal/domain/repository"
-	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/disk"
 	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
 	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
@@ -67,7 +64,6 @@ func newSnapshotRestoreCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			decryptKeySvc := encryption.NewDecryptSymmetricKey(encrypt.NewSymmetricRepository(), disk.NewAsymmetricKeyPairRepository())
 			switch filePath {
 			case "":
 				return executeRestore(
@@ -76,7 +72,6 @@ func newSnapshotRestoreCommand() *cobra.Command {
 					manifestRepo,
 					objectRepo,
 					repoHandler.FolderRepository(),
-					decryptKeySvc,
 					repoHandler.RepositoryPath(),
 					snapshotID,
 					destination,
@@ -89,7 +84,6 @@ func newSnapshotRestoreCommand() *cobra.Command {
 					manifestRepo,
 					objectRepo,
 					repoHandler.FolderRepository(),
-					decryptKeySvc,
 					snapshotID,
 					filePath,
 					repoHandler.RepositoryPath(),
@@ -139,9 +133,8 @@ func newSnapshotRestoreCommand() *cobra.Command {
 	return cmd
 }
 
-func executeRestoreFile(cmd *cobra.Command, mdw cqs.CommandHandlerMiddleware, manifestRepo snapshot.ManifestRepository, objectRepo snapshot.ObjectRepository, folderRepository repository.FolderRepository, decryptKeySvc *encryption.DecryptSymmetricKey, snapshotID, filePath, repositoryPath string, destinationPath, privateKey *string) error {
-	svc := snapshot.NewRestoreFile(manifestRepo, objectRepo, folderRepository, decryptKeySvc)
-	handler := mdw(app.NewRestoreFile(svc))
+func executeRestoreFile(cmd *cobra.Command, mdw cqs.CommandHandlerMiddleware, manifestRepo app.ManifestRepository, objectRepo app.ObjectRepository, folderRepository app.FolderRepository, snapshotID, filePath, repositoryPath string, destinationPath, privateKey *string) error {
+	handler := mdw(app.NewRestoreFile(manifestRepo, objectRepo, folderRepository, disk.NewAsymmetricKeyPairRepository(), encrypt.NewSymmetricRepository()))
 
 	if _, err := handler.Handle(cmd.Context(), app.RestoreFileCommand{
 		SnapshotID:      snapshotID,
@@ -161,14 +154,8 @@ func executeRestoreFile(cmd *cobra.Command, mdw cqs.CommandHandlerMiddleware, ma
 	return err
 }
 
-func executeRestore(cmd *cobra.Command, mdw cqs.CommandHandlerMiddleware, manifestRepo snapshot.ManifestRepository, objectRepo snapshot.ObjectRepository, folderRepo repository.FolderRepository, decryptKeySvc *encryption.DecryptSymmetricKey, repositoryPath, snapshotID string, destination, privateKey *string) error {
-	svc := snapshot.NewRestore(
-		manifestRepo,
-		objectRepo,
-		folderRepo,
-		decryptKeySvc,
-	)
-	handler := mdw(app.NewRestoreSnapshot(svc))
+func executeRestore(cmd *cobra.Command, mdw cqs.CommandHandlerMiddleware, manifestRepo app.ManifestRepository, objectRepo app.ObjectRepository, folderRepo app.FolderRepository, repositoryPath, snapshotID string, destination, privateKey *string) error {
+	handler := mdw(app.NewRestoreSnapshot(manifestRepo, objectRepo, folderRepo, disk.NewAsymmetricKeyPairRepository(), encrypt.NewSymmetricRepository()))
 	events, err := handler.Handle(cmd.Context(), app.RestoreSnapshotCommand{
 		SnapshotID:      snapshotID,
 		RepositoryPath:  repositoryPath,

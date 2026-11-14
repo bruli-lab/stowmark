@@ -3,11 +3,12 @@ package repositories
 import (
 	"context"
 
+	"github.com/bruli-lab/stowmark/internal/app"
+
 	"github.com/bruli-lab/stowmark/internal/infra/blob"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/bruli-lab/stowmark/internal/config"
-	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	s3infra "github.com/bruli-lab/stowmark/internal/infra/s3"
 )
 
@@ -16,7 +17,7 @@ type S3Repositories struct {
 	repositoryPath, bucket string
 }
 
-func (s S3Repositories) FolderRepository() repository.FolderRepository {
+func (s S3Repositories) FolderRepository() app.FolderRepository {
 	return s3infra.NewFolderRepositoryRepository(s.client, s.bucket)
 }
 

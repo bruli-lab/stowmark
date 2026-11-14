@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/bruli-lab/stowmark/internal/app"
-	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 )
 
@@ -16,13 +15,12 @@ func (h *Handler) ReKey(ctx context.Context, privateKeyPath, publicKeyPath strin
 	defer func() {
 		_ = obsv.Shutdown(ctx)
 	}()
-	svc := snapshot.NewReKey(h.folderRepository, h.symmetricKeyRepository, h.asymmetricKeyPaiRepository, h.objectRepository)
 	evtr := app.NewEventsTracing()
 	mdw, err := middlewares.BuildCommandMiddlewares(obsv, evtr)
 	if err != nil {
 		return err
 	}
-	handler := mdw(app.NewRekeyKey(svc))
+	handler := mdw(app.NewRekeyKey(h.folderRepository, h.objectRepository, h.asymmetricKeyPaiRepository, h.symmetricKeyRepository))
 	_, err = handler.Handle(ctx, app.RekeyKeyCommand{
 		RepositoryPath: h.repositoryPath,
 		PrivateKeyPath: privateKeyPath,

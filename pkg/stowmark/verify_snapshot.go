@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/bruli-lab/stowmark/internal/app"
-	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 )
@@ -29,13 +28,11 @@ func (h *Handler) VerifySnapshot(ctx context.Context, id string, privateKey *str
 	defer func() {
 		_ = obsv.Shutdown(ctx)
 	}()
-	decryptSvc := encryption.NewDecryptSymmetricKey(h.symmetricKeyRepository, h.asymmetricKeyPaiRepository)
-	svc := snapshot.NewVerifier(h.objectRepository, h.manifestRepository, h.folderRepository, decryptSvc)
 	mdw, err := middlewares.BuildQueryMiddlewares(obsv)
 	if err != nil {
 		return nil, err
 	}
-	handler := mdw(app.NewVerifySnapshot(svc))
+	handler := mdw(app.NewVerifySnapshot(h.manifestRepository, h.objectRepository, h.folderRepository, h.asymmetricKeyPaiRepository, h.symmetricKeyRepository))
 	resultQuery, err := handler.Handle(ctx, app.VerifySnapshotQuery{
 		SnapshotID:     id,
 		RepositoryPath: h.repositoryPath,

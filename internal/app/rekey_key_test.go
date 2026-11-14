@@ -1,4 +1,4 @@
-package snapshot_test
+package app_test
 
 import (
 	"context"
@@ -7,14 +7,16 @@ import (
 	"io"
 	"testing"
 
+	"github.com/bruli-lab/stowmark/internal/app"
+
 	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
-	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/fixtures"
 	"github.com/stretchr/testify/require"
 )
 
-func TestReKey_Do(t *testing.T) {
+func TestRekeyKey_Handle(t *testing.T) {
+	t.Parallel()
 	errTest := errors.New("test error")
 	list := []string{"object1", "object2"}
 	type args struct {
@@ -50,7 +52,7 @@ func TestReKey_Do(t *testing.T) {
 		{
 			name:        "with a config without encryption, then it returns a mission encryption config to encrypt error",
 			config:      new(fixtures.ConfigBuilder{}.Build(t)),
-			expectedErr: snapshot.ErrMissingEncryptionConfigToEncrypt,
+			expectedErr: app.ErrMissingEncryptionConfigToEncrypt,
 		},
 		{
 			name: "when red rsa private key returns an error, then it returns same error",
@@ -231,10 +233,10 @@ func TestReKey_Do(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		t.Run(`Given ReKey service,
-		when Do method is called `+tt.name, func(t *testing.T) {
+		t.Run(`Given a RekeyKey command handler,
+		when Handle method is called `+tt.name, func(t *testing.T) {
 			t.Parallel()
-			folderRepo := &repository.FolderRepositoryMock{}
+			folderRepo := &app.FolderRepositoryMock{}
 			folderRepo.GetConfigFunc = func(_ context.Context, _ string) (*repository.Config, error) {
 				return tt.config, tt.getConfigErr
 			}
@@ -242,7 +244,7 @@ func TestReKey_Do(t *testing.T) {
 				return tt.createConfigErr
 			}
 
-			symmetricRepo := &encryption.SymmetricKeyRepositoryMock{}
+			symmetricRepo := &app.SymmetricKeyRepositoryMock{}
 			symmetricRepo.DecodeAndDecryptSymmetricKeyFunc = func(_ context.Context, _ *rsa.PrivateKey, _ string) ([]byte, error) {
 				return tt.oldSymmetricKey, tt.decodeErr
 			}
@@ -253,7 +255,7 @@ func TestReKey_Do(t *testing.T) {
 				return tt.encryptedKey, tt.encryptErr
 			}
 
-			asymmetricRepo := &encryption.AsymmetricKeyPairRepositoryMock{}
+			asymmetricRepo := &app.AsymmetricKeyPairRepositoryMock{}
 			asymmetricRepo.ReadRSAPrivateKeyFunc = func(_ context.Context, _ string) (*rsa.PrivateKey, error) {
 				return tt.privateKey, tt.readPrivateKeyErr
 			}
@@ -264,7 +266,7 @@ func TestReKey_Do(t *testing.T) {
 				return tt.fingerprint, tt.fingerPrintErr
 			}
 
-			objectRepo := &snapshot.ObjectRepositoryMock{}
+			objectRepo := &app.ObjectRepositoryMock{}
 			objectRepo.ListEncryptedObjectsFunc = func(_ context.Context, _ uint64) ([]string, error) {
 				return tt.list, tt.listErr
 			}
@@ -284,8 +286,13 @@ func TestReKey_Do(t *testing.T) {
 				return tt.abortErr
 			}
 
-			svc := snapshot.NewReKey(folderRepo, symmetricRepo, asymmetricRepo, objectRepo)
-			err := svc.Do(t.Context(), tt.args.repositoryPath, tt.args.privateKeyPath, tt.args.publicKeyPath)
+			handler := app.NewRekeyKey(folderRepo, objectRepo, asymmetricRepo, symmetricRepo)
+			events, err := handler.Handle(t.Context(), app.RekeyKeyCommand{
+				RepositoryPath: tt.args.repositoryPath,
+				PrivateKeyPath: tt.args.privateKeyPath,
+				PublicKeyPath:  tt.args.publicKeyPath,
+			})
+			require.Empty(t, events)
 			require.Len(t, objectRepo.AbortRekeyCalls(), tt.abortCalls)
 			if tt.expectedErr != nil {
 				require.ErrorIs(t, err, tt.expectedErr)

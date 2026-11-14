@@ -26,12 +26,11 @@ func (h *Handler) ListSnapshots(ctx context.Context) ([]SnapshotSummary, error) 
 	defer func() {
 		_ = obsv.Shutdown(ctx)
 	}()
-	svc := snapshot.NewListing(h.manifestRepository)
 	mdw, err := middlewares.BuildQueryMiddlewares(obsv)
 	if err != nil {
 		return nil, err
 	}
-	handler := mdw(app.NewSnapshotList(svc))
+	handler := mdw(app.NewSnapshotList(h.manifestRepository))
 	resultQuery, err := handler.Handle(ctx, app.SnaphotListQuery{})
 	if err != nil {
 		return nil, err

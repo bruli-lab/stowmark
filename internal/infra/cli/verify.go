@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/bruli-lab/stowmark/internal/app"
-	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/disk"
 	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
@@ -58,12 +57,6 @@ func newSnapshotVerifyCommand() *cobra.Command {
 				return err
 			}
 
-			svc := snapshot.NewVerifier(
-				objectRepo,
-				manifestRepo,
-				repoHand.FolderRepository(),
-				encryption.NewDecryptSymmetricKey(encrypt.NewSymmetricRepository(), disk.NewAsymmetricKeyPairRepository()),
-			)
 			var privateKeyPath *string
 			if privateKey != "" {
 				privateKeyPath = &privateKey
@@ -73,7 +66,13 @@ func newSnapshotVerifyCommand() *cobra.Command {
 				return err
 			}
 
-			handler := multiMdw(app.NewVerifySnapshot(svc))
+			handler := multiMdw(app.NewVerifySnapshot(
+				manifestRepo,
+				objectRepo,
+				repoHand.FolderRepository(),
+				disk.NewAsymmetricKeyPairRepository(),
+				encrypt.NewSymmetricRepository(),
+			))
 
 			resultQuery, err := handler.Handle(cmd.Context(), app.VerifySnapshotQuery{
 				SnapshotID:     snapshotID,

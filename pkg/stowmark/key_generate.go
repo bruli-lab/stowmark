@@ -20,13 +20,12 @@ func (h *Handler) KeyGenerate(ctx context.Context, folder string) (*encryption.A
 	if err != nil {
 		return nil, err
 	}
-	svc := encryption.NewCreateAsymmetricKeyPair(h.asymmetricKeyPaiRepository)
 	evtr := app.NewEventsTracing()
 	mdw, err := middlewares.BuildCommandMiddlewares(obsv, evtr)
 	if err != nil {
 		return nil, err
 	}
-	handler := mdw(app.NewGenerateKey(svc))
+	handler := mdw(app.NewGenerateKey(h.asymmetricKeyPaiRepository))
 	_, err = handler.Handle(ctx, app.GenerateKeyCommand{Keys: keys})
 	if err != nil {
 		return nil, err

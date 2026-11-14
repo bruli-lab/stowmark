@@ -5,7 +5,6 @@ import (
 
 	"github.com/bruli-lab/go-core/cqs"
 	"github.com/bruli-lab/go-core/event"
-	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 )
 
 const RestoreFileCommandName = "restore-file"
@@ -20,15 +19,29 @@ func (r RestoreFileCommand) Name() string {
 }
 
 type RestoreFile struct {
-	svc *snapshot.RestoreFile
+	manifestRepo ManifestRepository
+	objectRepo   ObjectRepository
+	keys         keyring
 }
 
-func (r RestoreFile) Handle(ctx context.Context, cmd cqs.Command) ([]event.Event, error) {
+func (r *RestoreFile) Handle(ctx context.Context, cmd cqs.Command) ([]event.Event, error) {
 	co, ok := cmd.(RestoreFileCommand)
 	if !ok {
 		return nil, cqs.NewInvalidCommandError(RestoreFileCommandName, cmd.Name())
 	}
-	if err := r.svc.Restore(ctx, co.SnapshotID, co.FilePath, co.RepositoryPath, co.DestinationPath, co.PrivateKeyPath); err != nil {
+	key, err := r.keys.forRepository(ctx, co.RepositoryPath, co.PrivateKeyPath)
+	if err != nil {
+		return nil, err
+	}
+	man, err := r.manifestRepo.Get(ctx, co.SnapshotID)
+	if err != nil {
+		return nil, err
+	}
+	file, err := man.FindFile(co.FilePath)
+	if err != nil {
+		return nil, err
+	}
+	if err := restoreFile(ctx, r.objectRepo, man, file, co.DestinationPath, key); err != nil {
 		return nil, err
 	}
 	return []event.Event{
@@ -36,6 +49,16 @@ func (r RestoreFile) Handle(ctx context.Context, cmd cqs.Command) ([]event.Event
 	}, nil
 }
 
-func NewRestoreFile(svc *snapshot.RestoreFile) *RestoreFile {
-	return &RestoreFile{svc: svc}
+func NewRestoreFile(
+	manifestRepo ManifestRepository,
+	objectRepo ObjectRepository,
+	folderRepo FolderRepository,
+	asymmetricRepo AsymmetricKeyPairRepository,
+	symmetricRepo SymmetricKeyRepository,
+) *RestoreFile {
+	return &RestoreFile{
+		manifestRepo: manifestRepo,
+		objectRepo:   objectRepo,
+		keys:         newKeyring(folderRepo, asymmetricRepo, symmetricRepo),
+	}
 }

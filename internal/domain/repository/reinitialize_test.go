@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_updateConfig(t *testing.T) {
+func TestConfig_Reinitialize(t *testing.T) {
 	id := uuid.New()
 	now := time.Now()
 	encryptionConfig := encryption.NewEncryptionConfig("key", "fingerprint", uint64(1))
@@ -122,20 +122,20 @@ func Test_updateConfig(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		t.Run(`Given an updateConfig function,
-		whe is called `+tt.name, func(t *testing.T) {
+		t.Run(`Given a previous config,
+		when it is reinitialized `+tt.name, func(t *testing.T) {
 			t.Parallel()
-			got := updateConfig(tt.args.previous, tt.args.newConfig, tt.args.force, &InitResult{})
+			got, _ := tt.args.previous.Reinitialize(tt.args.newConfig, tt.args.force)
 			require.Equal(t, tt.expectedEncryptionConfig, got.Encryption())
 		})
 	}
 }
 
-func TestUpdateConfig_KeepsCreatedAt(t *testing.T) {
+func TestConfig_ReinitializeKeepsCreatedAt(t *testing.T) {
 	t.Parallel()
 
-	t.Run(`Given an updateConfig function and a previous config created in the past,
-	when it is called with a new config,
+	t.Run(`Given a previous config created in the past,
+	when it is reinitialized with a new config,
 	then it keeps the creation date of the previous config`, func(t *testing.T) {
 		t.Parallel()
 
@@ -143,10 +143,11 @@ func TestUpdateConfig_KeepsCreatedAt(t *testing.T) {
 		previous := HydrateConfig(uuid.New(), FormatVersionTwo, createdAt, &Compression{compType: NoneCompressionType}, nil)
 		newConfig := NewConfig(uuid.New(), FormatVersionTwo, &Compression{compType: ZstdCompressionType}, nil)
 
-		got := updateConfig(previous, newConfig, false, &InitResult{})
+		got, warnings := previous.Reinitialize(newConfig, false)
 
 		require.Equal(t, createdAt, got.CreatedAt())
 		require.Equal(t, previous.Id(), got.Id())
 		require.Equal(t, ZstdCompressionType, got.Compression().CompType())
+		require.Empty(t, warnings)
 	})
 }

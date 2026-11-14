@@ -1,10 +1,12 @@
-package snapshot_test
+package app_test
 
 import (
 	"context"
 	"crypto/rsa"
 	"errors"
 	"testing"
+
+	"github.com/bruli-lab/stowmark/internal/app"
 
 	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
@@ -68,36 +70,48 @@ func TestRestoreFile_Restore(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		t.Run(`Given a RestoreFile service,
-		when Restore method is called `+tt.name, func(t *testing.T) {
+		t.Run(`Given a RestoreFile command handler,
+		when Handle method is called `+tt.name, func(t *testing.T) {
 			t.Parallel()
-			manifestRepo := &snapshot.ManifestRepositoryMock{}
+			manifestRepo := &app.ManifestRepositoryMock{}
 			manifestRepo.GetFunc = func(_ context.Context, _ string) (*snapshot.Manifest, error) {
 				return tt.manifest, tt.manifestErr
 			}
-			objectRepo := &snapshot.ObjectRepositoryMock{}
+			objectRepo := &app.ObjectRepositoryMock{}
 			objectRepo.RestoreObjectFunc = func(_ context.Context, _ *repository.Compression, _ *snapshot.File, _ []byte, _ uint64) error {
 				return tt.objectErr
 			}
-			folderRepo := &repository.FolderRepositoryMock{}
+			folderRepo := &app.FolderRepositoryMock{}
 			folderRepo.GetConfigFunc = func(_ context.Context, _ string) (*repository.Config, error) {
 				return tt.config, nil
 			}
-			symmetricRepo := &encryption.SymmetricKeyRepositoryMock{}
+			symmetricRepo := &app.SymmetricKeyRepositoryMock{}
 			symmetricRepo.DecodeAndDecryptSymmetricKeyFunc = func(_ context.Context, _ *rsa.PrivateKey, _ string) ([]byte, error) {
 				return tt.symmetricKey, nil
 			}
-			asymmetricRepo := &encryption.AsymmetricKeyPairRepositoryMock{}
+			asymmetricRepo := &app.AsymmetricKeyPairRepositoryMock{}
 			asymmetricRepo.ReadRSAPrivateKeyFunc = func(_ context.Context, _ string) (*rsa.PrivateKey, error) {
 				return tt.privateKey, nil
 			}
-			svc := snapshot.NewRestoreFile(manifestRepo, objectRepo, folderRepo, encryption.NewDecryptSymmetricKey(symmetricRepo, asymmetricRepo))
-			err := svc.Restore(t.Context(), uuid.NewString(), tt.args.filePath, "repository-path", tt.args.destinationPath, tt.args.privateKey)
+			handler := app.NewRestoreFile(manifestRepo, objectRepo, folderRepo, asymmetricRepo, symmetricRepo)
+			snapshotID := uuid.NewString()
+			events, err := handler.Handle(t.Context(), app.RestoreFileCommand{
+				SnapshotID:      snapshotID,
+				FilePath:        tt.args.filePath,
+				RepositoryPath:  "repository-path",
+				DestinationPath: tt.args.destinationPath,
+				PrivateKeyPath:  tt.args.privateKey,
+			})
 			if tt.expectedErr != nil {
 				require.ErrorIs(t, err, tt.expectedErr)
 				return
 			}
 			require.NoError(t, err)
+			require.Len(t, events, 1)
+			got, ok := events[0].(*app.RestoreSnapshotEvent)
+			require.True(t, ok)
+			require.Equal(t, snapshotID, got.SnapshotID)
+			require.True(t, got.IsSuccess)
 		})
 	}
 }

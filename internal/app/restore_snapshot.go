@@ -23,15 +23,17 @@ func (r RestoreSnapshotCommand) Name() string {
 }
 
 type RestoreSnapshot struct {
-	svc *snapshot.Restore
+	manifestRepo ManifestRepository
+	objectRepo   ObjectRepository
+	keys         keyring
 }
 
-func (r RestoreSnapshot) Handle(ctx context.Context, cmd cqs.Command) ([]event.Event, error) {
+func (r *RestoreSnapshot) Handle(ctx context.Context, cmd cqs.Command) ([]event.Event, error) {
 	co, ok := cmd.(RestoreSnapshotCommand)
 	if !ok {
 		return nil, cqs.NewInvalidCommandError(RestoreSnapshotCommandName, cmd.Name())
 	}
-	result, err := r.svc.Restore(ctx, co.SnapshotID, co.RepositoryPath, co.DestinationPath, co.PrivateKeyPath)
+	result, err := r.restore(ctx, co)
 	if err != nil {
 		return nil, err
 	}
@@ -47,8 +49,47 @@ func (r RestoreSnapshot) Handle(ctx context.Context, cmd cqs.Command) ([]event.E
 	}, nil
 }
 
-func NewRestoreSnapshot(svc *snapshot.Restore) *RestoreSnapshot {
-	return &RestoreSnapshot{svc: svc}
+func (r *RestoreSnapshot) restore(ctx context.Context, co RestoreSnapshotCommand) (*snapshot.Result, error) {
+	key, err := r.keys.forRepository(ctx, co.RepositoryPath, co.PrivateKeyPath)
+	if err != nil {
+		return nil, err
+	}
+	man, err := r.manifestRepo.Get(ctx, co.SnapshotID)
+	if err != nil {
+		return nil, err
+	}
+	result := snapshot.NewResult(co.SnapshotID)
+	for _, f := range man.Files() {
+		if err := restoreFile(ctx, r.objectRepo, man, &f, co.DestinationPath, key); err != nil {
+			result.AddFailed(*snapshot.NewFailedResult(f.Path(), err.Error()))
+			continue
+		}
+		result.AddSuccess()
+	}
+	return result, nil
+}
+
+func restoreFile(ctx context.Context, objectRepo ObjectRepository, man *snapshot.Manifest, file *snapshot.File, destinationPath *string, key objectKey) error {
+	if destinationPath != nil {
+		if err := file.ChangeSourcePath(man.Source(), *destinationPath); err != nil {
+			return err
+		}
+	}
+	return objectRepo.RestoreObject(ctx, man.Compression(), file, key.symmetricKey, key.generation)
+}
+
+func NewRestoreSnapshot(
+	manifestRepo ManifestRepository,
+	objectRepo ObjectRepository,
+	folderRepo FolderRepository,
+	asymmetricRepo AsymmetricKeyPairRepository,
+	symmetricRepo SymmetricKeyRepository,
+) *RestoreSnapshot {
+	return &RestoreSnapshot{
+		manifestRepo: manifestRepo,
+		objectRepo:   objectRepo,
+		keys:         newKeyring(folderRepo, asymmetricRepo, symmetricRepo),
+	}
 }
 
 type Failed struct {

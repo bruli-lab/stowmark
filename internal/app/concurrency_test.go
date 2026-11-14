@@ -1,4 +1,4 @@
-package snapshot_test
+package app_test
 
 import (
 	"context"
@@ -10,7 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bruli-lab/stowmark/internal/domain/encryption"
+	"github.com/bruli-lab/stowmark/internal/app"
+
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/fixtures"
@@ -35,10 +36,10 @@ func hashOf(content string) string {
 }
 
 type createDependencies struct {
-	sourceRepo   *snapshot.SourceRepositoryMock
-	manifestRepo *snapshot.ManifestRepositoryMock
-	objectRepo   *snapshot.ObjectRepositoryMock
-	folderRepo   *repository.FolderRepositoryMock
+	sourceRepo   *app.SourceRepositoryMock
+	manifestRepo *app.ManifestRepositoryMock
+	objectRepo   *app.ObjectRepositoryMock
+	folderRepo   *app.FolderRepositoryMock
 }
 
 func newCreateDependencies(t *testing.T, files []snapshot.File) createDependencies {
@@ -48,7 +49,7 @@ func newCreateDependencies(t *testing.T, files []snapshot.File) createDependenci
 	source := fixtures.SourceBuilder{Files: files}.Build()
 
 	return createDependencies{
-		sourceRepo: &snapshot.SourceRepositoryMock{
+		sourceRepo: &app.SourceRepositoryMock{
 			ExploreFunc: func(_ context.Context, _ string) (*snapshot.Source, error) {
 				return &source, nil
 			},
@@ -56,12 +57,12 @@ func newCreateDependencies(t *testing.T, files []snapshot.File) createDependenci
 				return hashOf(filePath), nil
 			},
 		},
-		manifestRepo: &snapshot.ManifestRepositoryMock{
+		manifestRepo: &app.ManifestRepositoryMock{
 			SaveFunc: func(_ context.Context, _ *snapshot.Manifest) error {
 				return nil
 			},
 		},
-		objectRepo: &snapshot.ObjectRepositoryMock{
+		objectRepo: &app.ObjectRepositoryMock{
 			AlreadyExistsFunc: func(_ context.Context, _ string, _ []byte, _ uint64) (bool, error) {
 				return false, nil
 			},
@@ -69,7 +70,7 @@ func newCreateDependencies(t *testing.T, files []snapshot.File) createDependenci
 				return nil
 			},
 		},
-		folderRepo: &repository.FolderRepositoryMock{
+		folderRepo: &app.FolderRepositoryMock{
 			GetConfigFunc: func(_ context.Context, _ string) (*repository.Config, error) {
 				return &config, nil
 			},
@@ -77,33 +78,36 @@ func newCreateDependencies(t *testing.T, files []snapshot.File) createDependenci
 	}
 }
 
-func (d createDependencies) service(workers int) *snapshot.Create {
-	return snapshot.NewCreateWithWorkers(
+func (d createDependencies) handler(workers int) *app.CreateSnapshot {
+	return app.NewCreateSnapshotWithWorkers(
 		d.sourceRepo,
 		d.manifestRepo,
 		d.objectRepo,
-		repository.NewGetConfig(d.folderRepo),
-		encryption.NewDecryptSymmetricKey(&encryption.SymmetricKeyRepositoryMock{}, &encryption.AsymmetricKeyPairRepositoryMock{}),
+		d.folderRepo,
+		&app.AsymmetricKeyPairRepositoryMock{},
+		&app.SymmetricKeyRepositoryMock{},
 		workers,
 	)
 }
 
-func TestCreate_Do_Concurrency(t *testing.T) {
+var createCommand = app.CreateSnapshotCommand{RepositoryPath: "repo", SourcePath: "source"}
+
+func TestCreateSnapshot_Handle_Concurrency(t *testing.T) {
 	t.Parallel()
 
-	t.Run(`Given a Create service with several workers and many new files,
-	when Do method is called,
+	t.Run(`Given a CreateSnapshot command handler with several workers and many new files,
+	when Handle method is called,
 	then it saves every file, counts them all and stores a manifest with every hash`, func(t *testing.T) {
 		t.Parallel()
 
 		files := sourceFiles(concurrentFiles)
 		deps := newCreateDependencies(t, files)
 
-		result, err := deps.service(8).Do(t.Context(), "repo", "source", nil)
+		result, err := createSnapshot(t.Context(), deps.handler(8), createCommand)
 
 		require.NoError(t, err)
-		require.Equal(t, concurrentFiles, result.FileCount())
-		require.Equal(t, int64(concurrentFiles*(concurrentFiles+1)/2), result.TotalSize())
+		require.Equal(t, concurrentFiles, result.FileCount)
+		require.Equal(t, int64(concurrentFiles*(concurrentFiles+1)/2), result.TotalSize)
 		require.Len(t, deps.objectRepo.SaveChunkCalls(), concurrentFiles)
 		require.Len(t, deps.manifestRepo.SaveCalls(), 1)
 		for _, file := range deps.manifestRepo.SaveCalls()[0].M.Files() {
@@ -111,8 +115,8 @@ func TestCreate_Do_Concurrency(t *testing.T) {
 		}
 	})
 
-	t.Run(`Given a Create service with several workers and a file that fails to save,
-	when Do method is called,
+	t.Run(`Given a CreateSnapshot command handler with several workers and a file that fails to save,
+	when Handle method is called,
 	then it returns the error and does not save the manifest`, func(t *testing.T) {
 		t.Parallel()
 
@@ -127,14 +131,14 @@ func TestCreate_Do_Concurrency(t *testing.T) {
 			return nil
 		}
 
-		result, err := deps.service(8).Do(t.Context(), "repo", "source", nil)
+		result, err := createSnapshot(t.Context(), deps.handler(8), createCommand)
 
 		require.ErrorIs(t, err, errSave)
 		require.Nil(t, result)
 		require.Empty(t, deps.manifestRepo.SaveCalls())
 	})
 
-	t.Run(`Given a Create service with several workers,
+	t.Run(`Given a CreateSnapshot command handler with several workers,
 	when the context is cancelled while files are being saved,
 	then it returns the cancellation error and does not save the manifest`, func(t *testing.T) {
 		t.Parallel()
@@ -148,7 +152,7 @@ func TestCreate_Do_Concurrency(t *testing.T) {
 			return nil
 		}
 
-		result, err := deps.service(4).Do(ctx, "repo", "source", nil)
+		result, err := createSnapshot(ctx, deps.handler(4), createCommand)
 
 		require.ErrorIs(t, err, context.Canceled)
 		require.Nil(t, result)
@@ -156,18 +160,21 @@ func TestCreate_Do_Concurrency(t *testing.T) {
 	})
 }
 
-func newVerifier(objectRepo *snapshot.ObjectRepositoryMock, manifest *snapshot.Manifest) *snapshot.Verifier {
-	return snapshot.NewVerifier(
-		objectRepo,
-		&snapshot.ManifestRepositoryMock{
+func newVerifier(objectRepo *app.ObjectRepositoryMock, manifest *snapshot.Manifest) *app.VerifySnapshot {
+	return app.NewVerifySnapshot(
+		&app.ManifestRepositoryMock{
 			GetFunc: func(_ context.Context, _ string) (*snapshot.Manifest, error) {
 				return manifest, nil
 			},
 		},
-		&repository.FolderRepositoryMock{},
-		encryption.NewDecryptSymmetricKey(&encryption.SymmetricKeyRepositoryMock{}, &encryption.AsymmetricKeyPairRepositoryMock{}),
+		objectRepo,
+		&app.FolderRepositoryMock{},
+		&app.AsymmetricKeyPairRepositoryMock{},
+		&app.SymmetricKeyRepositoryMock{},
 	)
 }
+
+var verifyQuery = app.VerifySnapshotQuery{RepositoryPath: "repo", SnapshotID: "snapshot"}
 
 func verifiableManifest(count int) (manifest *snapshot.Manifest, contents map[string]string) {
 	contents = make(map[string]string, count)
@@ -182,11 +189,11 @@ func verifiableManifest(count int) (manifest *snapshot.Manifest, contents map[st
 	return &built, contents
 }
 
-func TestVerifier_Verify_Concurrency(t *testing.T) {
+func TestVerifySnapshot_Handle_Concurrency(t *testing.T) {
 	t.Parallel()
 
-	t.Run(`Given a Verifier service and a manifest with many files where some objects are missing,
-	when Verify method is called,
+	t.Run(`Given a VerifySnapshot query handler and a manifest with many files where some objects are missing,
+	when Handle method is called,
 	then it checks every file and reports only the missing ones as failed`, func(t *testing.T) {
 		t.Parallel()
 
@@ -199,7 +206,7 @@ func TestVerifier_Verify_Concurrency(t *testing.T) {
 			delete(contents, hash)
 			missing++
 		}
-		objectRepo := &snapshot.ObjectRepositoryMock{
+		objectRepo := &app.ObjectRepositoryMock{
 			ReadObjectFunc: func(_ context.Context, hash string, _ []byte, _ uint64) (io.ReadCloser, error) {
 				content, ok := contents[hash]
 				if !ok {
@@ -209,7 +216,7 @@ func TestVerifier_Verify_Concurrency(t *testing.T) {
 			},
 		}
 
-		result, err := newVerifier(objectRepo, manifest).Verify(t.Context(), "repo", "snapshot", nil)
+		result, err := verifySnapshot(t.Context(), newVerifier(objectRepo, manifest), verifyQuery)
 
 		require.NoError(t, err)
 		require.Equal(t, concurrentFiles, result.TotalFiles())
@@ -217,7 +224,7 @@ func TestVerifier_Verify_Concurrency(t *testing.T) {
 		require.False(t, result.IsSuccess())
 	})
 
-	t.Run(`Given a Verifier service and a manifest with many files,
+	t.Run(`Given a VerifySnapshot query handler and a manifest with many files,
 	when the context is cancelled while objects are being read,
 	then it returns the cancellation error instead of a partial result`, func(t *testing.T) {
 		t.Parallel()
@@ -225,14 +232,14 @@ func TestVerifier_Verify_Concurrency(t *testing.T) {
 		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 		manifest, contents := verifiableManifest(concurrentFiles)
-		objectRepo := &snapshot.ObjectRepositoryMock{
+		objectRepo := &app.ObjectRepositoryMock{
 			ReadObjectFunc: func(_ context.Context, hash string, _ []byte, _ uint64) (io.ReadCloser, error) {
 				cancel()
 				return io.NopCloser(strings.NewReader(contents[hash])), nil
 			},
 		}
 
-		result, err := newVerifier(objectRepo, manifest).Verify(ctx, "repo", "snapshot", nil)
+		result, err := verifySnapshot(ctx, newVerifier(objectRepo, manifest), verifyQuery)
 
 		require.ErrorIs(t, err, context.Canceled)
 		require.Nil(t, result)

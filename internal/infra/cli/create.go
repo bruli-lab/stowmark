@@ -5,9 +5,6 @@ import (
 	"fmt"
 
 	"github.com/bruli-lab/stowmark/internal/app"
-	"github.com/bruli-lab/stowmark/internal/domain/encryption"
-	"github.com/bruli-lab/stowmark/internal/domain/repository"
-	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/disk"
 	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
 	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
@@ -49,8 +46,6 @@ func newSnapshotCreateCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			folderRepositoryRepo := repoHand.FolderRepository()
-			decryptSymmetricKeySvc := encryption.NewDecryptSymmetricKey(encrypt.NewSymmetricRepository(), disk.NewAsymmetricKeyPairRepository())
 			obsv, err := builtObservability(cmd.Context())
 			if err != nil {
 				return err
@@ -64,8 +59,14 @@ func newSnapshotCreateCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			svc := snapshot.NewCreate(sourceRepo, manifestRepo, objRepo, repository.NewGetConfig(folderRepositoryRepo), decryptSymmetricKeySvc)
-			handler := multiMdw(app.NewCreateSnapshot(svc))
+			handler := multiMdw(app.NewCreateSnapshot(
+				sourceRepo,
+				manifestRepo,
+				objRepo,
+				repoHand.FolderRepository(),
+				disk.NewAsymmetricKeyPairRepository(),
+				encrypt.NewSymmetricRepository(),
+			))
 
 			var privateKey *string
 			if privateKeyPath != "" {

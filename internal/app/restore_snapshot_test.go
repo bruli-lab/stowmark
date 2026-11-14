@@ -1,18 +1,20 @@
-package snapshot_test
+package app_test
 
 import (
 	"context"
 	"errors"
 	"testing"
 
-	"github.com/bruli-lab/stowmark/internal/domain/encryption"
+	"github.com/bruli-lab/stowmark/internal/app"
+
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/fixtures"
 	"github.com/stretchr/testify/require"
 )
 
-func TestRestore_Restore(t *testing.T) {
+func TestRestoreSnapshot_HandleResult(t *testing.T) {
+	t.Parallel()
 	errTest := errors.New("test error")
 	manifest := fixtures.ManifestBuilder{Files: []snapshot.File{
 		fixtures.FileBuilder{}.Build(),
@@ -52,31 +54,39 @@ func TestRestore_Restore(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		t.Run(`Given a Restore service,
-		when Restore method is called `+tt.name, func(t *testing.T) {
+		t.Run(`Given a RestoreSnapshot command handler,
+		when Handle method is called `+tt.name, func(t *testing.T) {
 			t.Parallel()
-			manifestRepo := &snapshot.ManifestRepositoryMock{}
+			manifestRepo := &app.ManifestRepositoryMock{}
 			manifestRepo.GetFunc = func(_ context.Context, _ string) (*snapshot.Manifest, error) {
 				return tt.manifest, tt.manifestErr
 			}
-			objectRepo := &snapshot.ObjectRepositoryMock{}
+			objectRepo := &app.ObjectRepositoryMock{}
 			objectRepo.RestoreObjectFunc = func(_ context.Context, _ *repository.Compression, _ *snapshot.File, _ []byte, _ uint64) error {
 				return tt.restoreErr
 			}
-			folderRepo := &repository.FolderRepositoryMock{}
-			symmetricRepo := &encryption.SymmetricKeyRepositoryMock{}
-			asymmetricRepo := &encryption.AsymmetricKeyPairRepositoryMock{}
+			folderRepo := &app.FolderRepositoryMock{}
+			symmetricRepo := &app.SymmetricKeyRepositoryMock{}
+			asymmetricRepo := &app.AsymmetricKeyPairRepositoryMock{}
 
-			svc := snapshot.NewRestore(manifestRepo, objectRepo, folderRepo, encryption.NewDecryptSymmetricKey(symmetricRepo, asymmetricRepo))
-			result, err := svc.Restore(t.Context(), tt.args.snapshotID, "repository-path", tt.args.destinationPath, tt.args.privateKey)
+			handler := app.NewRestoreSnapshot(manifestRepo, objectRepo, folderRepo, asymmetricRepo, symmetricRepo)
+			events, err := handler.Handle(t.Context(), app.RestoreSnapshotCommand{
+				SnapshotID:      tt.args.snapshotID,
+				RepositoryPath:  "repository-path",
+				PrivateKeyPath:  tt.args.privateKey,
+				DestinationPath: tt.args.destinationPath,
+			})
 			if tt.expectedErr != nil {
 				require.ErrorIs(t, err, tt.expectedErr)
 				return
 			}
 			require.NoError(t, err)
-			require.Equal(t, tt.args.snapshotID, result.SnapshotID())
-			require.Equal(t, tt.expectedSuccess, result.IsSuccess())
-			require.Len(t, result.Failed(), tt.expectedFailedLen)
+			require.Len(t, events, 1)
+			result, ok := events[0].(*app.RestoreSnapshotEvent)
+			require.True(t, ok)
+			require.Equal(t, tt.args.snapshotID, result.SnapshotID)
+			require.Equal(t, tt.expectedSuccess, result.IsSuccess)
+			require.Len(t, result.FailedFiles, tt.expectedFailedLen)
 		})
 	}
 }

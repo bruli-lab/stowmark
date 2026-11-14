@@ -1,4 +1,4 @@
-package repository_test
+package app_test
 
 import (
 	"context"
@@ -6,13 +6,16 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/bruli-lab/stowmark/internal/app"
+
 	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/fixtures"
 	"github.com/stretchr/testify/require"
 )
 
-func TestRewrap_Do(t *testing.T) {
+func TestRewrapKey_Handle(t *testing.T) {
+	t.Parallel()
 	errTest := errors.New("test error")
 	type args struct {
 		repositoryPath    string
@@ -49,7 +52,7 @@ func TestRewrap_Do(t *testing.T) {
 				newPublicKeyPath:  "new",
 			},
 			config:      new(fixtures.ConfigBuilder{}.Build(t)),
-			expectedErr: repository.ErrRepositoryNotEncrypted,
+			expectedErr: app.ErrRepositoryNotEncrypted,
 		},
 		{
 			name: "and read private key returns error, then it returns same error",
@@ -158,24 +161,24 @@ func TestRewrap_Do(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		t.Run(`Given a Rewrap service,
-		when Do method is called `+tt.name, func(t *testing.T) {
+		t.Run(`Given a RewrapKey command handler,
+		when Handle method is called `+tt.name, func(t *testing.T) {
 			t.Parallel()
-			folderRepo := &repository.FolderRepositoryMock{}
+			folderRepo := &app.FolderRepositoryMock{}
 			folderRepo.GetConfigFunc = func(_ context.Context, _ string) (*repository.Config, error) {
 				return tt.config, tt.getConfigErr
 			}
 			folderRepo.CreateConfigFunc = func(_ context.Context, _ string, _ *repository.Config) error {
 				return tt.createErr
 			}
-			symmetricRepo := &encryption.SymmetricKeyRepositoryMock{}
+			symmetricRepo := &app.SymmetricKeyRepositoryMock{}
 			symmetricRepo.DecodeAndDecryptSymmetricKeyFunc = func(_ context.Context, _ *rsa.PrivateKey, _ string) ([]byte, error) {
 				return tt.symmetricKey, tt.decodeErr
 			}
 			symmetricRepo.EncryptSymmetricKeyFunc = func(_ context.Context, _ *rsa.PublicKey, _ []byte) ([]byte, error) {
 				return tt.encryptedKey, tt.encryptErr
 			}
-			asymmetricRepo := &encryption.AsymmetricKeyPairRepositoryMock{}
+			asymmetricRepo := &app.AsymmetricKeyPairRepositoryMock{}
 			asymmetricRepo.ReadRSAPrivateKeyFunc = func(_ context.Context, _ string) (*rsa.PrivateKey, error) {
 				return tt.privateKey, tt.readPrivateErr
 			}
@@ -185,8 +188,13 @@ func TestRewrap_Do(t *testing.T) {
 			asymmetricRepo.PublicKeyFingerPrintFunc = func(_ context.Context, _ *rsa.PublicKey) (string, error) {
 				return "fingerprint", tt.fingerPrintErr
 			}
-			svc := repository.NewRewrap(folderRepo, symmetricRepo, asymmetricRepo)
-			err := svc.Do(t.Context(), tt.args.repositoryPath, tt.args.oldPrivateKeyPath, tt.args.newPublicKeyPath)
+			handler := app.NewRewrapKey(folderRepo, asymmetricRepo, symmetricRepo)
+			events, err := handler.Handle(t.Context(), app.RewrapKeyCommand{
+				RepositoryPath: tt.args.repositoryPath,
+				OldPrivateKey:  tt.args.oldPrivateKeyPath,
+				NewPublicKey:   tt.args.newPublicKeyPath,
+			})
+			require.Empty(t, events)
 			if tt.expectedErr != nil {
 				require.ErrorIs(t, err, tt.expectedErr)
 				return

@@ -6,10 +6,8 @@ import (
 	"log/slog"
 
 	"github.com/bruli-lab/stowmark/internal/app"
-	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
-	"github.com/google/uuid"
 )
 
 type Compression struct {
@@ -18,7 +16,6 @@ type Compression struct {
 }
 
 func (h *Handler) Init(ctx context.Context, comp *Compression, formatVersion int, publicKey *string, force bool) error {
-	svc := repository.NewInit(h.folderRepository)
 	compType, err := repository.ParseCompressionType(comp.Type)
 	if err != nil {
 		return err
@@ -27,20 +24,7 @@ func (h *Handler) Init(ctx context.Context, comp *Compression, formatVersion int
 	if err != nil {
 		return err
 	}
-	var encryptionConfig *encryption.EncryptionConfig
-	if publicKey != nil {
-		encryptionConfigSvc := encryption.NewCreateEncryptionConfig(h.asymmetricKeyPaiRepository, h.symmetricKeyRepository)
-		encryptionConfig, err = encryptionConfigSvc.Create(ctx, *publicKey)
-		if err != nil {
-			return err
-		}
-	}
 	version, err := repository.ParseFormatVersionOrCurrent(formatVersion)
-	if err != nil {
-		return err
-	}
-	conf := repository.NewConfig(uuid.New(), version, compre, encryptionConfig)
-	repo, err := repository.NewRepository(h.repositoryPath, conf)
 	if err != nil {
 		return err
 	}
@@ -57,10 +41,13 @@ func (h *Handler) Init(ctx context.Context, comp *Compression, formatVersion int
 	if err != nil {
 		return err
 	}
-	handler := mdw(app.NewInit(svc))
+	handler := mdw(app.NewInit(h.folderRepository, h.asymmetricKeyPaiRepository, h.symmetricKeyRepository))
 	events, err := handler.Handle(ctx, app.InitCommand{
-		Repository: repo,
-		Force:      force,
+		RepositoryPath: h.repositoryPath,
+		Compression:    compre,
+		FormatVersion:  version,
+		PublicKeyPath:  publicKey,
+		Force:          force,
 	})
 	if err != nil {
 		return err

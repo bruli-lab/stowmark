@@ -3,23 +3,21 @@ package stowmark
 import (
 	"context"
 
-	"github.com/bruli-lab/stowmark/internal/domain/encryption"
-	"github.com/bruli-lab/stowmark/internal/domain/repository"
-	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
+	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/infra/disk"
 	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
 	"github.com/bruli-lab/stowmark/internal/infra/repositories"
 )
 
 type Handler struct {
-	folderRepository           repository.FolderRepository
-	sourceRepository           snapshot.SourceRepository
-	manifestRepository         snapshot.ManifestRepository
-	objectRepository           snapshot.ObjectRepository
+	folderRepository           app.FolderRepository
+	sourceRepository           app.SourceRepository
+	manifestRepository         app.ManifestRepository
+	objectRepository           app.ObjectRepository
 	repositoryPath             string
 	repositoriesHandler        repositories.Repositories
-	asymmetricKeyPaiRepository encryption.AsymmetricKeyPairRepository
-	symmetricKeyRepository     encryption.SymmetricKeyRepository
+	asymmetricKeyPaiRepository app.AsymmetricKeyPairRepository
+	symmetricKeyRepository     app.SymmetricKeyRepository
 }
 
 func (h *Handler) Close() error {

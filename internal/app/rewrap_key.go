@@ -1,4 +1,3 @@
-//nolint:dupl // CQS command handlers intentionally share the same adapter structure.
 package app
 
 import (
@@ -6,12 +5,10 @@ import (
 
 	"github.com/bruli-lab/go-core/cqs"
 	"github.com/bruli-lab/go-core/event"
-	"github.com/bruli-lab/stowmark/internal/domain/repository"
 )
 
 const RewrapKeyCommandName = "rewrap-key"
 
-//nolint:dupl // false positive
 type RewrapKeyCommand struct {
 	RepositoryPath string
 	OldPrivateKey  string
@@ -23,17 +20,37 @@ func (r RewrapKeyCommand) Name() string {
 }
 
 type RewrapKey struct {
-	svc *repository.Rewrap
+	folderRepo FolderRepository
+	keys       keyring
 }
 
-func (r RewrapKey) Handle(ctx context.Context, cmd cqs.Command) ([]event.Event, error) {
+func (r *RewrapKey) Handle(ctx context.Context, cmd cqs.Command) ([]event.Event, error) {
 	co, ok := cmd.(RewrapKeyCommand)
 	if !ok {
 		return nil, cqs.NewInvalidCommandError(RewrapKeyCommandName, cmd.Name())
 	}
-	return nil, r.svc.Do(ctx, co.RepositoryPath, co.OldPrivateKey, co.NewPublicKey)
+	conf, err := r.folderRepo.GetConfig(ctx, co.RepositoryPath)
+	if err != nil {
+		return nil, err
+	}
+	encryptionConf := conf.Encryption()
+	if encryptionConf == nil {
+		return nil, ErrRepositoryNotEncrypted
+	}
+	symmetricKey, err := r.keys.unwrap(ctx, co.OldPrivateKey, encryptionConf)
+	if err != nil {
+		return nil, err
+	}
+	defer clear(symmetricKey)
+	wrapped, err := r.keys.wrap(ctx, co.NewPublicKey, symmetricKey)
+	if err != nil {
+		return nil, err
+	}
+	encryptionConf.ChangeEncryptedKey(wrapped.encodedKey)
+	encryptionConf.ChangePublicKeyFingerPrint(wrapped.fingerprint)
+	return nil, r.folderRepo.CreateConfig(ctx, co.RepositoryPath, conf)
 }
 
-func NewRewrapKey(svc *repository.Rewrap) *RewrapKey {
-	return &RewrapKey{svc: svc}
+func NewRewrapKey(folderRepo FolderRepository, asymmetricRepo AsymmetricKeyPairRepository, symmetricRepo SymmetricKeyRepository) *RewrapKey {
+	return &RewrapKey{folderRepo: folderRepo, keys: newKeyring(folderRepo, asymmetricRepo, symmetricRepo)}
 }

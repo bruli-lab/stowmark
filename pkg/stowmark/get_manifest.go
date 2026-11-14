@@ -37,12 +37,11 @@ func (h *Handler) GetManifest(ctx context.Context, id string) (*Manifest, error)
 	defer func() {
 		_ = obsv.Shutdown(ctx)
 	}()
-	svc := snapshot.NewGetManifest(h.manifestRepository)
 	mdw, err := middlewares.BuildQueryMiddlewares(obsv)
 	if err != nil {
 		return nil, err
 	}
-	handler := mdw(app.NewManifestGet(svc))
+	handler := mdw(app.NewManifestGet(h.manifestRepository))
 	result, err := handler.Handle(ctx, app.ManifestGetQuery{
 		SnapshotID: id,
 	})

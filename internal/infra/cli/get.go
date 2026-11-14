@@ -39,12 +39,11 @@ func newSnapshotGetCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			svc := snapshot.NewGetManifest(manifestRepo)
 			multiMdw, err2 := middlewares.BuildQueryMiddlewares(obsv)
 			if err2 != nil {
 				return err2
 			}
-			handler := multiMdw(app.NewManifestGet(svc))
+			handler := multiMdw(app.NewManifestGet(manifestRepo))
 			result, err := handler.Handle(cmd.Context(), app.ManifestGetQuery{
 				SnapshotID: snapshotID,
 			})

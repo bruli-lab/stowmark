@@ -4,10 +4,10 @@ import (
 	"fmt"
 
 	"github.com/bruli-lab/stowmark/internal/app"
-	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/infra/disk"
 	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
 	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
+	"github.com/bruli-lab/stowmark/internal/infra/repositories"
 	"github.com/spf13/cobra"
 )
 
@@ -31,16 +31,21 @@ func newKeyRewrapCommand() *cobra.Command {
 			}()
 			asymmetricRepo := disk.NewAsymmetricKeyPairRepository()
 			symmetricRepo := encrypt.NewSymmetricRepository()
-			folderRepo := disk.NewFolderRepositoryRepository()
-			svc := repository.NewRewrap(folderRepo, symmetricRepo, asymmetricRepo)
+			repoHandler, err := repositories.NewHandler(cmd.Context(), repositoryPath)
+			if err != nil {
+				return fmt.Errorf("failed to create repository handler: %w", err)
+			}
+			defer func() {
+				_ = repoHandler.Close()
+			}()
 			evtr := app.NewEventsTracing()
 			multiMdw, err := middlewares.BuildCommandMiddlewares(obsv, evtr)
 			if err != nil {
 				return err
 			}
-			handler := multiMdw(app.NewRewrapKey(svc))
+			handler := multiMdw(app.NewRewrapKey(repoHandler.FolderRepository(), asymmetricRepo, symmetricRepo))
 			_, err = handler.Handle(cmd.Context(), app.RewrapKeyCommand{
-				RepositoryPath: repositoryPath,
+				RepositoryPath: repoHandler.RepositoryPath(),
 				OldPrivateKey:  oldPrivateKey,
 				NewPublicKey:   newPublicKey,
 			})
