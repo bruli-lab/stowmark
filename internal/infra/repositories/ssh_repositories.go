@@ -1,6 +1,7 @@
 package repositories
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/url"
@@ -41,7 +42,7 @@ func (s *SSHRepositories) BlobStore() (blob.Store, error) {
 	return sshinfra.NewBlobStore(s.client.Sftp(), s.repositoryPath), nil
 }
 
-func NewSSHRepositories(address string, environment map[string]string) (*SSHRepositories, error) {
+func NewSSHRepositories(ctx context.Context, address string, environment map[string]string) (*SSHRepositories, error) {
 	conf, err := config.NewSSHConfigFrom(environment)
 	if err != nil {
 		return nil, fmt.Errorf("load SSH configuration: %w", err)
@@ -71,9 +72,17 @@ func NewSSHRepositories(address string, environment map[string]string) (*SSHRepo
 		return nil, fmt.Errorf("get home directory: %w", err)
 	}
 
+	auth, authCloser, err := NewSSHAuth(ctx, conf)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = authCloser.Close()
+	}()
+
 	clientConfig, err := newClientConfig(
 		u.User.Username(),
-		conf.PrivateKey,
+		auth,
 		filepath.Join(homeDir, ".ssh", "known_hosts"),
 	)
 	if err != nil {
@@ -94,17 +103,7 @@ func NewSSHRepositories(address string, environment map[string]string) (*SSHRepo
 	}, nil
 }
 
-func newClientConfig(username, privateKey, knownHostsPath string) (*gossh.ClientConfig, error) {
-	file, err := os.ReadFile(privateKey)
-	if err != nil {
-		return nil, fmt.Errorf("read SSH private key: %w", err)
-	}
-
-	signer, err := gossh.ParsePrivateKey(file)
-	if err != nil {
-		return nil, fmt.Errorf("parse SSH private key: %w", err)
-	}
-
+func newClientConfig(username string, auth gossh.AuthMethod, knownHostsPath string) (*gossh.ClientConfig, error) {
 	hostKeyCallback, err := knownhosts.New(knownHostsPath)
 	if err != nil {
 		return nil, fmt.Errorf(
@@ -115,10 +114,8 @@ func newClientConfig(username, privateKey, knownHostsPath string) (*gossh.Client
 	}
 
 	return &gossh.ClientConfig{
-		User: username,
-		Auth: []gossh.AuthMethod{
-			gossh.PublicKeys(signer),
-		},
+		User:            username,
+		Auth:            []gossh.AuthMethod{auth},
 		HostKeyCallback: hostKeyCallback,
 		Timeout:         10 * time.Second,
 	}, nil

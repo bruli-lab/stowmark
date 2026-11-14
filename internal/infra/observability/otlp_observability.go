@@ -3,13 +3,17 @@ package observability
 import (
 	"context"
 	"log/slog"
+	"time"
 
 	"go.opentelemetry.io/otel/log"
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
 )
 
-const instrumentationName = "github.com/bruli-lab/stowmark"
+const (
+	instrumentationName = "github.com/bruli-lab/stowmark"
+	ShutdownTimeout     = 5 * time.Second
+)
 
 type OTLPObservability struct {
 	TracerProvider trace.TracerProvider
@@ -32,6 +36,8 @@ func (o OTLPObservability) Shutdown(ctx context.Context) error {
 		return nil
 	}
 
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), ShutdownTimeout)
+	defer cancel()
 	return o.shutdown(ctx)
 }
 

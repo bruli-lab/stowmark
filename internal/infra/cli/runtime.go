@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"errors"
 
 	"github.com/bruli-lab/stowmark/internal/bootstrap"
@@ -15,7 +14,7 @@ func withRuntime(cmd *cobra.Command, run func(runtime *bootstrap.Runtime) error)
 		return err
 	}
 	defer func() {
-		err = errors.Join(err, runtime.Close(context.WithoutCancel(cmd.Context())))
+		err = errors.Join(err, runtime.Close(cmd.Context()))
 	}()
 	return run(runtime)
 }

@@ -178,6 +178,17 @@ Set the private key used to authenticate with the SSH server:
 export STOWMARK_SSH_PRIVATE_KEY="$HOME/.ssh/id_ed25519"
 ```
 
+If the key is protected with a passphrase, also set `STOWMARK_SSH_PRIVATE_KEY_PASSPHRASE`. Environment variables can be
+read by other processes of the same user, so prefer an `ssh-agent` for protected keys: when
+`STOWMARK_SSH_PRIVATE_KEY` is not set, Stowmark authenticates with the keys of the agent in `SSH_AUTH_SOCK`.
+
+```bash
+eval "$(ssh-agent)"
+ssh-add ~/.ssh/id_ed25519
+```
+
+When `STOWMARK_SSH_PRIVATE_KEY` is set, only that key is used, even if an agent is running.
+
 Use an SSH repository URL anywhere that `--repo` or the repository argument is accepted:
 
 ```text
@@ -915,6 +926,9 @@ endpoint is the only variable required to enable telemetry:
 ```bash
 OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 stowmark snapshot list --repo /srv/backups/stowmark
 ```
+
+When a command ends, including after Ctrl+C, Stowmark waits up to 5 seconds to send the remaining telemetry. Press
+Ctrl+C again to exit immediately.
 
 Standard OTLP exporter variables can be used to configure headers, timeouts, compression or signal-specific
 endpoints. Stowmark does not include repository paths, file paths, object hashes, snapshot identifiers, encryption

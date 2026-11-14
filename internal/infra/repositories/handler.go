@@ -80,7 +80,7 @@ func newBackend(ctx context.Context, value string, environment map[string]string
 	case repository.Local:
 		return NewLocalRepositories(value), nil
 	case repository.Ssh:
-		return NewSSHRepositories(value, environment)
+		return NewSSHRepositories(ctx, value, environment)
 	case repository.Smb:
 		return NewSmbRepositories(ctx, value, environment)
 	case repository.S3:

@@ -14,6 +14,7 @@ var version = "dev"
 func Execute() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	context.AfterFunc(ctx, stop)
 
 	rootCmd := &cobra.Command{
 		Use:           "stowmark",
