@@ -151,3 +151,37 @@ func TestConfig_ReinitializeKeepsCreatedAt(t *testing.T) {
 		require.Empty(t, warnings)
 	})
 }
+
+func TestConfig_ReinitializeObjectLock(t *testing.T) {
+	t.Parallel()
+
+	previousLock, err := NewObjectLock(ComplianceObjectLock, time.Hour)
+	require.NoError(t, err)
+	newLock, err := NewObjectLock(GovernanceObjectLock, 2*time.Hour)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name             string
+		previous, next   *ObjectLock
+		expected         *ObjectLock
+		expectedWarnings []string
+	}{
+		{name: "without object lock in the new config, then it keeps the previous one with a warning", previous: previousLock, expected: previousLock, expectedWarnings: []string{ObjectLockPreservedWarning}},
+		{name: "with object lock in the new config, then the new one wins", previous: previousLock, next: newLock, expected: newLock},
+		{name: "without object lock in either config, then there is none", expected: nil},
+	}
+	for _, tt := range tests {
+		t.Run(`Given a previous config, when it is reinitialized `+tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			previous := NewConfig(uuid.New(), FormatVersionTwo, &Compression{compType: NoneCompressionType}, nil).WithObjectLock(tt.previous)
+			next := NewConfig(uuid.New(), FormatVersionTwo, &Compression{compType: NoneCompressionType}, nil).WithObjectLock(tt.next)
+
+			got, warnings := previous.Reinitialize(next, true)
+
+			require.Equal(t, tt.expected, got.ObjectLock())
+			require.Equal(t, tt.expected, got.Codec().ObjectLock())
+			require.Equal(t, tt.expectedWarnings, warnings)
+		})
+	}
+}

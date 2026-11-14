@@ -2,6 +2,7 @@ package stowmark
 
 import (
 	"context"
+	"time"
 
 	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
@@ -17,11 +18,15 @@ type PrunePlan struct {
 }
 
 type PruneResult struct {
-	RemovedObjects        int
-	FreedBytes            int64
-	MissingObjects        int
-	RemovedKeyGenerations []uint64
-	RemovedTemporaryFiles int
+	RemovedObjects          int
+	FreedBytes              int64
+	MissingObjects          int
+	RemovedKeyGenerations   []uint64
+	RemovedTemporaryFiles   int
+	PostponedObjects        int
+	PostponedBytes          int64
+	PostponedKeyGenerations []uint64
+	RetainedUntil           time.Time
 }
 
 func (h *Handler) PlanPrune(ctx context.Context) (*PrunePlan, error) {
@@ -57,6 +62,12 @@ func (h *Handler) Prune(ctx context.Context) (*PruneResult, error) {
 	}
 	for _, temporaries := range app.EventsOf[*snapshot.TemporariesRemoved](events) {
 		result.RemovedTemporaryFiles += temporaries.Removed()
+	}
+	for _, postponed := range app.EventsOf[*snapshot.ObjectsDeletionPostponed](events) {
+		result.PostponedObjects += postponed.Objects()
+		result.PostponedBytes += postponed.Bytes()
+		result.PostponedKeyGenerations = append(result.PostponedKeyGenerations, postponed.Generations()...)
+		result.RetainedUntil = postponed.Until()
 	}
 	return result, nil
 }

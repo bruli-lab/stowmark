@@ -6,6 +6,9 @@ import (
 	"io"
 	"slices"
 	"strings"
+	"time"
+
+	"github.com/bruli-lab/stowmark/internal/domain/repository"
 )
 
 var (
@@ -42,4 +45,22 @@ func Keys(entries []Entry) []string {
 
 type TemporaryCleaner interface {
 	DeleteTemporaries(ctx context.Context, prefix string) (int, error)
+}
+
+type RetentionStore interface {
+	VerifyObjectLock(ctx context.Context) error
+	PutRetained(ctx context.Context, key string, retention repository.Retention, write func(io.Writer) error) error
+	RetainedUntil(ctx context.Context, key string) (time.Time, error)
+	Retain(ctx context.Context, key string, retention repository.Retention) error
+}
+
+func putWithLock(ctx context.Context, store Store, key string, lock *repository.ObjectLock, write func(io.Writer) error) error {
+	if lock == nil {
+		return store.Put(ctx, key, write)
+	}
+	retained, ok := store.(RetentionStore)
+	if !ok {
+		return repository.ErrObjectLockUnsupported
+	}
+	return retained.PutRetained(ctx, key, lock.RetentionFrom(time.Now()), write)
 }

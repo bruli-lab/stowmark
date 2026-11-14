@@ -88,7 +88,7 @@ func (f FolderRepositoryRepository) GetConfig(ctx context.Context, repositoryPat
 		return nil, fmt.Errorf("unmarshal WebDAV config %q: %w", configPath, err)
 	}
 
-	return model.BuildConfigDomain(conf)
+	return model.BuildConfigDomain(&conf)
 }
 
 func NewFolderRepositoryRepository(client *gowebdav.Client) *FolderRepositoryRepository {

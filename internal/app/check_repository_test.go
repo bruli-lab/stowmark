@@ -5,6 +5,7 @@ import (
 	"crypto/rsa"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -29,6 +30,8 @@ type checkSetup struct {
 	listIDsErr  error
 	listObjErr  error
 	generations []uint64
+	objectLock  *repository.ObjectLock
+	expired     []string
 }
 
 type checkDependencies struct {
@@ -37,14 +40,16 @@ type checkDependencies struct {
 	objectRepo    *app.ObjectRepositoryMock
 	encryptedRepo *app.EncryptedObjectRepositoryMock
 	lockRepo      *app.LockRepositoryMock
+	retentionRepo *app.RetentionRepositoryMock
 	mu            sync.Mutex
 	readKeys      [][]byte
 }
 
-func newCheckDependencies(t *testing.T, setup checkSetup) *checkDependencies {
+func newCheckDependencies(t *testing.T, setup *checkSetup) *checkDependencies {
 	t.Helper()
 
-	config := fixtures.ConfigBuilder{EncryptionConfig: setup.encryption}.Build(t)
+	built := fixtures.ConfigBuilder{EncryptionConfig: setup.encryption}.Build(t)
+	config := *built.WithObjectLock(setup.objectLock)
 	manifests := map[string]snapshot.Manifest{
 		"s1": manifestWithHashes(hashOf(healthyContent), hashOf(corruptContent)),
 		"s2": manifestWithHashes(hashOf(healthyContent), hashOf(missingContent)),
@@ -84,11 +89,22 @@ func newCheckDependencies(t *testing.T, setup checkSetup) *checkDependencies {
 	stale, err := repository.NewLock(repository.ExclusiveLock, otherOwner, time.Now().Add(-repository.LockStaleAfter-time.Minute))
 	require.NoError(t, err)
 	deps.lockRepo = newMemoryLocks(stale).mock
+	deps.retentionRepo = &app.RetentionRepositoryMock{
+		RetainedUntilFunc: func(_ context.Context, item repository.RetainedItem) (time.Time, error) {
+			if item.Kind() == repository.RetainedObject && item.ID() == hashOf(missingContent) {
+				return time.Time{}, repository.NewNotFoundError(item.ID())
+			}
+			if slices.Contains(setup.expired, item.ID()) {
+				return time.Now().Add(-time.Hour), nil
+			}
+			return time.Now().Add(time.Hour), nil
+		},
+	}
 	return deps
 }
 
 func (d *checkDependencies) handler(asymmetric *app.AsymmetricKeyPairRepositoryMock, symmetric *app.SymmetricKeyRepositoryMock) *app.CheckRepository {
-	return app.NewCheckRepositoryWithWorkers(d.folderRepo, d.manifestRepo, d.objectRepo, d.encryptedRepo, d.lockRepo, asymmetric, symmetric, newUnlockedLocker(), 2)
+	return app.NewCheckRepositoryWithWorkers(d.folderRepo, d.manifestRepo, d.objectRepo, d.encryptedRepo, d.lockRepo, d.retentionRepo, asymmetric, symmetric, newUnlockedLocker(), 2)
 }
 
 func checkReport(t *testing.T, handler *app.CheckRepository, query app.CheckRepositoryQuery) *snapshot.CheckReport {
@@ -118,7 +134,7 @@ func TestCheckRepository_Handle(t *testing.T) {
 	then it reports every structural problem without reading any object`, func(t *testing.T) {
 		t.Parallel()
 
-		deps := newCheckDependencies(t, checkSetup{generations: []uint64{1}})
+		deps := newCheckDependencies(t, &checkSetup{generations: []uint64{1}})
 
 		report := checkReport(t, deps.handler(nil, nil), app.CheckRepositoryQuery{RepositoryPath: "repo"})
 
@@ -138,12 +154,40 @@ func TestCheckRepository_Handle(t *testing.T) {
 		require.True(t, report.HasErrors())
 	})
 
+	t.Run(`Given a repository with object lock whose manifest s1 lost its protection,
+	when the CheckRepository query handler is called,
+	then it reports the unprotected items as a warning and skips the missing ones`, func(t *testing.T) {
+		t.Parallel()
+
+		lock, err := repository.NewObjectLock(repository.GovernanceObjectLock, 24*time.Hour)
+		require.NoError(t, err)
+		deps := newCheckDependencies(t, &checkSetup{objectLock: lock, expired: []string{"s1", hashOf(healthyContent)}})
+
+		report := checkReport(t, deps.handler(nil, nil), app.CheckRepositoryQuery{RepositoryPath: "repo"})
+
+		require.Equal(t, 2, report.Unprotected())
+		require.Len(t, deps.retentionRepo.RetainedUntilCalls(), 6)
+	})
+
+	t.Run(`Given a repository without object lock,
+	when the CheckRepository query handler is called,
+	then it does not read any retention`, func(t *testing.T) {
+		t.Parallel()
+
+		deps := newCheckDependencies(t, &checkSetup{})
+
+		report := checkReport(t, deps.handler(nil, nil), app.CheckRepositoryQuery{RepositoryPath: "repo"})
+
+		require.Zero(t, report.Unprotected())
+		require.Empty(t, deps.retentionRepo.RetainedUntilCalls())
+	})
+
 	t.Run(`Given a plain repository with a tampered object,
 	when the CheckRepository query handler is called reading data,
 	then it reads each referenced object once and reports the tampered one`, func(t *testing.T) {
 		t.Parallel()
 
-		deps := newCheckDependencies(t, checkSetup{})
+		deps := newCheckDependencies(t, &checkSetup{})
 
 		report := checkReport(t, deps.handler(nil, nil), app.CheckRepositoryQuery{RepositoryPath: "repo", ReadData: true})
 
@@ -163,7 +207,7 @@ func TestCheckRepository_Handle(t *testing.T) {
 	then it reads the current generation with the repository key and only reports the older generation`, func(t *testing.T) {
 		t.Parallel()
 
-		deps := newCheckDependencies(t, checkSetup{encryption: encryption.NewEncryptionConfig("key", "fingerprint", 2), generations: []uint64{1, 2}})
+		deps := newCheckDependencies(t, &checkSetup{encryption: encryption.NewEncryptionConfig("key", "fingerprint", 2), generations: []uint64{1, 2}})
 		asymmetric, symmetric := keyRepositories()
 
 		report := checkReport(t, deps.handler(asymmetric, symmetric), app.CheckRepositoryQuery{RepositoryPath: "repo", ReadData: true, PrivateKeyPath: new("private.pem")})
@@ -182,7 +226,7 @@ func TestCheckRepository_Handle(t *testing.T) {
 	then it reports the object as corrupt instead of failing`, func(t *testing.T) {
 		t.Parallel()
 
-		deps := newCheckDependencies(t, checkSetup{encryption: encryption.NewEncryptionConfig("key", "fingerprint", 2)})
+		deps := newCheckDependencies(t, &checkSetup{encryption: encryption.NewEncryptionConfig("key", "fingerprint", 2)})
 		deps.objectRepo.VerifyObjectFunc = func(_ context.Context, hash string, _ repository.Codec) error {
 			if hash == hashOf(corruptContent) {
 				return fmt.Errorf("%w: decrypt object %q", snapshot.ErrCorruptObject, hash)
@@ -203,7 +247,7 @@ func TestCheckRepository_Handle(t *testing.T) {
 	then it reads only the selected objects`, func(t *testing.T) {
 		t.Parallel()
 
-		deps := newCheckDependencies(t, checkSetup{})
+		deps := newCheckDependencies(t, &checkSetup{})
 		subset, err := snapshot.ParseDataSubset("50%")
 		require.NoError(t, err)
 
@@ -250,7 +294,7 @@ func TestCheckRepository_Handle_Errors(t *testing.T) {
 		when Handle method is called `+tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			deps := newCheckDependencies(t, tt.setup)
+			deps := newCheckDependencies(t, &tt.setup)
 
 			_, err := deps.handler(nil, nil).Handle(t.Context(), tt.query)
 

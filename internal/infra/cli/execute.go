@@ -35,6 +35,7 @@ func newRootCommand() *cobra.Command {
 	rootCmd.AddCommand(newForgetCommand())
 	rootCmd.AddCommand(newPruneCommand())
 	rootCmd.AddCommand(newCheckCommand())
+	rootCmd.AddCommand(newRetentionCommand())
 	addOutputFlags(rootCmd)
 
 	return rootCmd

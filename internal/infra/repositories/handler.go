@@ -17,6 +17,7 @@ type Repositories interface {
 	EncryptedObjectRepository() (app.EncryptedObjectRepository, error)
 	ManifestRepository() (app.ManifestRepository, error)
 	LockRepository() (app.LockRepository, error)
+	RetentionRepository() (app.RetentionRepository, error)
 	Close() error
 }
 
@@ -61,6 +62,14 @@ func (b blobRepositories) LockRepository() (app.LockRepository, error) {
 		return nil, err
 	}
 	return blob.NewLockRepository(store), nil
+}
+
+func (b blobRepositories) RetentionRepository() (app.RetentionRepository, error) {
+	store, err := b.BlobStore()
+	if err != nil {
+		return nil, err
+	}
+	return blob.NewRetentionRepository(store), nil
 }
 
 func NewHandler(ctx context.Context, value string, environment map[string]string) (Repositories, error) {

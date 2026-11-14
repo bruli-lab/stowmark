@@ -1,6 +1,8 @@
 package repository
 
 import (
+	"time"
+
 	"github.com/bruli-lab/go-core/event"
 	"github.com/google/uuid"
 )
@@ -8,6 +10,7 @@ import (
 const (
 	RepositoryInitializedEventName = "repository.initialized"
 	LockRemovedEventName           = "repository.lock_removed"
+	RetentionExtendedEventName     = "repository.retention_extended"
 )
 
 type RepositoryInitialized struct {
@@ -43,5 +46,37 @@ func (l *Lock) Removed() *LockRemoved {
 	return &LockRemoved{
 		BasicEvent: event.NewBasicEvent(LockRemovedEventName, uuid.New(), l.ID().String()),
 		lock:       *l,
+	}
+}
+
+type RetentionExtended struct {
+	event.BasicEvent
+	checked  int
+	extended int
+	until    time.Time
+}
+
+func (r *RetentionExtended) RepositoryID() string {
+	return r.AggregateRootID()
+}
+
+func (r *RetentionExtended) Checked() int {
+	return r.checked
+}
+
+func (r *RetentionExtended) Extended() int {
+	return r.extended
+}
+
+func (r *RetentionExtended) Until() time.Time {
+	return r.until
+}
+
+func (c *Config) RetentionExtended(checked, extended int, until time.Time) *RetentionExtended {
+	return &RetentionExtended{
+		BasicEvent: event.NewBasicEvent(RetentionExtendedEventName, uuid.New(), c.ID().String()),
+		checked:    checked,
+		extended:   extended,
+		until:      until.UTC(),
 	}
 }

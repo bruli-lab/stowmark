@@ -36,6 +36,9 @@ func MarshalConfig(ctx context.Context, c *repository.Config) ([]byte, error) {
 		},
 		Encryption: encryption,
 	}
+	if lock := c.ObjectLock(); lock != nil {
+		co.ObjectLock = &model.ObjectLock{Mode: string(lock.Mode()), PeriodSeconds: int64(lock.Period() / time.Second)}
+	}
 
 	data, err := json.MarshalIndent(co, "", "  ")
 	if err != nil {

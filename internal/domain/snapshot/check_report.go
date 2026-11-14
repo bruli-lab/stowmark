@@ -64,6 +64,7 @@ type CheckReport struct {
 	sizes             map[string]int64
 	staleLocks        int
 	orphanGenerations []uint64
+	unprotected       int
 	readData          bool
 	readObjects       int
 	corruptObjects    []ObjectProblem
@@ -122,6 +123,14 @@ func (c *CheckReport) RecordStaleLocks(count int) {
 
 func (c *CheckReport) RecordOrphanGenerations(generations []uint64) {
 	c.orphanGenerations = generations
+}
+
+func (c *CheckReport) RecordUnprotected(count int) {
+	c.unprotected = count
+}
+
+func (c *CheckReport) Unprotected() int {
+	return c.unprotected
 }
 
 func (c *CheckReport) RecordData(readObjects int, corrupt []ObjectProblem) {

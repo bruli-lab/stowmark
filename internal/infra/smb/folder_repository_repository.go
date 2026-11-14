@@ -82,7 +82,7 @@ func (f FolderRepositoryRepository) GetConfig(ctx context.Context, folderPath st
 		return nil, fmt.Errorf("unmarshal config %q: %w", configPath, err)
 	}
 
-	return model.BuildConfigDomain(conf)
+	return model.BuildConfigDomain(&conf)
 }
 
 func NewFolderRepositoryRepository(share *smb2.Share) *FolderRepositoryRepository {

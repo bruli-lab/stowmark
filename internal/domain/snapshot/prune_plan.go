@@ -7,6 +7,7 @@ type PrunePlan struct {
 	referenced        int
 	unreferenced      []string
 	unreferencedBytes int64
+	unreferencedSizes map[string]int64
 	missing           []string
 	generations       []uint64
 }
@@ -21,6 +22,7 @@ func NewPrunePlan(manifests []Manifest, stored []StoredObject) *PrunePlan {
 
 	present := make(map[string]struct{}, len(stored))
 	unreferenced := make([]string, 0)
+	unreferencedSizes := make(map[string]int64)
 	var unreferencedBytes int64
 	for _, object := range stored {
 		if _, seen := present[object.hash]; seen {
@@ -30,6 +32,7 @@ func NewPrunePlan(manifests []Manifest, stored []StoredObject) *PrunePlan {
 		if _, ok := referenced[object.hash]; !ok {
 			unreferenced = append(unreferenced, object.hash)
 			unreferencedBytes += object.size
+			unreferencedSizes[object.hash] = object.size
 		}
 	}
 
@@ -48,6 +51,7 @@ func NewPrunePlan(manifests []Manifest, stored []StoredObject) *PrunePlan {
 		referenced:        len(referenced),
 		unreferenced:      unreferenced,
 		unreferencedBytes: unreferencedBytes,
+		unreferencedSizes: unreferencedSizes,
 		missing:           missing,
 	}
 }

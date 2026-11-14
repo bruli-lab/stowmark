@@ -17,6 +17,7 @@ type Repository struct {
 	objects   app.ObjectRepository
 	encrypted app.EncryptedObjectRepository
 	locks     app.LockRepository
+	retention app.RetentionRepository
 	locker    *app.RepositoryLocker
 }
 
@@ -46,6 +47,9 @@ func (r *Repository) open() error {
 	if r.locks, err = r.backend.LockRepository(); err != nil {
 		return err
 	}
+	if r.retention, err = r.backend.RetentionRepository(); err != nil {
+		return err
+	}
 	r.locker = app.NewRepositoryLocker(r.locks)
 	return nil
 }
@@ -59,7 +63,7 @@ func (r *Repository) Close() error {
 }
 
 func (r *Repository) Init() cqs.CommandHandler {
-	return r.runtime.commands(app.NewInit(r.folder, r.runtime.asymmetric, r.runtime.symmetric, r.locker))
+	return r.runtime.commands(app.NewInit(r.folder, r.retention, r.runtime.asymmetric, r.runtime.symmetric, r.locker))
 }
 
 func (r *Repository) CreateSnapshot() cqs.CommandHandler {
@@ -102,6 +106,12 @@ func (r *Repository) PruneRepository() cqs.CommandHandler {
 	))
 }
 
+func (r *Repository) ExtendRetention() cqs.CommandHandler {
+	return r.runtime.commands(app.NewExtendRetention(
+		r.folder, r.manifests, r.retention, r.runtime.asymmetric, r.runtime.symmetric, r.locker,
+	))
+}
+
 func (r *Repository) SnapshotList() cqs.QueryHandler {
 	return r.runtime.queries(app.NewSnapshotList(r.folder, r.manifests, r.runtime.asymmetric, r.runtime.symmetric))
 }
@@ -118,7 +128,7 @@ func (r *Repository) VerifySnapshot() cqs.QueryHandler {
 
 func (r *Repository) CheckRepository() cqs.QueryHandler {
 	return r.runtime.queries(app.NewCheckRepository(
-		r.folder, r.manifests, r.objects, r.encrypted, r.locks, r.runtime.asymmetric, r.runtime.symmetric, r.locker,
+		r.folder, r.manifests, r.objects, r.encrypted, r.locks, r.retention, r.runtime.asymmetric, r.runtime.symmetric, r.locker,
 	))
 }
 

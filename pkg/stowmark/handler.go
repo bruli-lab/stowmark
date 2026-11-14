@@ -31,6 +31,7 @@ const (
 	ProgressVerifying   = app.ProgressVerifying
 	ProgressReadingData = app.ProgressReadingData
 	ProgressRekeying    = app.ProgressRekeying
+	ProgressRetaining   = app.ProgressRetaining
 )
 
 func WithProgress(progress Progress) Option {

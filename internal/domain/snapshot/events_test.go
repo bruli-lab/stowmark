@@ -129,4 +129,55 @@ func TestSnapshotEvents(t *testing.T) {
 		require.Equal(t, "repository-id", removed.RepositoryID())
 		require.Equal(t, 3, removed.Removed())
 	})
+
+	t.Run(`Given a prune plan where some deletions were postponed by object lock,
+	when PrunedExcept, GenerationsRemovedExcept and DeletionPostponed are called,
+	then they split the objects, bytes and generations between removed and postponed`, func(t *testing.T) {
+		t.Parallel()
+
+		plan := snapshot.NewPrunePlan(nil, []snapshot.StoredObject{snapshot.NewStoredObject("bb02", 10), snapshot.NewStoredObject("cc03", 32)})
+		plan.RecordOrphanGenerations([]uint64{1, 2})
+		until := time.Date(2026, time.December, 1, 0, 0, 0, 0, time.FixedZone("CET", 3600))
+
+		pruned := plan.PrunedExcept("repository-id", []string{"cc03"})
+		removed := plan.GenerationsRemovedExcept("repository-id", []uint64{2})
+		postponed := plan.DeletionPostponed("repository-id", []string{"cc03"}, []uint64{2}, until)
+
+		require.Equal(t, 1, pruned.Removed())
+		require.Equal(t, int64(10), pruned.FreedBytes())
+		require.Equal(t, []uint64{1}, removed.Generations())
+		require.Equal(t, snapshot.ObjectsDeletionPostponedEventName, postponed.EventName())
+		require.Equal(t, "repository-id", postponed.RepositoryID())
+		require.Equal(t, 1, postponed.Objects())
+		require.Equal(t, int64(32), postponed.Bytes())
+		require.Equal(t, []uint64{2}, postponed.Generations())
+		require.Equal(t, until.UTC(), postponed.Until())
+	})
+
+	t.Run(`Given a retention decision that forgets a snapshot still under retention,
+	when ForgetPostponed is called,
+	then the event belongs to the snapshot and carries the end of the retention`, func(t *testing.T) {
+		t.Parallel()
+
+		manifest := fixtures.ManifestBuilder{}.Build()
+		policy, err := snapshot.NewRetentionPolicy(snapshot.RetentionRules{Last: 1})
+		require.NoError(t, err)
+		newer := fixtures.ManifestBuilder{ID: new(snapshot.NewID() + "z")}.Build()
+		decisions := policy.Apply([]snapshot.ManifestResume{*newer.Resume(), *manifest.Resume()}, time.Now())
+		until := time.Date(2026, time.December, 1, 0, 0, 0, 0, time.UTC)
+
+		var postponed *snapshot.SnapshotForgetPostponed
+		for i := range decisions {
+			if !decisions[i].Keep() {
+				postponed = decisions[i].ForgetPostponed(until)
+			}
+		}
+
+		require.NotNil(t, postponed)
+		require.Equal(t, snapshot.SnapshotForgetPostponedEventName, postponed.EventName())
+		require.NotEmpty(t, postponed.SnapshotID())
+		require.Equal(t, "/source", postponed.Source())
+		require.Equal(t, until, postponed.Until())
+		require.False(t, postponed.CreatedAt().IsZero())
+	})
 }

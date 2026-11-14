@@ -5,6 +5,7 @@ import "github.com/bruli-lab/stowmark/internal/domain/encryption"
 const (
 	EncryptionRemovedWarning   = "encryption configuration removed.\nExisting encrypted objects may no longer be recoverable."
 	EncryptionPreservedWarning = "the repository already has encryption enabled.\nThe existing encryption configuration has been preserved."
+	ObjectLockPreservedWarning = "the repository already uses object lock.\nThe existing object lock configuration has been preserved."
 )
 
 func (c Config) Reinitialize(newConfig *Config, force bool) (reinitialized *Config, warnings []string) {
@@ -21,5 +22,10 @@ func (c Config) Reinitialize(newConfig *Config, force bool) (reinitialized *Conf
 	default:
 		encryptionConfig = newConfig.encryption
 	}
-	return HydrateConfig(c.id, c.formatVersion, c.createdAt, newConfig.compression, encryptionConfig), warnings
+	objectLock := newConfig.objectLock
+	if objectLock == nil && c.objectLock != nil {
+		warnings = append(warnings, ObjectLockPreservedWarning)
+		objectLock = c.objectLock
+	}
+	return HydrateConfig(c.id, c.formatVersion, c.createdAt, newConfig.compression, encryptionConfig).WithObjectLock(objectLock), warnings
 }

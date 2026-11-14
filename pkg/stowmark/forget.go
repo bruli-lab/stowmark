@@ -75,7 +75,27 @@ func (h *Handler) PlanForget(ctx context.Context, policy RetentionPolicy) ([]Sna
 	return snapshots, nil
 }
 
+type PostponedSnapshot struct {
+	ID            string
+	CreatedAt     time.Time
+	Source        string
+	RetainedUntil time.Time
+}
+
+type ForgetResult struct {
+	Forgotten []ForgottenSnapshot
+	Postponed []PostponedSnapshot
+}
+
 func (h *Handler) Forget(ctx context.Context, policy RetentionPolicy) ([]ForgottenSnapshot, error) {
+	result, err := h.ForgetSnapshots(ctx, policy)
+	if err != nil {
+		return nil, err
+	}
+	return result.Forgotten, nil
+}
+
+func (h *Handler) ForgetSnapshots(ctx context.Context, policy RetentionPolicy) (*ForgetResult, error) {
 	retention, err := policy.build()
 	if err != nil {
 		return nil, err
@@ -90,9 +110,14 @@ func (h *Handler) Forget(ctx context.Context, policy RetentionPolicy) ([]Forgott
 	}
 
 	forgotten := app.EventsOf[*snapshot.SnapshotForgotten](events)
-	result := make([]ForgottenSnapshot, len(forgotten))
+	result := &ForgetResult{Forgotten: make([]ForgottenSnapshot, len(forgotten))}
 	for i, ev := range forgotten {
-		result[i] = ForgottenSnapshot{ID: ev.SnapshotID(), CreatedAt: ev.CreatedAt(), Source: ev.Source()}
+		result.Forgotten[i] = ForgottenSnapshot{ID: ev.SnapshotID(), CreatedAt: ev.CreatedAt(), Source: ev.Source()}
+	}
+	postponed := app.EventsOf[*snapshot.SnapshotForgetPostponed](events)
+	result.Postponed = make([]PostponedSnapshot, len(postponed))
+	for i, ev := range postponed {
+		result.Postponed[i] = PostponedSnapshot{ID: ev.SnapshotID(), CreatedAt: ev.CreatedAt(), Source: ev.Source(), RetainedUntil: ev.Until()}
 	}
 
 	return result, nil

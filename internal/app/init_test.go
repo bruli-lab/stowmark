@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/domain/encryption"
@@ -167,7 +168,7 @@ func TestInit_Handle(t *testing.T) {
 				},
 			}
 
-			handler := app.NewInit(folderRepo, asymmetricRepo, symmetricRepo, newUnlockedLocker())
+			handler := app.NewInit(folderRepo, &app.RetentionRepositoryMock{}, asymmetricRepo, symmetricRepo, newUnlockedLocker())
 			events, err := handler.Handle(t.Context(), app.InitCommand{
 				RepositoryPath: "repo",
 				Compression:    fixtures.CompressionBuilder{}.Build(t),
@@ -198,6 +199,66 @@ func TestInit_Handle(t *testing.T) {
 				folderRepo.CreateFolderCalls()[1].Path,
 				folderRepo.CreateFolderCalls()[2].Path,
 			})
+		})
+	}
+}
+
+func TestInit_Handle_ObjectLock(t *testing.T) {
+	t.Parallel()
+
+	errTest := errors.New("test error")
+	lock, err := repository.NewObjectLock(repository.ComplianceObjectLock, 24*time.Hour)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name        string
+		verifyErr   error
+		expectedErr error
+	}{
+		{
+			name: "and the backend supports it, then it stores the object lock in the config",
+		},
+		{
+			name:        "and the backend does not support it, then it returns the error before creating anything",
+			verifyErr:   repository.ErrObjectLockUnsupported,
+			expectedErr: repository.ErrObjectLockUnsupported,
+		},
+		{
+			name:        "and the bucket check fails, then it returns the same error",
+			verifyErr:   errTest,
+			expectedErr: errTest,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(`Given an Init command handler,
+		when Handle method is called with an object lock `+tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			folderRepo := &app.FolderRepositoryMock{
+				ExistsFunc:       func(context.Context, string) (bool, error) { return false, nil },
+				CreateFolderFunc: func(context.Context, string) error { return nil },
+				CreateConfigFunc: func(context.Context, string, *repository.Config) error { return nil },
+			}
+			retentionRepo := &app.RetentionRepositoryMock{
+				VerifyObjectLockFunc: func(context.Context) error { return tt.verifyErr },
+			}
+
+			_, err := app.NewInit(folderRepo, retentionRepo, nil, nil, newUnlockedLocker()).Handle(t.Context(), app.InitCommand{
+				RepositoryPath: "repo",
+				Compression:    fixtures.CompressionBuilder{}.Build(t),
+				FormatVersion:  repository.DefaultFormatVersion,
+				ObjectLock:     lock,
+			})
+
+			require.Len(t, retentionRepo.VerifyObjectLockCalls(), 1)
+			if tt.expectedErr != nil {
+				require.ErrorIs(t, err, tt.expectedErr)
+				require.Empty(t, folderRepo.CreateFolderCalls())
+				return
+			}
+			require.NoError(t, err)
+			require.Len(t, folderRepo.CreateConfigCalls(), 1)
+			require.Equal(t, lock, folderRepo.CreateConfigCalls()[0].C.ObjectLock())
 		})
 	}
 }

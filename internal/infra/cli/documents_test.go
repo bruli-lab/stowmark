@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/bruli-lab/go-core/event"
+	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/fixtures"
 	"github.com/stretchr/testify/require"
@@ -65,7 +66,8 @@ func TestDocuments_EmptyLists(t *testing.T) {
 			newPruneDocument(nil),
 			newSnapshotDocuments(nil),
 			newRetentionDocuments(nil),
-			forgetDocument{Forgotten: newForgottenDocuments(nil)},
+			forgetDocument{Forgotten: newForgottenDocuments(nil), Postponed: newPostponedDocuments(nil)},
+			newRetentionExtendDocument(nil),
 			newResultDocument("s1", 0, nil, true),
 		}
 		for _, document := range documents {
@@ -101,11 +103,93 @@ func TestNewPruneDocument(t *testing.T) {
 		document := newPruneDocument(events)
 
 		require.Equal(t, &pruneDocument{
-			RemovedObjects:        2,
-			FreedBytes:            42,
-			RemovedKeyGenerations: []uint64{4},
-			RemovedTemporaryFiles: 2,
-			MissingObjects:        1,
+			RemovedObjects:          2,
+			FreedBytes:              42,
+			RemovedKeyGenerations:   []uint64{4},
+			RemovedTemporaryFiles:   2,
+			MissingObjects:          1,
+			PostponedKeyGenerations: []uint64{},
 		}, document)
 	})
+
+	t.Run(`Given the events of a prune where object lock postponed some deletions,
+	when newPruneDocument is called,
+	then it reports the postponed objects, bytes, generations and the end of the retention`, func(t *testing.T) {
+		t.Parallel()
+
+		plan := snapshot.NewPrunePlan(nil, []snapshot.StoredObject{snapshot.NewStoredObject("bb02", 10), snapshot.NewStoredObject("cc03", 32)})
+		plan.RecordOrphanGenerations([]uint64{3, 4})
+		until := time.Date(2026, time.December, 1, 0, 0, 0, 0, time.UTC)
+		events := []event.Event{
+			plan.PrunedExcept("repo", []string{"cc03"}),
+			plan.GenerationsRemovedExcept("repo", []uint64{4}),
+			plan.DeletionPostponed("repo", []string{"cc03"}, []uint64{4}, until),
+		}
+
+		document := newPruneDocument(events)
+
+		require.Equal(t, &pruneDocument{
+			RemovedObjects:          1,
+			FreedBytes:              10,
+			RemovedKeyGenerations:   []uint64{3},
+			PostponedObjects:        1,
+			PostponedBytes:          32,
+			PostponedKeyGenerations: []uint64{4},
+			RetainedUntil:           &until,
+		}, document)
+	})
+}
+
+func TestNewRetentionExtendDocument(t *testing.T) {
+	t.Parallel()
+
+	t.Run(`Given the event of an extended retention,
+	when newRetentionExtendDocument is called,
+	then it reports the extended items and the new end of the retention`, func(t *testing.T) {
+		t.Parallel()
+
+		conf := fixtures.ConfigBuilder{}.Build(t)
+		until := time.Date(2026, time.December, 1, 0, 0, 0, 0, time.UTC)
+
+		document := newRetentionExtendDocument([]event.Event{conf.RetentionExtended(9, 4, until)})
+
+		require.Equal(t, retentionExtendDocument{Extended: 4, RetainedUntil: &until}, document)
+	})
+}
+
+func TestParseObjectLock(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		period, mode string
+		expected     time.Duration
+		expectedErr  error
+	}{
+		{name: "without a period, then there is no object lock", mode: "governance"},
+		{name: "with a period in days, then it returns the object lock", period: "30d", mode: "compliance", expected: 30 * 24 * time.Hour},
+		{name: "with an invalid period, then it returns invalid duration error", period: "soon", mode: "governance", expectedErr: ErrInvalidRetentionDuration},
+		{name: "with an unknown mode, then it returns invalid object lock error", period: "1d", mode: "legal", expectedErr: repository.ErrInvalidObjectLock},
+		{name: "with a zero period, then it returns invalid object lock error", period: "0d", mode: "governance", expectedErr: repository.ErrInvalidObjectLock},
+	}
+	for _, tt := range tests {
+		t.Run(`Given the object lock flags of init,
+		when parseObjectLock is called `+tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			lock, err := parseObjectLock(tt.period, tt.mode)
+
+			if tt.expectedErr != nil {
+				require.ErrorIs(t, err, tt.expectedErr)
+				return
+			}
+			require.NoError(t, err)
+			if tt.period == "" {
+				require.Nil(t, lock)
+				return
+			}
+			require.Equal(t, tt.expected, lock.Period())
+			require.Equal(t, repository.ObjectLockMode(tt.mode), lock.Mode())
+		})
+	}
 }

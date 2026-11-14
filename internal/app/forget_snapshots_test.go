@@ -3,6 +3,7 @@ package app_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -99,6 +100,35 @@ func TestForgetSnapshots_Handle(t *testing.T) {
 		require.NoError(t, err)
 		require.Empty(t, events)
 		require.Empty(t, deleted())
+	})
+}
+
+func TestForgetSnapshots_Handle_Retained(t *testing.T) {
+	t.Parallel()
+
+	t.Run(`Given a repository with object lock whose old manifests are still retained,
+	when the ForgetSnapshots command handler is called,
+	then it keeps them and returns a forget postponed event for each`, func(t *testing.T) {
+		t.Parallel()
+
+		until := time.Now().Add(time.Hour).UTC().Truncate(time.Second)
+		manifests := manifestsCreated(time.Hour, 2*time.Hour)
+		repo, deleted := forgetManifestRepo(manifests, nil, fmt.Errorf("delete manifest: %w", repository.NewRetainedError(until)))
+
+		events, err := app.NewForgetSnapshots(plainFolderRepository(t), repo, nil, nil, newUnlockedLocker()).Handle(t.Context(), app.ForgetSnapshotsCommand{
+			RepositoryPath: "repo",
+			Policy:         retentionPolicy(t, snapshot.RetentionRules{Last: 1}),
+		})
+
+		require.NoError(t, err)
+		require.Empty(t, app.EventsOf[*snapshot.SnapshotForgotten](events))
+		postponed, err := app.SingleEvent[*snapshot.SnapshotForgetPostponed](events)
+		require.NoError(t, err)
+		require.Equal(t, snapshot.SnapshotForgetPostponedEventName, postponed.EventName())
+		require.Equal(t, manifests[1].ID(), postponed.SnapshotID())
+		require.Equal(t, "/source", postponed.Source())
+		require.Equal(t, until, postponed.Until())
+		require.Equal(t, []string{manifests[1].ID()}, deleted())
 	})
 }
 

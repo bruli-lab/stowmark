@@ -17,6 +17,7 @@ type InitCommand struct {
 	Compression    *repository.Compression
 	FormatVersion  repository.FormatVersion
 	PublicKeyPath  *string
+	ObjectLock     *repository.ObjectLock
 	Force          bool
 }
 
@@ -25,15 +26,21 @@ func (i InitCommand) Name() string {
 }
 
 type Init struct {
-	folderRepo FolderRepository
-	keys       keyring
-	locker     *RepositoryLocker
+	folderRepo    FolderRepository
+	retentionRepo RetentionRepository
+	keys          keyring
+	locker        *RepositoryLocker
 }
 
 func (i *Init) Handle(ctx context.Context, cmd cqs.Command) ([]event.Event, error) {
 	co, ok := cmd.(InitCommand)
 	if !ok {
 		return nil, cqs.NewInvalidCommandError(InitCommandName, cmd.Name())
+	}
+	if co.ObjectLock != nil {
+		if err := i.retentionRepo.VerifyObjectLock(ctx); err != nil {
+			return nil, err
+		}
 	}
 	repo, err := i.newRepository(ctx, co)
 	if err != nil {
@@ -94,7 +101,7 @@ func (i *Init) newRepository(ctx context.Context, co InitCommand) (*repository.R
 		}
 		encryptionConfig = created
 	}
-	conf := repository.NewConfig(uuid.New(), co.FormatVersion, co.Compression, encryptionConfig)
+	conf := repository.NewConfig(uuid.New(), co.FormatVersion, co.Compression, encryptionConfig).WithObjectLock(co.ObjectLock)
 	return repository.NewRepository(co.RepositoryPath, conf)
 }
 
@@ -111,9 +118,15 @@ func (i *Init) ensureMetadataKey(ctx context.Context, conf *repository.Config, p
 
 func NewInit(
 	folderRepo FolderRepository,
+	retentionRepo RetentionRepository,
 	asymmetricRepo AsymmetricKeyPairRepository,
 	symmetricRepo SymmetricKeyRepository,
 	locker *RepositoryLocker,
 ) *Init {
-	return &Init{folderRepo: folderRepo, keys: newKeyring(folderRepo, asymmetricRepo, symmetricRepo), locker: locker}
+	return &Init{
+		folderRepo:    folderRepo,
+		retentionRepo: retentionRepo,
+		keys:          newKeyring(folderRepo, asymmetricRepo, symmetricRepo),
+		locker:        locker,
+	}
 }

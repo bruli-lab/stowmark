@@ -356,7 +356,7 @@ func TestInit_MetadataKey(t *testing.T) {
 				GetConfigFunc:    func(context.Context, string) (*repository.Config, error) { return previous, nil },
 			}
 			asymmetric, symmetric := fakeKeyRepositories()
-			handler := app.NewInit(folderRepo, asymmetric, symmetric, newUnlockedLocker())
+			handler := app.NewInit(folderRepo, &app.RetentionRepositoryMock{}, asymmetric, symmetric, newUnlockedLocker())
 
 			_, err := handler.Handle(t.Context(), app.InitCommand{
 				RepositoryPath: "repo",

@@ -76,6 +76,20 @@ func TestBuildConfigDomain(t *testing.T) {
 			mutate:      func(conf *model.Config) { conf.Encryption.Type = "chacha20-poly1305" },
 			expectedErr: encryption.ErrUnsupportedEncryption,
 		},
+		{
+			name:   "with an object lock, then it returns the domain config with the object lock",
+			mutate: func(conf *model.Config) { conf.ObjectLock = &model.ObjectLock{Mode: "compliance", PeriodSeconds: 3600} },
+		},
+		{
+			name:        "with an unknown object lock mode, then it returns an invalid object lock error",
+			mutate:      func(conf *model.Config) { conf.ObjectLock = &model.ObjectLock{Mode: "legal-hold", PeriodSeconds: 3600} },
+			expectedErr: repository.ErrInvalidObjectLock,
+		},
+		{
+			name:        "with an object lock without period, then it returns an invalid object lock error",
+			mutate:      func(conf *model.Config) { conf.ObjectLock = &model.ObjectLock{Mode: "governance"} },
+			expectedErr: repository.ErrInvalidObjectLock,
+		},
 	}
 
 	for _, tt := range tests {
@@ -86,7 +100,7 @@ func TestBuildConfigDomain(t *testing.T) {
 			conf := validConfig()
 			tt.mutate(&conf)
 
-			got, err := model.BuildConfigDomain(conf)
+			got, err := model.BuildConfigDomain(&conf)
 
 			if tt.wantErr || tt.expectedErr != nil {
 				require.Error(t, err)
@@ -100,6 +114,12 @@ func TestBuildConfigDomain(t *testing.T) {
 			require.Equal(t, conf.FormatVersion, got.FormatVersion().Int())
 			require.Equal(t, conf.CreatedAt, got.CreatedAt().Format("2006-01-02T15:04:05-07:00"))
 			require.Equal(t, conf.Compression.Type, got.Compression().CompType().String())
+			if conf.ObjectLock != nil {
+				require.Equal(t, conf.ObjectLock.Mode, string(got.ObjectLock().Mode()))
+				require.Equal(t, conf.ObjectLock.PeriodSeconds, int64(got.ObjectLock().Period().Seconds()))
+			} else {
+				require.Nil(t, got.ObjectLock())
+			}
 			if conf.Encryption == nil {
 				require.Nil(t, got.Encryption())
 				return

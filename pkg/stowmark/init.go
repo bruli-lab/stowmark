@@ -3,6 +3,7 @@ package stowmark
 import (
 	"context"
 	"log/slog"
+	"time"
 
 	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
@@ -13,7 +14,40 @@ type Compression struct {
 	Level *int
 }
 
+type ObjectLockMode = repository.ObjectLockMode
+
+const (
+	GovernanceObjectLock = repository.GovernanceObjectLock
+	ComplianceObjectLock = repository.ComplianceObjectLock
+)
+
+var (
+	ErrObjectLockUnsupported = repository.ErrObjectLockUnsupported
+	ErrObjectLockDisabled    = repository.ErrObjectLockDisabled
+)
+
+type ObjectLock struct {
+	Mode   ObjectLockMode
+	Period time.Duration
+}
+
+type InitOptions struct {
+	Compression   *Compression
+	FormatVersion int
+	PublicKey     *string
+	ObjectLock    *ObjectLock
+	Force         bool
+}
+
 func (h *Handler) Init(ctx context.Context, comp *Compression, formatVersion int, publicKey *string, force bool) error {
+	return h.InitWithOptions(ctx, InitOptions{Compression: comp, FormatVersion: formatVersion, PublicKey: publicKey, Force: force})
+}
+
+func (h *Handler) InitWithOptions(ctx context.Context, options InitOptions) error {
+	comp := options.Compression
+	if comp == nil {
+		comp = &Compression{Type: repository.NoneCompressionType.String()}
+	}
 	compType, err := repository.ParseCompressionType(comp.Type)
 	if err != nil {
 		return err
@@ -22,7 +56,11 @@ func (h *Handler) Init(ctx context.Context, comp *Compression, formatVersion int
 	if err != nil {
 		return err
 	}
-	version, err := repository.ParseFormatVersionOrDefault(formatVersion)
+	version, err := repository.ParseFormatVersionOrDefault(options.FormatVersion)
+	if err != nil {
+		return err
+	}
+	lock, err := options.ObjectLock.build()
 	if err != nil {
 		return err
 	}
@@ -31,8 +69,9 @@ func (h *Handler) Init(ctx context.Context, comp *Compression, formatVersion int
 		RepositoryPath: h.repository.Path(),
 		Compression:    compre,
 		FormatVersion:  version,
-		PublicKeyPath:  publicKey,
-		Force:          force,
+		PublicKeyPath:  options.PublicKey,
+		ObjectLock:     lock,
+		Force:          options.Force,
 	})
 	if err != nil {
 		return err
@@ -45,4 +84,15 @@ func (h *Handler) Init(ctx context.Context, comp *Compression, formatVersion int
 		slog.Warn(warning)
 	}
 	return nil
+}
+
+func (o *ObjectLock) build() (*repository.ObjectLock, error) {
+	if o == nil {
+		return nil, nil
+	}
+	mode := o.Mode
+	if mode == "" {
+		mode = GovernanceObjectLock
+	}
+	return repository.NewObjectLock(mode, o.Period)
 }

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/stretchr/testify/require"
 )
 
@@ -104,5 +105,45 @@ func TestCLI_JSONOutput(t *testing.T) {
 		output := runCLI(t, "snapshot", "list", "--repo", repo)
 
 		require.Equal(t, "No snapshots found.\n", string(output))
+	})
+}
+
+func runCLIError(t *testing.T, args ...string) error {
+	t.Helper()
+
+	root := newRootCommand()
+	root.SetOut(&bytes.Buffer{})
+	root.SetErr(&bytes.Buffer{})
+	root.SetArgs(args)
+	return root.ExecuteContext(t.Context())
+}
+
+func TestCLI_ObjectLock(t *testing.T) {
+	t.Parallel()
+
+	t.Run(`Given a local repository path,
+	when init is run with --object-lock,
+	then it fails because only S3 supports object lock and creates nothing`, func(t *testing.T) {
+		t.Parallel()
+
+		repo := filepath.Join(t.TempDir(), "repo")
+
+		err := runCLIError(t, "init", "--repo", repo, "--object-lock", "30d")
+
+		require.ErrorIs(t, err, repository.ErrObjectLockUnsupported)
+		require.NoDirExists(t, repo)
+	})
+
+	t.Run(`Given a local repository without object lock,
+	when retention extend is run,
+	then it fails because the repository does not use object lock`, func(t *testing.T) {
+		t.Parallel()
+
+		repo := filepath.Join(t.TempDir(), "repo")
+		runCLI(t, "init", "--repo", repo)
+
+		err := runCLIError(t, "retention", "extend", "--repo", repo)
+
+		require.ErrorIs(t, err, repository.ErrObjectLockDisabled)
 	})
 }

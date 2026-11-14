@@ -59,6 +59,22 @@ func s3ContainerEndpoint(t *testing.T, ctx context.Context, s3Container testcont
 func createS3Bucket(t *testing.T, ctx context.Context, endpoint, bucket string) {
 	t.Helper()
 
+	_, err := s3TestClient(t, ctx, endpoint).CreateBucket(ctx, &s3.CreateBucketInput{Bucket: aws.String(bucket)})
+	require.NoError(t, err)
+}
+
+func createObjectLockS3Bucket(t *testing.T, ctx context.Context, endpoint, bucket string) *s3.Client {
+	t.Helper()
+
+	client := s3TestClient(t, ctx, endpoint)
+	_, err := client.CreateBucket(ctx, &s3.CreateBucketInput{Bucket: aws.String(bucket), ObjectLockEnabledForBucket: aws.Bool(true)})
+	require.NoError(t, err)
+	return client
+}
+
+func s3TestClient(t *testing.T, ctx context.Context, endpoint string) *s3.Client {
+	t.Helper()
+
 	cfg, err := config.LoadDefaultConfig(ctx,
 		config.WithRegion("us-east-1"),
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
@@ -69,13 +85,8 @@ func createS3Bucket(t *testing.T, ctx context.Context, endpoint, bucket string) 
 	)
 	require.NoError(t, err)
 
-	client := s3.NewFromConfig(cfg, func(options *s3.Options) {
+	return s3.NewFromConfig(cfg, func(options *s3.Options) {
 		options.BaseEndpoint = aws.String(endpoint)
 		options.UsePathStyle = true
 	})
-
-	_, err = client.CreateBucket(ctx, &s3.CreateBucketInput{
-		Bucket: aws.String(bucket),
-	})
-	require.NoError(t, err)
 }

@@ -10,6 +10,7 @@ const (
 	ProgressVerifying   ProgressStage = "Verifying"
 	ProgressReadingData ProgressStage = "Reading data"
 	ProgressRekeying    ProgressStage = "Rekeying"
+	ProgressRetaining   ProgressStage = "Extending retention"
 )
 
 type Progress interface {

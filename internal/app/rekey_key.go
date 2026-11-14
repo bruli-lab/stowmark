@@ -98,7 +98,7 @@ func (r *RekeyKey) rekey(ctx context.Context, co RekeyKeyCommand) (rotated *encr
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), rekeyCleanupTimeout)
 		defer cancel()
 
-		if cleanupErr := r.encryptedRepo.AbortRekey(cleanupCtx, newGeneration); cleanupErr != nil {
+		if cleanupErr := r.encryptedRepo.AbortRekey(cleanupCtx, newGeneration); cleanupErr != nil && !errors.Is(cleanupErr, repository.ErrRetained) {
 			resultErr = errors.Join(resultErr, cleanupErr)
 		}
 	}()
@@ -119,7 +119,7 @@ func (r *RekeyKey) rekey(ctx context.Context, co RekeyKeyCommand) (rotated *encr
 
 	committed = true
 
-	if err := r.encryptedRepo.DeleteEncryptedGeneration(ctx, currentGeneration); err != nil {
+	if err := r.encryptedRepo.DeleteEncryptedGeneration(ctx, currentGeneration); err != nil && !errors.Is(err, repository.ErrRetained) {
 		return nil, err
 	}
 

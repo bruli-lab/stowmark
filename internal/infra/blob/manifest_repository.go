@@ -45,7 +45,7 @@ func (m ManifestRepository) Save(ctx context.Context, manifest *snapshot.Manifes
 	}
 	data = append(data, '\n')
 
-	return m.store.Put(ctx, key, func(destination io.Writer) error {
+	return putWithLock(ctx, m.store, key, codec.ObjectLock(), func(destination io.Writer) error {
 		if !codec.EncryptsMetadata() {
 			_, err := destination.Write(data)
 			return err

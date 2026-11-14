@@ -40,4 +40,21 @@ func TestRepositoryEvents(t *testing.T) {
 		require.Equal(t, lock.ID().String(), removed.AggregateRootID())
 		require.Equal(t, lock, removed.Lock())
 	})
+
+	t.Run(`Given a repository config,
+	when RetentionExtended is called,
+	then the event belongs to the repository and carries the counters and the new end`, func(t *testing.T) {
+		t.Parallel()
+
+		conf := fixtures.ConfigBuilder{}.Build(t)
+		until := time.Date(2026, time.December, 1, 0, 0, 0, 0, time.FixedZone("CET", 3600))
+
+		extended := conf.RetentionExtended(10, 3, until)
+
+		require.Equal(t, repository.RetentionExtendedEventName, extended.EventName())
+		require.Equal(t, conf.ID().String(), extended.RepositoryID())
+		require.Equal(t, 10, extended.Checked())
+		require.Equal(t, 3, extended.Extended())
+		require.Equal(t, until.UTC(), extended.Until())
+	})
 }

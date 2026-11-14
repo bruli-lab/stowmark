@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/bruli-lab/go-core/cqs"
@@ -41,6 +42,7 @@ type CheckRepository struct {
 	objectRepo    ObjectRepository
 	encryptedRepo EncryptedObjectRepository
 	lockRepo      LockRepository
+	walker        retentionWalker
 	keys          keyring
 	verifier      objectVerifier
 	locker        *RepositoryLocker
@@ -95,6 +97,9 @@ func (c *CheckRepository) check(ctx context.Context, q CheckRepositoryQuery) (*s
 		return nil, err
 	}
 	if err := c.checkGenerations(ctx, report, conf); err != nil {
+		return nil, err
+	}
+	if err := c.checkRetention(ctx, report, conf, manifests); err != nil {
 		return nil, err
 	}
 	if !q.readsData() {
@@ -160,6 +165,30 @@ func (c *CheckRepository) checkGenerations(ctx context.Context, report *snapshot
 	return nil
 }
 
+func (c *CheckRepository) checkRetention(
+	ctx context.Context,
+	report *snapshot.CheckReport,
+	conf *repository.Config,
+	manifests []snapshot.Manifest,
+) error {
+	if conf.ObjectLock() == nil {
+		return nil
+	}
+	now := time.Now()
+	var unprotected atomic.Int64
+	err := c.walker.walk(ctx, snapshot.RetainedItems(manifests, conf), noProgress{}, func(_ context.Context, _ repository.RetainedItem, until time.Time) error {
+		if !until.After(now) {
+			unprotected.Add(1)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	report.RecordUnprotected(int(unprotected.Load()))
+	return nil
+}
+
 func (c *CheckRepository) readData(
 	ctx context.Context,
 	report *snapshot.CheckReport,
@@ -217,11 +246,12 @@ func NewCheckRepository(
 	objectRepo ObjectRepository,
 	encryptedRepo EncryptedObjectRepository,
 	lockRepo LockRepository,
+	retentionRepo RetentionRepository,
 	asymmetricRepo AsymmetricKeyPairRepository,
 	symmetricRepo SymmetricKeyRepository,
 	locker *RepositoryLocker,
 ) *CheckRepository {
-	return NewCheckRepositoryWithWorkers(folderRepo, manifestRepo, objectRepo, encryptedRepo, lockRepo, asymmetricRepo, symmetricRepo, locker, defaultVerifyWorkers)
+	return NewCheckRepositoryWithWorkers(folderRepo, manifestRepo, objectRepo, encryptedRepo, lockRepo, retentionRepo, asymmetricRepo, symmetricRepo, locker, defaultVerifyWorkers)
 }
 
 func NewCheckRepositoryWithWorkers(
@@ -230,6 +260,7 @@ func NewCheckRepositoryWithWorkers(
 	objectRepo ObjectRepository,
 	encryptedRepo EncryptedObjectRepository,
 	lockRepo LockRepository,
+	retentionRepo RetentionRepository,
 	asymmetricRepo AsymmetricKeyPairRepository,
 	symmetricRepo SymmetricKeyRepository,
 	locker *RepositoryLocker,
@@ -244,6 +275,7 @@ func NewCheckRepositoryWithWorkers(
 		objectRepo:    objectRepo,
 		encryptedRepo: encryptedRepo,
 		lockRepo:      lockRepo,
+		walker:        newRetentionWalker(retentionRepo),
 		keys:          newKeyring(folderRepo, asymmetricRepo, symmetricRepo),
 		verifier:      newObjectVerifier(objectRepo),
 		locker:        locker,

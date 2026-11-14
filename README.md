@@ -46,6 +46,7 @@ the source path, creation time and references to its files.
 - Remote repositories over SSH/SFTP using public-key authentication.
 - Remote repositories over SMB using password authentication.
 - Remote repositories in Amazon S3 and S3-compatible object storage.
+- Optional S3 Object Lock (WORM) retention of every object, manifest and the repository config.
 - Remote repositories in Google Cloud Storage using Application Default Credentials.
 - Remote repositories over WebDAV using username and password authentication.
 - Optional OpenTelemetry observability through an OTLP-compatible collector.
@@ -350,6 +351,60 @@ stowmark init --repo s3://stowmark/backups
 Amazon S3. The configured credentials must allow Stowmark to read, create and inspect objects in the bucket. The bucket
 must already exist; Stowmark creates the repository objects under the path specified in the URL.
 
+### S3 Object Lock
+
+An S3 repository can be protected against deletion and overwriting, even by someone who has the credentials, with
+[S3 Object Lock](https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lock.html). Stowmark sets a retention
+on every object, snapshot manifest and `config.json` it writes, so S3 refuses to delete them until it ends:
+
+```bash
+stowmark init --repo s3://stowmark-backups/home-server --object-lock 30d --object-lock-mode governance
+```
+
+Bucket requirements:
+
+- The bucket must be created with Object Lock enabled (`aws s3api create-bucket ... --object-lock-enabled-for-bucket`),
+  which also turns on versioning. `init --object-lock` checks it and fails otherwise.
+- The bucket must **not** have a default retention. Stowmark sets the retention of each object itself, and a default
+  retention would also lock the repository locks (`locks/`), which have to be deletable.
+- Object Lock is only supported on S3. `init --object-lock` fails on every other backend.
+
+Modes:
+
+| Mode | Who can delete a retained object before the retention ends |
+|---|---|
+| `governance` (default) | Only users with the `s3:BypassGovernanceRetention` permission. |
+| `compliance` | Nobody, not even the root account. The retention can be extended but never shortened. |
+
+How it changes the commands:
+
+- `snapshot create` writes each new object and manifest with a retention of one period. Objects that already exist
+  are reused and keep their first retention.
+- `stowmark retention extend --repo <repository> [--private-key <key>]` extends the retention of the config, every
+  manifest and every object they use to one full period from now, for those whose retention ends within half a
+  period. Run it regularly, for example daily from cron with a 30-day period, so that objects reused by new snapshots
+  stay protected.
+- `check` warns about the items in use whose retention has already ended.
+- `forget` keeps the snapshots whose manifest is still retained and reports them as postponed. `prune` does the same
+  with objects and old key generations. Run them again once the retention has ended.
+- `key rekey` writes the objects of the new generation with a retention and leaves the old generation for `prune`,
+  which deletes it once its retention has ended.
+- Deleting in a versioned bucket only hides an object behind a delete marker. When the bucket uses Object Lock,
+  Stowmark deletes every version of an object (and its delete markers) so that `prune` really frees space.
+
+Recommendations:
+
+- Add a lifecycle rule that expires noncurrent versions and removes expired delete markers, to clean up anything
+  deleted outside Stowmark.
+- Versions of Stowmark without Object Lock support ignore `object_lock` in `config.json`. They write objects without a
+  retention, and their `prune` and `forget` only create delete markers: the data stays in the bucket, hidden, until a
+  lifecycle rule or a newer `prune` removes it. Use the same version on every machine that writes to the repository.
+- If something is deleted by mistake while it is still retained, it is only hidden: restore the previous version with
+  the S3 console or `aws s3api` (delete the delete marker).
+
+The credentials need `s3:GetBucketObjectLockConfiguration`, `s3:PutObjectRetention`, `s3:GetObjectRetention`,
+`s3:ListBucketVersions` and `s3:DeleteObjectVersion` on top of the usual permissions.
+
 ## Google Cloud Storage repositories
 
 Stowmark can store a repository natively in Google Cloud Storage (GCS). The source directory and restored files remain
@@ -485,7 +540,7 @@ and remove files and collections under the repository path.
 
 | Command                                                                 | Description                              |
 |-------------------------------------------------------------------------|------------------------------------------|
-| `stowmark init --repo <repository> [--version 3]`                       | Initialize a new repository.             |
+| `stowmark init --repo <repository> [--version 3] [--object-lock <period>]` | Initialize a new repository.          |
 | `stowmark snapshot create <source> --repo <repository> [--exclude <pattern>] [--no-ignore-file]` | Create a snapshot of a directory.  |
 | `stowmark snapshot list --repo <repository> [--private-key <key>]`      | List snapshots from newest to oldest.    |
 | `stowmark snapshot get --id <id> --repo <repository> [--private-key <key>]` | Display a snapshot manifest.         |
@@ -498,6 +553,7 @@ and remove files and collections under the repository path.
 | `stowmark forget --repo <repository> --keep-<rule> <n> [--prune] [--private-key <key>]` | Forget the snapshots a retention policy does not keep. |
 | `stowmark prune --repo <repository> [--private-key <key>]`              | Delete objects that no snapshot references. |
 | `stowmark check --repo <repository> [--read-data \| --read-data-subset <subset>]` | Check the integrity of the whole repository. |
+| `stowmark retention extend --repo <repository> [--private-key <key>]`   | Extend the [S3 Object Lock](#s3-object-lock) retention. |
 
 Every command also accepts `--json` (see [JSON output](#json-output)) and `--no-progress` (see [Progress](#progress)).
 
@@ -1085,6 +1141,7 @@ stowmark prune --repo /backups/stowmark --dry-run
   unreferenced objects as stored, after compression and encryption. It does not include old key generations or
   temporary files.
 - `prune` lists every object of the repository, which can take a while on large S3 or GCS repositories.
+- With [S3 Object Lock](#s3-object-lock), `forget` and `prune` postpone what is still retained and report until when.
 
 ## Security model and limitations
 
@@ -1116,8 +1173,9 @@ What it does **not** protect:
   other than the filesystem root; otherwise restore stops before writing anything and asks for a destination. Restore
   does not check for symbolic links that already exist on disk below the restore path and point elsewhere.
 - "Immutable-style" means objects and manifests are never overwritten by Stowmark. It is not enforced by the storage:
-  anyone with write access to the backend can still delete or replace them. Use bucket versioning, object lock or
-  backend snapshots if you need protection against that.
+  anyone with write access to the backend can still delete or replace them, unless the repository uses
+  [S3 Object Lock](#s3-object-lock). On other backends, use bucket versioning or backend snapshots if you need
+  protection against that.
 
 What is not backed up:
 

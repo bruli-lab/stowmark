@@ -4,10 +4,36 @@ import "slices"
 
 type Codec struct {
 	version     FormatVersion
-	compression *Compression
+	storage     *codecStorage
 	dataKey     []byte
 	generation  uint64
 	metadataKey []byte
+}
+
+type codecStorage struct {
+	compression *Compression
+	objectLock  *ObjectLock
+}
+
+func (s *codecStorage) copy() *codecStorage {
+	if s == nil {
+		return &codecStorage{}
+	}
+	copied := *s
+	return &copied
+}
+
+func (c Codec) ObjectLock() *ObjectLock {
+	if c.storage == nil {
+		return nil
+	}
+	return c.storage.objectLock
+}
+
+func (c Codec) WithObjectLock(lock *ObjectLock) Codec {
+	c.storage = c.storage.copy()
+	c.storage.objectLock = lock
+	return c
 }
 
 func (c Codec) Version() FormatVersion {
@@ -15,7 +41,10 @@ func (c Codec) Version() FormatVersion {
 }
 
 func (c Codec) Compression() *Compression {
-	return c.compression
+	if c.storage == nil {
+		return nil
+	}
+	return c.storage.compression
 }
 
 func (c Codec) DataKey() []byte {
@@ -47,7 +76,8 @@ func (c Codec) BuffersEncryptedObjects() bool {
 }
 
 func (c Codec) WithCompression(compression *Compression) Codec {
-	c.compression = compression
+	c.storage = c.storage.copy()
+	c.storage.compression = compression
 	return c
 }
 
@@ -63,9 +93,9 @@ func (c Codec) WithMetadataKey(key []byte) Codec {
 }
 
 func NewCodec(version FormatVersion, compression *Compression) Codec {
-	return Codec{version: version, compression: compression}
+	return Codec{version: version, storage: &codecStorage{compression: compression}}
 }
 
 func (c Config) Codec() Codec {
-	return NewCodec(c.formatVersion, c.compression)
+	return NewCodec(c.formatVersion, c.compression).WithObjectLock(c.objectLock)
 }

@@ -4,13 +4,14 @@ import (
 	"context"
 	"crypto/rsa"
 	"io"
+	"time"
 
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/google/uuid"
 )
 
-//go:generate go tool moq -out repositories_mock.go . FolderRepository SourceRepository ManifestRepository ObjectRepository EncryptedObjectRepository RestoreDestination AsymmetricKeyPairRepository SymmetricKeyRepository LockRepository KeyGenerator
+//go:generate go tool moq -out repositories_mock.go . FolderRepository SourceRepository ManifestRepository ObjectRepository EncryptedObjectRepository RestoreDestination AsymmetricKeyPairRepository SymmetricKeyRepository LockRepository KeyGenerator RetentionRepository
 type FolderRepository interface {
 	Exists(ctx context.Context, path string) (bool, error)
 	CreateFolder(ctx context.Context, path string) error
@@ -51,6 +52,12 @@ type EncryptedObjectRepository interface {
 	SaveRekeyedObject(ctx context.Context, hash string, source io.Reader, codec repository.Codec) error
 	DeleteEncryptedGeneration(ctx context.Context, generation uint64) error
 	AbortRekey(ctx context.Context, generation uint64) error
+}
+
+type RetentionRepository interface {
+	VerifyObjectLock(ctx context.Context) error
+	RetainedUntil(ctx context.Context, item repository.RetainedItem) (time.Time, error)
+	Retain(ctx context.Context, item repository.RetainedItem, retention repository.Retention) error
 }
 
 type RestoreDestination interface {

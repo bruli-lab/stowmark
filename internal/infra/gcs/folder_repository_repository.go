@@ -122,7 +122,7 @@ func (f FolderRepositoryRepository) GetConfig(ctx context.Context, repositoryPat
 		return nil, fmt.Errorf("unmarshal config: %w", err)
 	}
 
-	return model.BuildConfigDomain(conf)
+	return model.BuildConfigDomain(&conf)
 }
 
 func NewFolderRepositoryRepository(client *storage.Client, bucket string) *FolderRepositoryRepository {

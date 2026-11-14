@@ -28,8 +28,11 @@ var DomainEvents = []string{
 	snapshot.MissingObjectsDetectedEventName,
 	snapshot.GenerationsRemovedEventName,
 	snapshot.TemporariesRemovedEventName,
+	snapshot.SnapshotForgetPostponedEventName,
+	snapshot.ObjectsDeletionPostponedEventName,
 	repository.RepositoryInitializedEventName,
 	repository.LockRemovedEventName,
+	repository.RetentionExtendedEventName,
 	encryption.SymmetricKeyRotatedEventName,
 	encryption.KeyRewrappedEventName,
 }

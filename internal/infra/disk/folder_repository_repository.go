@@ -37,7 +37,7 @@ func (f FolderRepositoryRepository) GetConfig(ctx context.Context, path string) 
 	if err := json.Unmarshal(data, &conf); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
-	return model.BuildConfigDomain(conf)
+	return model.BuildConfigDomain(&conf)
 }
 
 func (f FolderRepositoryRepository) Exists(ctx context.Context, path string) (bool, error) {

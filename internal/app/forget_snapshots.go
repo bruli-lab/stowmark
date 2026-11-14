@@ -56,7 +56,12 @@ func (f *ForgetSnapshots) Handle(ctx context.Context, cmd cqs.Command) ([]event.
 				continue
 			}
 			forgotten := decisions[i].Forgotten()
-			if err := f.manifestRepo.Delete(ctx, forgotten.SnapshotID()); err != nil {
+			err := f.manifestRepo.Delete(ctx, forgotten.SnapshotID())
+			if until, retained := repository.RetainedUntil(err); retained {
+				events = append(events, decisions[i].ForgetPostponed(until))
+				continue
+			}
+			if err != nil {
 				return fmt.Errorf("forget snapshot %s: %w", forgotten.SnapshotID(), err)
 			}
 			events = append(events, forgotten)

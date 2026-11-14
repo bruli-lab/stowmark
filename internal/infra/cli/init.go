@@ -17,6 +17,8 @@ func newInitCommand() *cobra.Command {
 		level           int
 		formatVersion   int
 		publicKey       string
+		objectLock      string
+		objectLockMode  string
 		force           bool
 	)
 
@@ -41,12 +43,17 @@ func newInitCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			lock, err := parseObjectLock(objectLock, objectLockMode)
+			if err != nil {
+				return err
+			}
 			return withRepository(cmd, repositoryPath, func(repo *bootstrap.Repository) error {
 				events, err := repo.Init().Handle(cmd.Context(), app.InitCommand{
 					RepositoryPath: repo.Path(),
 					Compression:    comp,
 					FormatVersion:  version,
 					PublicKeyPath:  optionalPath(publicKey),
+					ObjectLock:     lock,
 					Force:          force,
 				})
 				if err != nil {
@@ -102,6 +109,18 @@ func newInitCommand() *cobra.Command {
 		0,
 		"compression level (gzip 1-9, zstd 1-22, lz4 0-9); defaults to the algorithm default",
 	)
+	cmd.Flags().StringVar(
+		&objectLock,
+		"object-lock",
+		"",
+		"retain every object, manifest and the config for this period with S3 Object Lock (for example 30d, 2w or 36h); the bucket must have object lock enabled and no default retention",
+	)
+	cmd.Flags().StringVar(
+		&objectLockMode,
+		"object-lock-mode",
+		string(repository.GovernanceObjectLock),
+		"object lock mode: governance (users with s3:BypassGovernanceRetention can still delete) or compliance (nobody can delete until the retention ends)",
+	)
 	cmd.Flags().BoolVar(
 		&force,
 		"force",
@@ -112,4 +131,19 @@ func newInitCommand() *cobra.Command {
 	_ = cmd.MarkFlagRequired("repo")
 
 	return cmd
+}
+
+func parseObjectLock(period, mode string) (*repository.ObjectLock, error) {
+	if period == "" {
+		return nil, nil
+	}
+	duration, err := parseRetentionDuration(period)
+	if err != nil {
+		return nil, err
+	}
+	lockMode, err := repository.ParseObjectLockMode(mode)
+	if err != nil {
+		return nil, err
+	}
+	return repository.NewObjectLock(lockMode, duration)
 }

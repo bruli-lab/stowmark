@@ -53,7 +53,8 @@ func newForgetCommand() *cobra.Command {
 					return fmt.Errorf("failed to forget snapshots: %w", err)
 				}
 				forgotten := app.EventsOf[*snapshot.SnapshotForgotten](events)
-				result := forgetDocument{Forgotten: newForgottenDocuments(forgotten)}
+				postponed := app.EventsOf[*snapshot.SnapshotForgetPostponed](events)
+				result := forgetDocument{Forgotten: newForgottenDocuments(forgotten), Postponed: newPostponedDocuments(postponed)}
 				if prune {
 					if result.Prune, err = runPrune(cmd.Context(), repo, privateKey); err != nil {
 						return err
@@ -61,6 +62,9 @@ func newForgetCommand() *cobra.Command {
 				}
 				return render(cmd, result, func(output io.Writer) error {
 					if err := printForgotten(output, forgotten); err != nil {
+						return err
+					}
+					if err := printPostponed(output, postponed); err != nil {
 						return err
 					}
 					if result.Prune == nil {
@@ -157,6 +161,15 @@ func printForgotten(output io.Writer, forgotten []*snapshot.SnapshotForgotten) e
 	}
 	_, err := fmt.Fprintf(output, "Forgot %d snapshot(s)\n", len(forgotten))
 	return err
+}
+
+func printPostponed(output io.Writer, postponed []*snapshot.SnapshotForgetPostponed) error {
+	for _, ev := range postponed {
+		if _, err := fmt.Fprintf(output, "Kept snapshot %s under object lock retention until %s; run forget again after that\n", ev.SnapshotID(), formatLocal(ev.Until())); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func formatLocal(at time.Time) string {

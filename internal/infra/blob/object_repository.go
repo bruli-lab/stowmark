@@ -79,7 +79,7 @@ func (o ObjectRepository) write(ctx context.Context, source io.Reader, hash stri
 		return err
 	}
 
-	return o.store.Put(ctx, key, func(destination io.Writer) error {
+	return putWithLock(ctx, o.store, key, codec.ObjectLock(), func(destination io.Writer) error {
 		return o.pipeline.Write(ctx, destination, source, codec, hash)
 	})
 }
@@ -268,7 +268,7 @@ func (o ObjectRepository) SaveRekeyedObject(ctx context.Context, hash string, so
 		return err
 	}
 
-	return o.store.Put(ctx, key, func(destination io.Writer) error {
+	return putWithLock(ctx, o.store, key, codec.ObjectLock(), func(destination io.Writer) error {
 		if codec.ContentAddressed() {
 			return o.reencryptContent(ctx, destination, source, hash, codec)
 		}

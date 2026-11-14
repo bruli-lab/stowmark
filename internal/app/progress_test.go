@@ -151,7 +151,7 @@ func TestProgress(t *testing.T) {
 	then it reports every read object and its size once and finishes`, func(t *testing.T) {
 		t.Parallel()
 
-		deps := newCheckDependencies(t, checkSetup{})
+		deps := newCheckDependencies(t, &checkSetup{})
 		progress := &recordingProgress{}
 
 		report := checkReport(t, deps.handler(nil, nil), app.CheckRepositoryQuery{RepositoryPath: "repo", ReadData: true, Progress: progress})
@@ -168,7 +168,7 @@ func TestProgress(t *testing.T) {
 	then it reports no progress`, func(t *testing.T) {
 		t.Parallel()
 
-		deps := newCheckDependencies(t, checkSetup{})
+		deps := newCheckDependencies(t, &checkSetup{})
 		progress := &recordingProgress{}
 
 		checkReport(t, deps.handler(nil, nil), app.CheckRepositoryQuery{RepositoryPath: "repo", Progress: progress})

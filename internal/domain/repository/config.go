@@ -13,6 +13,16 @@ type Config struct {
 	createdAt     time.Time
 	compression   *Compression
 	encryption    *encryption.EncryptionConfig
+	objectLock    *ObjectLock
+}
+
+func (c Config) ObjectLock() *ObjectLock {
+	return c.objectLock
+}
+
+func (c Config) WithObjectLock(lock *ObjectLock) *Config {
+	c.objectLock = lock
+	return &c
 }
 
 func (c Config) Encryption() *encryption.EncryptionConfig {

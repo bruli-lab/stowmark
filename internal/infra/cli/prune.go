@@ -94,7 +94,7 @@ func runPrune(ctx context.Context, repo *bootstrap.Repository, privateKey *strin
 }
 
 func newPruneDocument(events []event.Event) *pruneDocument {
-	result := &pruneDocument{RemovedKeyGenerations: []uint64{}}
+	result := &pruneDocument{RemovedKeyGenerations: []uint64{}, PostponedKeyGenerations: []uint64{}}
 	for _, pruned := range app.EventsOf[*snapshot.ObjectsPruned](events) {
 		result.RemovedObjects += pruned.Removed()
 		result.FreedBytes += pruned.FreedBytes()
@@ -108,6 +108,13 @@ func newPruneDocument(events []event.Event) *pruneDocument {
 	for _, detected := range app.EventsOf[*snapshot.MissingObjectsDetected](events) {
 		result.MissingObjects += len(detected.Hashes())
 	}
+	for _, postponed := range app.EventsOf[*snapshot.ObjectsDeletionPostponed](events) {
+		until := postponed.Until()
+		result.PostponedObjects += postponed.Objects()
+		result.PostponedBytes += postponed.Bytes()
+		result.PostponedKeyGenerations = append(result.PostponedKeyGenerations, postponed.Generations()...)
+		result.RetainedUntil = &until
+	}
 	return result
 }
 
@@ -117,6 +124,13 @@ func (p *pruneDocument) print(output io.Writer) error {
 	}
 	if len(p.RemovedKeyGenerations) > 0 {
 		if _, err := fmt.Fprintf(output, "Removed old key generation(s): %s\n", formatGenerations(p.RemovedKeyGenerations)); err != nil {
+			return err
+		}
+	}
+	if p.RetainedUntil != nil {
+		if _, err := fmt.Fprintf(output, "Kept %d object(s) (%s) and old key generation(s) %s under object lock retention until %s; run prune again after that\n",
+			p.PostponedObjects, progress.FormatBytes(p.PostponedBytes), formatGenerations(p.PostponedKeyGenerations), formatLocal(*p.RetainedUntil),
+		); err != nil {
 			return err
 		}
 	}

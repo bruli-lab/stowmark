@@ -3,6 +3,7 @@ package app_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -45,6 +46,8 @@ type pruneSetup struct {
 	generationsErr error
 	deleteGenErr   error
 	temporariesErr error
+	retained       map[string]time.Time
+	retainedGens   map[uint64]time.Time
 }
 
 func newPruneDependencies(t *testing.T, setup *pruneSetup) *pruneDependencies {
@@ -72,13 +75,21 @@ func newPruneDependencies(t *testing.T, setup *pruneSetup) *pruneDependencies {
 			deps.mu.Lock()
 			defer deps.mu.Unlock()
 			deps.deleted = append(deps.deleted, hash)
+			if until, ok := setup.retained[hash]; ok {
+				return fmt.Errorf("delete object %q: %w", hash, repository.NewRetainedError(until))
+			}
 			return setup.deleteErr
 		},
 		DeleteTemporaryObjectsFunc: func(context.Context) (int, error) { return setup.temporaries, setup.temporariesErr },
 	}
 	deps.encryptedRepo = &app.EncryptedObjectRepositoryMock{
-		ListEncryptedGenerationsFunc:  func(context.Context) ([]uint64, error) { return setup.generations, setup.generationsErr },
-		DeleteEncryptedGenerationFunc: func(context.Context, uint64) error { return setup.deleteGenErr },
+		ListEncryptedGenerationsFunc: func(context.Context) ([]uint64, error) { return setup.generations, setup.generationsErr },
+		DeleteEncryptedGenerationFunc: func(_ context.Context, generation uint64) error {
+			if until, ok := setup.retainedGens[generation]; ok {
+				return repository.NewRetainedError(until)
+			}
+			return setup.deleteGenErr
+		},
 	}
 	return deps
 }
@@ -159,6 +170,71 @@ func TestPruneRepository_Handle(t *testing.T) {
 		require.NoError(t, err)
 		require.Empty(t, events)
 		require.Empty(t, deps.deletedObjects())
+	})
+}
+
+func TestPruneRepository_Handle_Retained(t *testing.T) {
+	t.Parallel()
+
+	t.Run(`Given an encrypted repository with object lock where an orphan object and an old generation are still retained,
+	when the PruneRepository command handler is called,
+	then it deletes what it can, postpones the rest and reports both`, func(t *testing.T) {
+		t.Parallel()
+
+		soon := time.Now().Add(time.Hour).UTC().Truncate(time.Second)
+		later := soon.Add(time.Hour)
+		deps := newPruneDependencies(t, &pruneSetup{
+			config:       encryption.NewEncryptionConfig("key", "fingerprint", 3),
+			manifests:    []snapshot.Manifest{manifestWithHashes("aa01")},
+			stored:       []string{"aa01", "bb02", "cc03"},
+			generations:  []uint64{1, 2, 3},
+			retained:     map[string]time.Time{"bb02": soon},
+			retainedGens: map[uint64]time.Time{1: later},
+		})
+
+		events, err := app.NewPruneRepository(deps.folderRepo, deps.manifestRepo, deps.objectRepo, deps.encryptedRepo, nil, nil, newUnlockedLocker()).
+			Handle(t.Context(), app.PruneRepositoryCommand{RepositoryPath: "repo"})
+
+		require.NoError(t, err)
+		require.Len(t, events, 3)
+		pruned, err := app.SingleEvent[*snapshot.ObjectsPruned](events)
+		require.NoError(t, err)
+		require.Equal(t, 1, pruned.Removed())
+		require.Equal(t, int64(storedObjectSize), pruned.FreedBytes())
+		removed, err := app.SingleEvent[*snapshot.GenerationsRemoved](events)
+		require.NoError(t, err)
+		require.Equal(t, []uint64{2}, removed.Generations())
+		postponed, err := app.SingleEvent[*snapshot.ObjectsDeletionPostponed](events)
+		require.NoError(t, err)
+		require.Equal(t, snapshot.ObjectsDeletionPostponedEventName, postponed.EventName())
+		require.Equal(t, 1, postponed.Objects())
+		require.Equal(t, int64(storedObjectSize), postponed.Bytes())
+		require.Equal(t, []uint64{1}, postponed.Generations())
+		require.Equal(t, later, postponed.Until())
+		require.Equal(t, deps.config.ID().String(), postponed.RepositoryID())
+	})
+
+	t.Run(`Given a repository where every orphan object is still retained,
+	when the PruneRepository command handler is called,
+	then it only returns the postponed event`, func(t *testing.T) {
+		t.Parallel()
+
+		until := time.Now().Add(time.Hour)
+		deps := newPruneDependencies(t, &pruneSetup{
+			manifests: []snapshot.Manifest{manifestWithHashes("aa01")},
+			stored:    []string{"aa01", "bb02"},
+			retained:  map[string]time.Time{"bb02": until},
+		})
+
+		events, err := app.NewPruneRepository(deps.folderRepo, deps.manifestRepo, deps.objectRepo, deps.encryptedRepo, nil, nil, newUnlockedLocker()).
+			Handle(t.Context(), app.PruneRepositoryCommand{RepositoryPath: "repo"})
+
+		require.NoError(t, err)
+		require.Len(t, events, 1)
+		postponed, err := app.SingleEvent[*snapshot.ObjectsDeletionPostponed](events)
+		require.NoError(t, err)
+		require.Equal(t, 1, postponed.Objects())
+		require.Empty(t, postponed.Generations())
 	})
 }
 

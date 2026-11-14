@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/bruli-lab/go-core/event"
+	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/model"
@@ -100,6 +102,7 @@ type checkDocument struct {
 	ReadData            bool                      `json:"read_data"`
 	ReadObjects         int                       `json:"read_objects"`
 	CorruptObjects      []objectProblemDocument   `json:"corrupt_objects"`
+	UnprotectedItems    int                       `json:"unprotected_items"`
 }
 
 type retentionDocument struct {
@@ -116,8 +119,16 @@ type forgottenDocument struct {
 	Source    string    `json:"source"`
 }
 
+type postponedDocument struct {
+	ID            string    `json:"id"`
+	CreatedAt     time.Time `json:"created_at"`
+	Source        string    `json:"source"`
+	RetainedUntil time.Time `json:"retained_until"`
+}
+
 type forgetDocument struct {
 	Forgotten []forgottenDocument `json:"forgotten"`
+	Postponed []postponedDocument `json:"postponed"`
 	Prune     *pruneDocument      `json:"prune,omitempty"`
 }
 
@@ -131,11 +142,20 @@ type prunePlanDocument struct {
 }
 
 type pruneDocument struct {
-	RemovedObjects        int      `json:"removed_objects"`
-	FreedBytes            int64    `json:"freed_bytes"`
-	RemovedKeyGenerations []uint64 `json:"removed_key_generations"`
-	RemovedTemporaryFiles int      `json:"removed_temporary_files"`
-	MissingObjects        int      `json:"missing_objects"`
+	RemovedObjects          int        `json:"removed_objects"`
+	FreedBytes              int64      `json:"freed_bytes"`
+	RemovedKeyGenerations   []uint64   `json:"removed_key_generations"`
+	RemovedTemporaryFiles   int        `json:"removed_temporary_files"`
+	MissingObjects          int        `json:"missing_objects"`
+	PostponedObjects        int        `json:"postponed_objects"`
+	PostponedBytes          int64      `json:"postponed_bytes"`
+	PostponedKeyGenerations []uint64   `json:"postponed_key_generations"`
+	RetainedUntil           *time.Time `json:"retained_until,omitempty"`
+}
+
+type retentionExtendDocument struct {
+	Extended      int        `json:"extended"`
+	RetainedUntil *time.Time `json:"retained_until,omitempty"`
 }
 
 type unlockDocument struct {
@@ -270,6 +290,7 @@ func newCheckDocument(report *snapshot.CheckReport) checkDocument {
 		ReadData:            report.ReadData(),
 		ReadObjects:         report.ReadObjects(),
 		CorruptObjects:      corrupt,
+		UnprotectedItems:    report.Unprotected(),
 	}
 }
 
@@ -298,6 +319,24 @@ func newForgottenDocuments(forgotten []*snapshot.SnapshotForgotten) []forgottenD
 		documents[i] = forgottenDocument{ID: ev.SnapshotID(), CreatedAt: ev.CreatedAt().UTC(), Source: ev.Source()}
 	}
 	return documents
+}
+
+func newPostponedDocuments(postponed []*snapshot.SnapshotForgetPostponed) []postponedDocument {
+	documents := make([]postponedDocument, len(postponed))
+	for i, ev := range postponed {
+		documents[i] = postponedDocument{ID: ev.SnapshotID(), CreatedAt: ev.CreatedAt().UTC(), Source: ev.Source(), RetainedUntil: ev.Until()}
+	}
+	return documents
+}
+
+func newRetentionExtendDocument(events []event.Event) retentionExtendDocument {
+	document := retentionExtendDocument{}
+	for _, extended := range app.EventsOf[*repository.RetentionExtended](events) {
+		until := extended.Until()
+		document.Extended += extended.Extended()
+		document.RetainedUntil = &until
+	}
+	return document
 }
 
 func newPrunePlanDocument(plan *snapshot.PrunePlan) prunePlanDocument {

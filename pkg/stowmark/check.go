@@ -35,6 +35,7 @@ type CheckResult struct {
 	ReadData            bool
 	ReadObjects         int
 	CorruptObjects      []CheckProblem
+	UnprotectedItems    int
 	HasErrors           bool
 }
 
@@ -83,6 +84,7 @@ func (h *Handler) Check(ctx context.Context, options CheckOptions) (*CheckResult
 		ReadData:            report.ReadData(),
 		ReadObjects:         report.ReadObjects(),
 		CorruptObjects:      corruptObjects,
+		UnprotectedItems:    report.Unprotected(),
 		HasErrors:           report.HasErrors(),
 	}, nil
 }

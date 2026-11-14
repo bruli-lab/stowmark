@@ -4,13 +4,22 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/bruli-lab/stowmark/internal/domain/encryption"
+	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/fixtures"
 	"github.com/bruli-lab/stowmark/internal/infra/codec"
 	"github.com/bruli-lab/stowmark/internal/infra/model"
 	"github.com/stretchr/testify/require"
 )
+
+func mustObjectLock(t *testing.T) *repository.ObjectLock {
+	t.Helper()
+	lock, err := repository.NewObjectLock(repository.GovernanceObjectLock, 7*24*time.Hour)
+	require.NoError(t, err)
+	return lock
+}
 
 func TestMarshalConfig(t *testing.T) {
 	t.Parallel()
@@ -18,6 +27,7 @@ func TestMarshalConfig(t *testing.T) {
 	tests := []struct {
 		name       string
 		encryption *encryption.EncryptionConfig
+		objectLock *repository.ObjectLock
 	}{
 		{
 			name: "without encryption, then it returns a config that builds back into the same domain config",
@@ -26,6 +36,10 @@ func TestMarshalConfig(t *testing.T) {
 			name:       "with encryption, then it returns a config that builds back into the same domain config",
 			encryption: encryption.NewEncryptionConfig("encrypted", "fingerprint", 4),
 		},
+		{
+			name:       "with object lock, then it returns a config that builds back into the same domain config",
+			objectLock: mustObjectLock(t),
+		},
 	}
 
 	for _, tt := range tests {
@@ -33,21 +47,23 @@ func TestMarshalConfig(t *testing.T) {
 		when MarshalConfig function is called `+tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			original := fixtures.ConfigBuilder{EncryptionConfig: tt.encryption}.Build(t)
+			built := fixtures.ConfigBuilder{EncryptionConfig: tt.encryption}.Build(t)
+			original := built.WithObjectLock(tt.objectLock)
 
-			data, err := codec.MarshalConfig(context.Background(), &original)
+			data, err := codec.MarshalConfig(context.Background(), original)
 
 			require.NoError(t, err)
 			require.Equal(t, byte('\n'), data[len(data)-1])
 			var conf model.Config
 			require.NoError(t, json.Unmarshal(data, &conf))
-			got, err := model.BuildConfigDomain(conf)
+			got, err := model.BuildConfigDomain(&conf)
 			require.NoError(t, err)
 			require.Equal(t, original.ID(), got.ID())
 			require.Equal(t, original.FormatVersion(), got.FormatVersion())
 			require.True(t, original.CreatedAt().Truncate(1e9).Equal(got.CreatedAt()))
 			require.Equal(t, original.Compression(), got.Compression())
 			require.Equal(t, original.Encryption(), got.Encryption())
+			require.Equal(t, original.ObjectLock(), got.ObjectLock())
 		})
 	}
 

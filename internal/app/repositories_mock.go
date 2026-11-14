@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"io"
 	"sync"
+	"time"
 )
 
 // Ensure, that FolderRepositoryMock does implement FolderRepository.
@@ -2450,5 +2451,177 @@ func (mock *KeyGeneratorMock) GenerateRSAKeyCalls() []struct {
 	mock.lockGenerateRSAKey.RLock()
 	calls = mock.calls.GenerateRSAKey
 	mock.lockGenerateRSAKey.RUnlock()
+	return calls
+}
+
+// Ensure, that RetentionRepositoryMock does implement RetentionRepository.
+// If this is not the case, regenerate this file with moq.
+var _ RetentionRepository = &RetentionRepositoryMock{}
+
+// RetentionRepositoryMock is a mock implementation of RetentionRepository.
+//
+//	func TestSomethingThatUsesRetentionRepository(t *testing.T) {
+//
+//		// make and configure a mocked RetentionRepository
+//		mockedRetentionRepository := &RetentionRepositoryMock{
+//			RetainFunc: func(ctx context.Context, item repository.RetainedItem, retention repository.Retention) error {
+//				panic("mock out the Retain method")
+//			},
+//			RetainedUntilFunc: func(ctx context.Context, item repository.RetainedItem) (time.Time, error) {
+//				panic("mock out the RetainedUntil method")
+//			},
+//			VerifyObjectLockFunc: func(ctx context.Context) error {
+//				panic("mock out the VerifyObjectLock method")
+//			},
+//		}
+//
+//		// use mockedRetentionRepository in code that requires RetentionRepository
+//		// and then make assertions.
+//
+//	}
+type RetentionRepositoryMock struct {
+	// RetainFunc mocks the Retain method.
+	RetainFunc func(ctx context.Context, item repository.RetainedItem, retention repository.Retention) error
+
+	// RetainedUntilFunc mocks the RetainedUntil method.
+	RetainedUntilFunc func(ctx context.Context, item repository.RetainedItem) (time.Time, error)
+
+	// VerifyObjectLockFunc mocks the VerifyObjectLock method.
+	VerifyObjectLockFunc func(ctx context.Context) error
+
+	// calls tracks calls to the methods.
+	calls struct {
+		// Retain holds details about calls to the Retain method.
+		Retain []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Item is the item argument value.
+			Item repository.RetainedItem
+			// Retention is the retention argument value.
+			Retention repository.Retention
+		}
+		// RetainedUntil holds details about calls to the RetainedUntil method.
+		RetainedUntil []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Item is the item argument value.
+			Item repository.RetainedItem
+		}
+		// VerifyObjectLock holds details about calls to the VerifyObjectLock method.
+		VerifyObjectLock []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+		}
+	}
+	lockRetain           sync.RWMutex
+	lockRetainedUntil    sync.RWMutex
+	lockVerifyObjectLock sync.RWMutex
+}
+
+// Retain calls RetainFunc.
+func (mock *RetentionRepositoryMock) Retain(ctx context.Context, item repository.RetainedItem, retention repository.Retention) error {
+	if mock.RetainFunc == nil {
+		panic("RetentionRepositoryMock.RetainFunc: method is nil but RetentionRepository.Retain was just called")
+	}
+	callInfo := struct {
+		Ctx       context.Context
+		Item      repository.RetainedItem
+		Retention repository.Retention
+	}{
+		Ctx:       ctx,
+		Item:      item,
+		Retention: retention,
+	}
+	mock.lockRetain.Lock()
+	mock.calls.Retain = append(mock.calls.Retain, callInfo)
+	mock.lockRetain.Unlock()
+	return mock.RetainFunc(ctx, item, retention)
+}
+
+// RetainCalls gets all the calls that were made to Retain.
+// Check the length with:
+//
+//	len(mockedRetentionRepository.RetainCalls())
+func (mock *RetentionRepositoryMock) RetainCalls() []struct {
+	Ctx       context.Context
+	Item      repository.RetainedItem
+	Retention repository.Retention
+} {
+	var calls []struct {
+		Ctx       context.Context
+		Item      repository.RetainedItem
+		Retention repository.Retention
+	}
+	mock.lockRetain.RLock()
+	calls = mock.calls.Retain
+	mock.lockRetain.RUnlock()
+	return calls
+}
+
+// RetainedUntil calls RetainedUntilFunc.
+func (mock *RetentionRepositoryMock) RetainedUntil(ctx context.Context, item repository.RetainedItem) (time.Time, error) {
+	if mock.RetainedUntilFunc == nil {
+		panic("RetentionRepositoryMock.RetainedUntilFunc: method is nil but RetentionRepository.RetainedUntil was just called")
+	}
+	callInfo := struct {
+		Ctx  context.Context
+		Item repository.RetainedItem
+	}{
+		Ctx:  ctx,
+		Item: item,
+	}
+	mock.lockRetainedUntil.Lock()
+	mock.calls.RetainedUntil = append(mock.calls.RetainedUntil, callInfo)
+	mock.lockRetainedUntil.Unlock()
+	return mock.RetainedUntilFunc(ctx, item)
+}
+
+// RetainedUntilCalls gets all the calls that were made to RetainedUntil.
+// Check the length with:
+//
+//	len(mockedRetentionRepository.RetainedUntilCalls())
+func (mock *RetentionRepositoryMock) RetainedUntilCalls() []struct {
+	Ctx  context.Context
+	Item repository.RetainedItem
+} {
+	var calls []struct {
+		Ctx  context.Context
+		Item repository.RetainedItem
+	}
+	mock.lockRetainedUntil.RLock()
+	calls = mock.calls.RetainedUntil
+	mock.lockRetainedUntil.RUnlock()
+	return calls
+}
+
+// VerifyObjectLock calls VerifyObjectLockFunc.
+func (mock *RetentionRepositoryMock) VerifyObjectLock(ctx context.Context) error {
+	if mock.VerifyObjectLockFunc == nil {
+		panic("RetentionRepositoryMock.VerifyObjectLockFunc: method is nil but RetentionRepository.VerifyObjectLock was just called")
+	}
+	callInfo := struct {
+		Ctx context.Context
+	}{
+		Ctx: ctx,
+	}
+	mock.lockVerifyObjectLock.Lock()
+	mock.calls.VerifyObjectLock = append(mock.calls.VerifyObjectLock, callInfo)
+	mock.lockVerifyObjectLock.Unlock()
+	return mock.VerifyObjectLockFunc(ctx)
+}
+
+// VerifyObjectLockCalls gets all the calls that were made to VerifyObjectLock.
+// Check the length with:
+//
+//	len(mockedRetentionRepository.VerifyObjectLockCalls())
+func (mock *RetentionRepositoryMock) VerifyObjectLockCalls() []struct {
+	Ctx context.Context
+} {
+	var calls []struct {
+		Ctx context.Context
+	}
+	mock.lockVerifyObjectLock.RLock()
+	calls = mock.calls.VerifyObjectLock
+	mock.lockVerifyObjectLock.RUnlock()
 	return calls
 }

@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 	"fmt"
+	"sync"
+	"time"
 
 	"github.com/bruli-lab/go-core/cqs"
 	"github.com/bruli-lab/go-core/event"
@@ -49,17 +51,21 @@ func (p *PruneRepository) Handle(ctx context.Context, cmd cqs.Command) ([]event.
 		if len(target.plan.Missing()) > 0 {
 			events = append(events, target.plan.MissingDetected(repositoryID))
 		}
-		if err := p.deleteObjects(ctx, target); err != nil {
+		postponed, err := p.deleteObjects(ctx, target)
+		if err != nil {
 			return err
 		}
-		if len(target.plan.Unreferenced()) > 0 {
-			events = append(events, target.plan.Pruned(repositoryID))
+		if len(target.plan.Unreferenced()) > len(postponed.objects) {
+			events = append(events, target.plan.PrunedExcept(repositoryID, postponed.objects))
 		}
-		if err := p.deleteGenerations(ctx, target); err != nil {
+		if err := p.deleteGenerations(ctx, target, postponed); err != nil {
 			return err
 		}
-		if len(target.plan.OrphanGenerations()) > 0 {
-			events = append(events, target.plan.GenerationsRemoved(repositoryID))
+		if len(target.plan.OrphanGenerations()) > len(postponed.generations) {
+			events = append(events, target.plan.GenerationsRemovedExcept(repositoryID, postponed.generations))
+		}
+		if postponed.any() {
+			events = append(events, target.plan.DeletionPostponed(repositoryID, postponed.objects, postponed.generations, postponed.until))
 		}
 		temporaries, err := p.objectRepo.DeleteTemporaryObjects(ctx)
 		if err != nil {
@@ -77,10 +83,40 @@ func (p *PruneRepository) Handle(ctx context.Context, cmd cqs.Command) ([]event.
 	return events, nil
 }
 
-func (p *PruneRepository) deleteObjects(ctx context.Context, target *pruneTarget) error {
+type postponedDeletions struct {
+	mu          sync.Mutex
+	objects     []string
+	generations []uint64
+	until       time.Time
+}
+
+func (p *postponedDeletions) object(hash string, until time.Time) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.objects = append(p.objects, hash)
+	p.extend(until)
+}
+
+func (p *postponedDeletions) generation(generation uint64, until time.Time) {
+	p.generations = append(p.generations, generation)
+	p.extend(until)
+}
+
+func (p *postponedDeletions) extend(until time.Time) {
+	if until.After(p.until) {
+		p.until = until
+	}
+}
+
+func (p *postponedDeletions) any() bool {
+	return len(p.objects) > 0 || len(p.generations) > 0
+}
+
+func (p *PruneRepository) deleteObjects(ctx context.Context, target *pruneTarget) (*postponedDeletions, error) {
+	postponed := &postponedDeletions{}
 	hashes := target.plan.Unreferenced()
 	if len(hashes) == 0 {
-		return nil
+		return postponed, nil
 	}
 
 	group, groupCtx := errgroup.WithContext(ctx)
@@ -92,7 +128,12 @@ func (p *PruneRepository) deleteObjects(ctx context.Context, target *pruneTarget
 		}
 
 		group.Go(func() error {
-			if err := p.objectRepo.DeleteObject(groupCtx, hash, target.encrypted, target.generation); err != nil {
+			err := p.objectRepo.DeleteObject(groupCtx, hash, target.encrypted, target.generation)
+			if until, retained := repository.RetainedUntil(err); retained {
+				postponed.object(hash, until)
+				return nil
+			}
+			if err != nil {
 				return fmt.Errorf("prune object %q: %w", hash, err)
 			}
 			return nil
@@ -100,15 +141,20 @@ func (p *PruneRepository) deleteObjects(ctx context.Context, target *pruneTarget
 	}
 
 	if err := group.Wait(); err != nil {
-		return err
+		return nil, err
 	}
 
-	return ctx.Err()
+	return postponed, ctx.Err()
 }
 
-func (p *PruneRepository) deleteGenerations(ctx context.Context, target *pruneTarget) error {
+func (p *PruneRepository) deleteGenerations(ctx context.Context, target *pruneTarget, postponed *postponedDeletions) error {
 	for _, generation := range target.plan.OrphanGenerations() {
-		if err := p.encryptedRepo.DeleteEncryptedGeneration(ctx, generation); err != nil {
+		err := p.encryptedRepo.DeleteEncryptedGeneration(ctx, generation)
+		if until, retained := repository.RetainedUntil(err); retained {
+			postponed.generation(generation, until)
+			continue
+		}
+		if err != nil {
 			return fmt.Errorf("prune key generation %d: %w", generation, err)
 		}
 	}

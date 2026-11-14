@@ -118,6 +118,9 @@ func printCheckReport(output io.Writer, report *snapshot.CheckReport) error {
 	if report.StaleLocks() > 0 {
 		lines = append(lines, fmt.Sprintf("WARNING: %d stale lock(s); run unlock to remove them", report.StaleLocks()))
 	}
+	if report.Unprotected() > 0 {
+		lines = append(lines, fmt.Sprintf("WARNING: the object lock retention of %d item(s) in use has ended; run retention extend to protect them again", report.Unprotected()))
+	}
 	if generations := report.OrphanGenerations(); len(generations) > 0 {
 		lines = append(lines, fmt.Sprintf("WARNING: objects of old key generation(s) %s remain, probably from an interrupted key rekey; run prune to remove them", formatGenerations(generations)))
 	}

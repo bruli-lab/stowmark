@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"testing"
+	"time"
 
 	"github.com/bruli-lab/stowmark/internal/app"
 
@@ -215,6 +216,40 @@ func TestRekeyKey_Handle(t *testing.T) {
 			expectedErr:     errTest,
 			deleteErr:       errTest,
 			abortCalls:      0,
+		},
+		{
+			name: "when the old generation is still retained by object lock, then it leaves it for prune and returns nil",
+			config: new(fixtures.ConfigBuilder{
+				EncryptionConfig: encryption.NewEncryptionConfig("abc", "def", uint64(1)),
+			}.Build(t)),
+			privateKey:      &rsa.PrivateKey{},
+			oldSymmetricKey: []byte("old-symmetric-key"),
+			publicKey:       &rsa.PublicKey{},
+			newSymmetricKey: []byte("new-symmetric-key"),
+			encryptedKey:    []byte("encrypted-key"),
+			fingerprint:     "fingerprint",
+			list:            list,
+			reader:          io.NopCloser(nil),
+			deleteErr:       repository.NewRetainedError(time.Now().Add(time.Hour)),
+			abortCalls:      0,
+		},
+		{
+			name: "when save rekey object fails and the new generation is retained, then it returns only the save error",
+			config: new(fixtures.ConfigBuilder{
+				EncryptionConfig: encryption.NewEncryptionConfig("abc", "def", uint64(1)),
+			}.Build(t)),
+			privateKey:      &rsa.PrivateKey{},
+			oldSymmetricKey: []byte("old-symmetric-key"),
+			publicKey:       &rsa.PublicKey{},
+			newSymmetricKey: []byte("new-symmetric-key"),
+			encryptedKey:    []byte("encrypted-key"),
+			fingerprint:     "fingerprint",
+			list:            list,
+			reader:          io.NopCloser(nil),
+			expectedErr:     errTest,
+			saveObjectErr:   errTest,
+			abortErr:        repository.NewRetainedError(time.Now().Add(time.Hour)),
+			abortCalls:      1,
 		},
 		{
 			name: "with no errors, then it returns nil",

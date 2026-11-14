@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/smithy-go"
+	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/infra/blob"
 )
 
@@ -20,9 +21,14 @@ type BlobStore struct {
 	client *s3.Client
 	bucket string
 	root   string
+	lock   *objectLockState
 }
 
 func (s BlobStore) Put(ctx context.Context, key string, write func(io.Writer) error) error {
+	return s.put(ctx, key, write, func(*s3.PutObjectInput) {})
+}
+
+func (s BlobStore) put(ctx context.Context, key string, write func(io.Writer) error, options func(*s3.PutObjectInput)) error {
 	objectKey, err := s.objectKey(ctx, key)
 	if err != nil {
 		return err
@@ -52,13 +58,15 @@ func (s BlobStore) Put(ctx context.Context, key string, write func(io.Writer) er
 		return fmt.Errorf("rewind temporary object %q: %w", temporary.Name(), err)
 	}
 
-	_, err = s.client.PutObject(ctx, &s3.PutObjectInput{
+	input := &s3.PutObjectInput{
 		Bucket:        aws.String(s.bucket),
 		Key:           aws.String(objectKey),
 		Body:          temporary,
 		ContentLength: aws.Int64(size),
 		IfNoneMatch:   aws.String("*"),
-	})
+	}
+	options(input)
+	_, err = s.client.PutObject(ctx, input)
 	if err != nil {
 		if isPreconditionFailedError(err) {
 			return nil
@@ -134,12 +142,8 @@ func (s BlobStore) Delete(ctx context.Context, key string) error {
 		return err
 	}
 
-	_, err = s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
-		Bucket: aws.String(s.bucket),
-		Key:    aws.String(objectKey),
-	})
-	if err != nil && !isNotFoundError(err) {
-		return fmt.Errorf("delete object %q from bucket %q: %w", objectKey, s.bucket, err)
+	if err := s.deleteRetainable(ctx, objectKey); err != nil {
+		return err
 	}
 
 	return nil
@@ -151,16 +155,24 @@ func (s BlobStore) DeletePrefix(ctx context.Context, prefix string) error {
 		return err
 	}
 
-	return s.each(ctx, objectPrefix+"/", func(objectKey string, _ int64) error {
-		_, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
-			Bucket: aws.String(s.bucket),
-			Key:    aws.String(objectKey),
-		})
-		if err != nil {
-			return fmt.Errorf("delete object %q from bucket %q: %w", objectKey, s.bucket, err)
+	var retained *repository.RetainedError
+	err = s.each(ctx, objectPrefix+"/", func(objectKey string, _ int64) error {
+		err := s.deleteRetainable(ctx, objectKey)
+		if until, ok := repository.RetainedUntil(err); ok {
+			if retained == nil || until.After(retained.Until()) {
+				retained = repository.NewRetainedError(until)
+			}
+			return nil
 		}
-		return nil
+		return err
 	})
+	if err != nil {
+		return err
+	}
+	if retained != nil {
+		return retained
+	}
+	return nil
 }
 
 func (s BlobStore) each(ctx context.Context, objectPrefix string, visit func(objectKey string, size int64) error) error {
@@ -207,7 +219,7 @@ func (s BlobStore) blobKey(objectKey string) string {
 }
 
 func NewBlobStore(client *s3.Client, bucket, prefix string) *BlobStore {
-	return &BlobStore{client: client, bucket: bucket, root: strings.Trim(prefix, "/")}
+	return &BlobStore{client: client, bucket: bucket, root: strings.Trim(prefix, "/"), lock: &objectLockState{}}
 }
 
 func isPreconditionFailedError(err error) bool {

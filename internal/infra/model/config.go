@@ -24,15 +24,21 @@ type Encryption struct {
 	Generation           uint64 `json:"generation"`
 	EncryptedMetadataKey string `json:"encrypted_metadata_key,omitempty"`
 }
+type ObjectLock struct {
+	Mode          string `json:"mode"`
+	PeriodSeconds int64  `json:"period_seconds"`
+}
+
 type Config struct {
 	ID            string      `json:"id"`
 	FormatVersion int         `json:"format_version"`
 	CreatedAt     string      `json:"created_at"`
 	Compression   Compression `json:"compression"`
 	Encryption    *Encryption `json:"encryption,omitempty"`
+	ObjectLock    *ObjectLock `json:"object_lock,omitempty"`
 }
 
-func BuildConfigDomain(conf Config) (*repository.Config, error) {
+func BuildConfigDomain(conf *Config) (*repository.Config, error) {
 	id, err := uuid.Parse(conf.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse config id: %w", err)
@@ -67,5 +73,16 @@ func BuildConfigDomain(conf Config) (*repository.Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse config created_at: %w", err)
 	}
-	return repository.HydrateConfig(id, formatVersion, createdAt, comp, encryptionConfig), nil
+	var objectLock *repository.ObjectLock
+	if conf.ObjectLock != nil {
+		mode, err := repository.ParseObjectLockMode(conf.ObjectLock.Mode)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse config object lock: %w", err)
+		}
+		objectLock, err = repository.NewObjectLock(mode, time.Duration(conf.ObjectLock.PeriodSeconds)*time.Second)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse config object lock: %w", err)
+		}
+	}
+	return repository.HydrateConfig(id, formatVersion, createdAt, comp, encryptionConfig).WithObjectLock(objectLock), nil
 }
