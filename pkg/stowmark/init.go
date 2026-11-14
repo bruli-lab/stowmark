@@ -22,7 +22,7 @@ func (h *Handler) Init(ctx context.Context, comp *Compression, formatVersion int
 	if err != nil {
 		return err
 	}
-	version, err := repository.ParseFormatVersionOrCurrent(formatVersion)
+	version, err := repository.ParseFormatVersionOrDefault(formatVersion)
 	if err != nil {
 		return err
 	}

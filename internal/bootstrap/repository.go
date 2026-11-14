@@ -70,13 +70,13 @@ func (r *Repository) CreateSnapshot() cqs.CommandHandler {
 
 func (r *Repository) RestoreSnapshot() cqs.CommandHandler {
 	return r.runtime.commands(app.NewRestoreSnapshot(
-		r.manifests, r.objects, r.folder, r.runtime.asymmetric, r.runtime.symmetric, r.locker,
+		r.manifests, r.objects, r.runtime.destination, r.folder, r.runtime.asymmetric, r.runtime.symmetric, r.locker,
 	))
 }
 
 func (r *Repository) RestoreFile() cqs.CommandHandler {
 	return r.runtime.commands(app.NewRestoreFile(
-		r.manifests, r.objects, r.folder, r.runtime.asymmetric, r.runtime.symmetric, r.locker,
+		r.manifests, r.objects, r.runtime.destination, r.folder, r.runtime.asymmetric, r.runtime.symmetric, r.locker,
 	))
 }
 
@@ -93,19 +93,21 @@ func (r *Repository) Unlock() cqs.CommandHandler {
 }
 
 func (r *Repository) ForgetSnapshots() cqs.CommandHandler {
-	return r.runtime.commands(app.NewForgetSnapshots(r.manifests, r.locker))
+	return r.runtime.commands(app.NewForgetSnapshots(r.folder, r.manifests, r.runtime.asymmetric, r.runtime.symmetric, r.locker))
 }
 
 func (r *Repository) PruneRepository() cqs.CommandHandler {
-	return r.runtime.commands(app.NewPruneRepository(r.folder, r.manifests, r.objects, r.encrypted, r.locker))
+	return r.runtime.commands(app.NewPruneRepository(
+		r.folder, r.manifests, r.objects, r.encrypted, r.runtime.asymmetric, r.runtime.symmetric, r.locker,
+	))
 }
 
 func (r *Repository) SnapshotList() cqs.QueryHandler {
-	return r.runtime.queries(app.NewSnapshotList(r.manifests))
+	return r.runtime.queries(app.NewSnapshotList(r.folder, r.manifests, r.runtime.asymmetric, r.runtime.symmetric))
 }
 
 func (r *Repository) ManifestGet() cqs.QueryHandler {
-	return r.runtime.queries(app.NewManifestGet(r.manifests))
+	return r.runtime.queries(app.NewManifestGet(r.folder, r.manifests, r.runtime.asymmetric, r.runtime.symmetric))
 }
 
 func (r *Repository) VerifySnapshot() cqs.QueryHandler {
@@ -121,11 +123,13 @@ func (r *Repository) CheckRepository() cqs.QueryHandler {
 }
 
 func (r *Repository) ForgetPlan() cqs.QueryHandler {
-	return r.runtime.queries(app.NewForgetPlan(r.manifests, r.locker))
+	return r.runtime.queries(app.NewForgetPlan(r.folder, r.manifests, r.runtime.asymmetric, r.runtime.symmetric, r.locker))
 }
 
 func (r *Repository) PrunePlan() cqs.QueryHandler {
-	return r.runtime.queries(app.NewPrunePlan(r.folder, r.manifests, r.objects, r.encrypted, r.locker))
+	return r.runtime.queries(app.NewPrunePlan(
+		r.folder, r.manifests, r.objects, r.encrypted, r.runtime.asymmetric, r.runtime.symmetric, r.locker,
+	))
 }
 
 func (r *Repository) LockList() cqs.QueryHandler {

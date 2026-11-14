@@ -69,7 +69,7 @@ func TestRuntime_OpenRepository(t *testing.T) {
 		comp, err := repository.NewCompression(repository.NoneCompressionType, nil)
 		require.NoError(t, err)
 
-		events, err := repo.Init().Handle(ctx, app.InitCommand{RepositoryPath: repo.Path(), Compression: comp, FormatVersion: repository.CurrentFormatVersion})
+		events, err := repo.Init().Handle(ctx, app.InitCommand{RepositoryPath: repo.Path(), Compression: comp, FormatVersion: repository.DefaultFormatVersion})
 		require.NoError(t, err)
 		_, err = app.SingleEvent[*repository.RepositoryInitialized](events)
 		require.NoError(t, err)
@@ -80,7 +80,7 @@ func TestRuntime_OpenRepository(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 1, created.FileCount())
 
-		snapshots, err := app.QueryResult[[]snapshot.ManifestResume](repo.SnapshotList().Handle(ctx, app.SnapshotListQuery{}))
+		snapshots, err := app.QueryResult[[]snapshot.ManifestResume](repo.SnapshotList().Handle(ctx, app.SnapshotListQuery{RepositoryPath: repo.Path()}))
 		require.NoError(t, err)
 		require.Len(t, snapshots, 1)
 		require.Equal(t, created.SnapshotID(), snapshots[0].ID())

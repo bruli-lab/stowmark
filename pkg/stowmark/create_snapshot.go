@@ -25,7 +25,7 @@ func (h *Handler) CreateSnapshot(ctx context.Context, source string, privateKey 
 	events, err := h.repository.CreateSnapshot().Handle(ctx, app.CreateSnapshotCommand{
 		RepositoryPath: h.repository.Path(),
 		SourcePath:     source,
-		PrivateKey:     privateKey,
+		PrivateKey:     h.key(privateKey),
 		Exclude:        exclude,
 	})
 	if err != nil {

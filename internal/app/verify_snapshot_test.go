@@ -5,7 +5,6 @@ import (
 	"crypto/rsa"
 	"errors"
 	"fmt"
-	"io"
 	"testing"
 
 	"github.com/bruli-lab/stowmark/internal/app"
@@ -40,7 +39,6 @@ func TestVerifySnapshot_Handle(t *testing.T) {
 		expectedFailedLen int
 		manifest          *snapshot.Manifest
 		file              *snapshot.File
-		reader            io.ReadCloser
 		config            *repository.Config
 	}{
 		{
@@ -147,16 +145,20 @@ func TestVerifySnapshot_Handle(t *testing.T) {
 		when Handle method is called `+tt.name, func(t *testing.T) {
 			t.Parallel()
 			objectRepo := &app.ObjectRepositoryMock{}
-			objectRepo.ReadObjectFunc = func(_ context.Context, _ string, _ []byte, _ uint64) (io.ReadCloser, error) {
-				return tt.reader, tt.readObjectErr
+			objectRepo.VerifyObjectFunc = func(_ context.Context, _ string, _ repository.Codec) error {
+				return tt.readObjectErr
 			}
 			manifestRepo := &app.ManifestRepositoryMock{}
-			manifestRepo.GetFunc = func(_ context.Context, _ string) (*snapshot.Manifest, error) {
+			manifestRepo.GetFunc = func(_ context.Context, _ string, _ repository.Codec) (*snapshot.Manifest, error) {
 				return tt.manifest, tt.getManifestErr
+			}
+			config := tt.config
+			if config == nil {
+				config = new(fixtures.ConfigBuilder{}.Build(t))
 			}
 			folderRepo := &app.FolderRepositoryMock{}
 			folderRepo.GetConfigFunc = func(_ context.Context, _ string) (*repository.Config, error) {
-				return tt.config, tt.getConfigErr
+				return config, tt.getConfigErr
 			}
 			symmetricRepo := &app.SymmetricKeyRepositoryMock{}
 			symmetricRepo.DecodeAndDecryptSymmetricKeyFunc = func(_ context.Context, _ *rsa.PrivateKey, _ string) ([]byte, error) {

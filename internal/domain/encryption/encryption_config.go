@@ -15,6 +15,19 @@ type EncryptionConfig struct {
 	encryptedKey         string
 	publicKeyFingerprint string
 	generation           uint64
+	encryptedMetadataKey string
+}
+
+func (e *EncryptionConfig) EncryptedMetadataKey() string {
+	return e.encryptedMetadataKey
+}
+
+func (e *EncryptionConfig) HasMetadataKey() bool {
+	return e.encryptedMetadataKey != ""
+}
+
+func (e *EncryptionConfig) ChangeEncryptedMetadataKey(key string) {
+	e.encryptedMetadataKey = key
 }
 
 func (e *EncryptionConfig) Generation() uint64 {
@@ -62,10 +75,13 @@ func NewEncryptionConfig(encryptedKey, publicKeyFingerprint string, generation u
 func HydrateEncryptionConfig(
 	encryptionType, keyEncryption, encryptedKey, publicKeyFingerprint string,
 	generation uint64,
+	encryptedMetadataKey string,
 ) (*EncryptionConfig, error) {
 	if encryptionType != DefaultEncryptionType || keyEncryption != DefaultKeyEncryption {
 		return nil, ErrUnsupportedEncryption
 	}
 
-	return NewEncryptionConfig(encryptedKey, publicKeyFingerprint, generation), nil
+	conf := NewEncryptionConfig(encryptedKey, publicKeyFingerprint, generation)
+	conf.encryptedMetadataKey = encryptedMetadataKey
+	return conf, nil
 }

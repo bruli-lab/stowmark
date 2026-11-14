@@ -5,8 +5,6 @@ import (
 	"crypto/rsa"
 	"errors"
 	"fmt"
-	"io"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -57,7 +55,7 @@ func newCheckDependencies(t *testing.T, setup checkSetup) *checkDependencies {
 	}
 	deps.manifestRepo = &app.ManifestRepositoryMock{
 		ListIDsFunc: func(context.Context) ([]string, error) { return []string{"broken", "s1", "s2"}, setup.listIDsErr },
-		GetFunc: func(_ context.Context, id string) (*snapshot.Manifest, error) {
+		GetFunc: func(_ context.Context, id string, _ repository.Codec) (*snapshot.Manifest, error) {
 			manifest, ok := manifests[id]
 			if !ok {
 				return nil, errors.New("invalid manifest json")
@@ -70,15 +68,14 @@ func newCheckDependencies(t *testing.T, setup checkSetup) *checkDependencies {
 		ListObjectsFunc: func(context.Context, bool, uint64) ([]string, error) {
 			return []string{hashOf(healthyContent), hashOf(corruptContent), hashOf(orphanContent)}, setup.listObjErr
 		},
-		ReadObjectFunc: func(_ context.Context, hash string, key []byte, _ uint64) (io.ReadCloser, error) {
+		VerifyObjectFunc: func(_ context.Context, hash string, codec repository.Codec) error {
 			deps.mu.Lock()
-			deps.readKeys = append(deps.readKeys, key)
+			deps.readKeys = append(deps.readKeys, codec.DataKey())
 			deps.mu.Unlock()
-			content := healthyContent
 			if hash == hashOf(corruptContent) {
-				content = "tampered"
+				return fmt.Errorf("%w: hash mismatch", snapshot.ErrCorruptObject)
 			}
-			return io.NopCloser(strings.NewReader(content)), nil
+			return nil
 		},
 	}
 	deps.encryptedRepo = &app.EncryptedObjectRepositoryMock{
@@ -137,7 +134,7 @@ func TestCheckRepository_Handle(t *testing.T) {
 		require.Equal(t, 1, report.StaleLocks())
 		require.Equal(t, []uint64{1}, report.OrphanGenerations())
 		require.False(t, report.ReadData())
-		require.Empty(t, deps.objectRepo.ReadObjectCalls())
+		require.Empty(t, deps.objectRepo.VerifyObjectCalls())
 		require.True(t, report.HasErrors())
 	})
 
@@ -152,7 +149,7 @@ func TestCheckRepository_Handle(t *testing.T) {
 
 		require.True(t, report.ReadData())
 		require.Equal(t, 2, report.ReadObjects())
-		require.Len(t, deps.objectRepo.ReadObjectCalls(), 2)
+		require.Len(t, deps.objectRepo.VerifyObjectCalls(), 2)
 		require.Len(t, report.CorruptObjects(), 1)
 		require.Equal(t, hashOf(corruptContent), report.CorruptObjects()[0].Hash())
 		require.Contains(t, report.CorruptObjects()[0].Reason(), "hash mismatch")
@@ -174,9 +171,9 @@ func TestCheckRepository_Handle(t *testing.T) {
 		require.Equal(t, []uint64{1}, report.OrphanGenerations())
 		require.True(t, deps.objectRepo.ListObjectsCalls()[0].Encrypted)
 		require.Equal(t, uint64(2), deps.objectRepo.ListObjectsCalls()[0].Generation)
-		for _, call := range deps.objectRepo.ReadObjectCalls() {
-			require.Equal(t, []byte("repository-key"), call.SymmetricKey)
-			require.Equal(t, uint64(2), call.Generation)
+		for _, call := range deps.objectRepo.VerifyObjectCalls() {
+			require.Equal(t, []byte("repository-key"), call.Codec.DataKey())
+			require.Equal(t, uint64(2), call.Codec.Generation())
 		}
 	})
 
@@ -186,11 +183,11 @@ func TestCheckRepository_Handle(t *testing.T) {
 		t.Parallel()
 
 		deps := newCheckDependencies(t, checkSetup{encryption: encryption.NewEncryptionConfig("key", "fingerprint", 2)})
-		deps.objectRepo.ReadObjectFunc = func(_ context.Context, hash string, _ []byte, _ uint64) (io.ReadCloser, error) {
+		deps.objectRepo.VerifyObjectFunc = func(_ context.Context, hash string, _ repository.Codec) error {
 			if hash == hashOf(corruptContent) {
-				return nil, fmt.Errorf("%w: decrypt object %q", snapshot.ErrCorruptObject, hash)
+				return fmt.Errorf("%w: decrypt object %q", snapshot.ErrCorruptObject, hash)
 			}
-			return io.NopCloser(strings.NewReader(healthyContent)), nil
+			return nil
 		}
 		asymmetric, symmetric := keyRepositories()
 
@@ -214,7 +211,7 @@ func TestCheckRepository_Handle(t *testing.T) {
 
 		require.True(t, report.ReadData())
 		require.Equal(t, 1, report.ReadObjects())
-		require.Len(t, deps.objectRepo.ReadObjectCalls(), 1)
+		require.Len(t, deps.objectRepo.VerifyObjectCalls(), 1)
 	})
 }
 
@@ -258,7 +255,7 @@ func TestCheckRepository_Handle_Errors(t *testing.T) {
 			_, err := deps.handler(nil, nil).Handle(t.Context(), tt.query)
 
 			require.ErrorIs(t, err, tt.expectedErr)
-			require.Empty(t, deps.objectRepo.ReadObjectCalls())
+			require.Empty(t, deps.objectRepo.VerifyObjectCalls())
 		})
 	}
 }

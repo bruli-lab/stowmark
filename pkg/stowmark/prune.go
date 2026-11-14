@@ -23,7 +23,7 @@ type PruneResult struct {
 }
 
 func (h *Handler) PlanPrune(ctx context.Context) (*PrunePlan, error) {
-	plan, err := app.QueryResult[*snapshot.PrunePlan](h.repository.PrunePlan().Handle(ctx, app.PrunePlanQuery{RepositoryPath: h.repository.Path()}))
+	plan, err := app.QueryResult[*snapshot.PrunePlan](h.repository.PrunePlan().Handle(ctx, app.PrunePlanQuery{RepositoryPath: h.repository.Path(), PrivateKeyPath: h.privateKey}))
 	if err != nil {
 		return nil, err
 	}
@@ -37,7 +37,7 @@ func (h *Handler) PlanPrune(ctx context.Context) (*PrunePlan, error) {
 }
 
 func (h *Handler) Prune(ctx context.Context) (*PruneResult, error) {
-	events, err := h.repository.PruneRepository().Handle(ctx, app.PruneRepositoryCommand{RepositoryPath: h.repository.Path()})
+	events, err := h.repository.PruneRepository().Handle(ctx, app.PruneRepositoryCommand{RepositoryPath: h.repository.Path(), PrivateKeyPath: h.privateKey})
 	if err != nil {
 		return nil, err
 	}

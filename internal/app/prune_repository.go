@@ -18,6 +18,7 @@ const (
 
 type PruneRepositoryCommand struct {
 	RepositoryPath string
+	PrivateKeyPath *string
 }
 
 func (p PruneRepositoryCommand) Name() string {
@@ -40,7 +41,7 @@ func (p *PruneRepository) Handle(ctx context.Context, cmd cqs.Command) ([]event.
 
 	events := make([]event.Event, 0)
 	err := p.locker.WithLock(ctx, repository.ExclusiveLock, func(ctx context.Context) error {
-		target, err := p.planner.plan(ctx, co.RepositoryPath)
+		target, err := p.planner.plan(ctx, co.RepositoryPath, co.PrivateKeyPath)
 		if err != nil {
 			return err
 		}
@@ -119,9 +120,11 @@ func NewPruneRepository(
 	manifestRepo ManifestRepository,
 	objectRepo ObjectRepository,
 	encryptedRepo EncryptedObjectRepository,
+	asymmetricRepo AsymmetricKeyPairRepository,
+	symmetricRepo SymmetricKeyRepository,
 	locker *RepositoryLocker,
 ) *PruneRepository {
-	return NewPruneRepositoryWithWorkers(folderRepo, manifestRepo, objectRepo, encryptedRepo, locker, defaultPruneWorkers)
+	return NewPruneRepositoryWithWorkers(folderRepo, manifestRepo, objectRepo, encryptedRepo, asymmetricRepo, symmetricRepo, locker, defaultPruneWorkers)
 }
 
 func NewPruneRepositoryWithWorkers(
@@ -129,6 +132,8 @@ func NewPruneRepositoryWithWorkers(
 	manifestRepo ManifestRepository,
 	objectRepo ObjectRepository,
 	encryptedRepo EncryptedObjectRepository,
+	asymmetricRepo AsymmetricKeyPairRepository,
+	symmetricRepo SymmetricKeyRepository,
 	locker *RepositoryLocker,
 	workers int,
 ) *PruneRepository {
@@ -136,7 +141,7 @@ func NewPruneRepositoryWithWorkers(
 		workers = defaultPruneWorkers
 	}
 	return &PruneRepository{
-		planner:       newPrunePlanner(folderRepo, manifestRepo, objectRepo, encryptedRepo),
+		planner:       newPrunePlanner(folderRepo, manifestRepo, objectRepo, encryptedRepo, newKeyring(folderRepo, asymmetricRepo, symmetricRepo)),
 		objectRepo:    objectRepo,
 		encryptedRepo: encryptedRepo,
 		locker:        locker,
@@ -156,6 +161,7 @@ type prunePlanner struct {
 	manifestRepo  ManifestRepository
 	objectRepo    ObjectRepository
 	encryptedRepo EncryptedObjectRepository
+	keys          keyring
 }
 
 func newPrunePlanner(
@@ -163,11 +169,12 @@ func newPrunePlanner(
 	manifestRepo ManifestRepository,
 	objectRepo ObjectRepository,
 	encryptedRepo EncryptedObjectRepository,
+	keys keyring,
 ) prunePlanner {
-	return prunePlanner{folderRepo: folderRepo, manifestRepo: manifestRepo, objectRepo: objectRepo, encryptedRepo: encryptedRepo}
+	return prunePlanner{folderRepo: folderRepo, manifestRepo: manifestRepo, objectRepo: objectRepo, encryptedRepo: encryptedRepo, keys: keys}
 }
 
-func (p prunePlanner) plan(ctx context.Context, repositoryPath string) (*pruneTarget, error) {
+func (p *prunePlanner) plan(ctx context.Context, repositoryPath string, privateKeyPath *string) (*pruneTarget, error) {
 	conf, err := p.folderRepo.GetConfig(ctx, repositoryPath)
 	if err != nil {
 		return nil, err
@@ -178,7 +185,12 @@ func (p prunePlanner) plan(ctx context.Context, repositoryPath string) (*pruneTa
 		target.generation = conf.Encryption().Generation()
 	}
 
-	manifests, err := p.manifestRepo.List(ctx)
+	codec, err := p.keys.forConfig(ctx, conf, privateKeyPath)
+	if err != nil {
+		return nil, err
+	}
+
+	manifests, err := p.manifestRepo.List(ctx, codec)
 	if err != nil {
 		return nil, err
 	}

@@ -74,16 +74,18 @@ func TestRestoreFile_Restore(t *testing.T) {
 		when Handle method is called `+tt.name, func(t *testing.T) {
 			t.Parallel()
 			manifestRepo := &app.ManifestRepositoryMock{}
-			manifestRepo.GetFunc = func(_ context.Context, _ string) (*snapshot.Manifest, error) {
+			manifestRepo.GetFunc = func(_ context.Context, _ string, _ repository.Codec) (*snapshot.Manifest, error) {
 				return tt.manifest, tt.manifestErr
 			}
 			objectRepo := &app.ObjectRepositoryMock{}
-			objectRepo.RestoreObjectFunc = func(_ context.Context, _ *repository.Compression, _ *snapshot.File, _ []byte, _ uint64) error {
+			objectRepo.RestoreObjectFunc = func(_ context.Context, _ *snapshot.File, _ repository.Codec) error {
 				return tt.objectErr
 			}
-			folderRepo := &app.FolderRepositoryMock{}
-			folderRepo.GetConfigFunc = func(_ context.Context, _ string) (*repository.Config, error) {
-				return tt.config, nil
+			folderRepo := plainFolderRepository(t)
+			if tt.config != nil {
+				folderRepo.GetConfigFunc = func(_ context.Context, _ string) (*repository.Config, error) {
+					return tt.config, nil
+				}
 			}
 			symmetricRepo := &app.SymmetricKeyRepositoryMock{}
 			symmetricRepo.DecodeAndDecryptSymmetricKeyFunc = func(_ context.Context, _ *rsa.PrivateKey, _ string) ([]byte, error) {
@@ -93,7 +95,7 @@ func TestRestoreFile_Restore(t *testing.T) {
 			asymmetricRepo.ReadRSAPrivateKeyFunc = func(_ context.Context, _ string) (*rsa.PrivateKey, error) {
 				return tt.privateKey, nil
 			}
-			handler := app.NewRestoreFile(manifestRepo, objectRepo, folderRepo, asymmetricRepo, symmetricRepo, newUnlockedLocker())
+			handler := app.NewRestoreFile(manifestRepo, objectRepo, &app.RestoreDestinationMock{}, folderRepo, asymmetricRepo, symmetricRepo, newUnlockedLocker())
 			snapshotID := uuid.NewString()
 			events, err := handler.Handle(t.Context(), app.RestoreFileCommand{
 				SnapshotID:      snapshotID,

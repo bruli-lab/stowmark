@@ -192,21 +192,21 @@ func TestCreateSnapshot_Handle(t *testing.T) {
 			sourceRepo.ExploreFunc = func(context.Context, string, *snapshot.ExcludeRules) (*snapshot.Source, error) {
 				return tt.source, tt.exploreErr
 			}
-			sourceRepo.CalculateHashFunc = func(_ context.Context, _ string, _ *repository.Compression) (string, error) {
+			sourceRepo.CalculateHashFunc = func(_ context.Context, _ string, _ repository.Codec) (string, error) {
 				return tt.hash, tt.calculateHashErr
 			}
 			manifestRepo := &app.ManifestRepositoryMock{}
-			manifestRepo.SaveFunc = func(_ context.Context, _ *snapshot.Manifest) error {
+			manifestRepo.SaveFunc = func(_ context.Context, _ *snapshot.Manifest, _ repository.Codec) error {
 				return tt.saveManifestErr
 			}
 			objRepo := &app.ObjectRepositoryMock{}
-			objRepo.SaveFunc = func(_ context.Context, _, _ string, _ *repository.Compression, _ []byte, _ uint64) error {
+			objRepo.SaveFunc = func(_ context.Context, _, _ string, _ repository.Codec) error {
 				return tt.saveObjErr
 			}
-			objRepo.AlreadyExistsFunc = func(_ context.Context, _ string, _ []byte, _ uint64) (bool, error) {
+			objRepo.AlreadyExistsFunc = func(_ context.Context, _ string, _ repository.Codec) (bool, error) {
 				return tt.exists, tt.alreadyExistsErr
 			}
-			objRepo.SaveChunkFunc = func(_ context.Context, _, _ string, _ int64, _ int64, _ *repository.Compression, _ []byte, _ uint64) error {
+			objRepo.SaveChunkFunc = func(_ context.Context, _ string, _ snapshot.Chunk, _ repository.Codec) error {
 				return tt.saveChunkErr
 			}
 			folderRepositoryRep := &app.FolderRepositoryMock{}

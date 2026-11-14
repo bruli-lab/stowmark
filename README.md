@@ -472,19 +472,22 @@ and remove files and collections under the repository path.
 
 | Command                                                                 | Description                              |
 |-------------------------------------------------------------------------|------------------------------------------|
-| `stowmark init --repo <repository>`                                     | Initialize a new repository.             |
+| `stowmark init --repo <repository> [--version 3]`                       | Initialize a new repository.             |
 | `stowmark snapshot create <source> --repo <repository> [--exclude <pattern>]` | Create a snapshot of a directory.  |
-| `stowmark snapshot list --repo <repository>`                            | List snapshots from newest to oldest.    |
-| `stowmark snapshot get --id <id> --repo <repository>`                   | Display a snapshot manifest.             |
+| `stowmark snapshot list --repo <repository> [--private-key <key>]`      | List snapshots from newest to oldest.    |
+| `stowmark snapshot get --id <id> --repo <repository> [--private-key <key>]` | Display a snapshot manifest.         |
 | `stowmark snapshot verify --id <id> --repo <repository>`                | Verify snapshot integrity.               |
 | `stowmark snapshot restore --id <id> --repo <repository>`               | Restore a snapshot or, with `--file`, one file. |
 | `stowmark key generate --folder <folder>`                               | Generate an RSA key pair.                |
 | `stowmark key rewrap --repo <repository> --old-private-key <key> --new-public-key <key>` | Re-encrypt the repository key with a new RSA key pair. |
 | `stowmark key rekey --repo <repository> --private-key <key> --public-key <key>` | Rotate the symmetric key and re-encrypt every object. |
 | `stowmark unlock --repo <repository> [--all]`                           | Remove stale (or all) repository locks.  |
-| `stowmark forget --repo <repository> --keep-<rule> <n> [--prune]`       | Forget the snapshots a retention policy does not keep. |
-| `stowmark prune --repo <repository>`                                    | Delete objects that no snapshot references. |
+| `stowmark forget --repo <repository> --keep-<rule> <n> [--prune] [--private-key <key>]` | Forget the snapshots a retention policy does not keep. |
+| `stowmark prune --repo <repository> [--private-key <key>]`              | Delete objects that no snapshot references. |
 | `stowmark check --repo <repository> [--read-data \| --read-data-subset <subset>]` | Check the integrity of the whole repository. |
+
+`--private-key` is only needed by `snapshot list`, `snapshot get`, `forget` and `prune` on encrypted
+[format version 3](#format-versions) repositories, whose manifests are encrypted.
 
 Run the built-in help for the complete set of options:
 
@@ -506,6 +509,8 @@ Stowmark uses hybrid encryption:
 - The symmetric key is encrypted with an RSA public key using `RSA-OAEP-SHA256`.
 - Only the encrypted symmetric key, the public-key fingerprint and the current key generation are stored in
   `config.json`.
+- In [format version 3](#format-versions) repositories, a second random 256-bit metadata key, also wrapped with the RSA
+  public key, names the objects (HMAC-SHA256) and encrypts the snapshot manifests.
 - The RSA private key is never stored in the repository.
 
 The private key is therefore required to create, verify and restore snapshots from an encrypted repository. Keep it in
@@ -602,8 +607,8 @@ Use a key rewrap when the RSA key pair must be replaced but the repository symme
 decrypts the existing symmetric key with the old private key and encrypts that same key with the new public key. Object
 data does not need to be rewritten, making this operation fast regardless of repository size.
 
-The operation updates the encrypted key and public-key fingerprint in `config.json`. After it completes, the new
-private key is required to access the repository.
+The operation updates the encrypted key and public-key fingerprint in `config.json`, and in format version 3 repositories
+also the wrapped metadata key. After it completes, the new private key is required to access the repository.
 
 ### Symmetric key rotation
 
@@ -613,7 +618,9 @@ Use a rekey when the repository symmetric key may have been compromised or must 
 2. Generates a new random symmetric key.
 3. Decrypts every object with the old key and encrypts it into a new generation with the new key.
 4. Encrypts the new symmetric key with the configured RSA public key.
-5. Commits the new generation in `config.json` only after every object has been processed successfully.
+5. Commits the new generation in `config.json` only after every object has been processed successfully. In format
+   version 3 repositories the metadata key is kept, so object names and manifests do not change, and it is wrapped
+   with the new public key.
 6. Removes the previous encrypted generation after the commit.
 
 Objects are processed concurrently using a bounded worker pool. If any object fails, Stowmark cancels the remaining
@@ -688,8 +695,9 @@ The syntax is a subset of `.gitignore`:
 ## Chunking
 
 Files larger than 8 MiB are split into ordered chunks before being stored. Smaller files are stored as a single object.
-Each chunk is compressed independently using the repository compression settings and identified by the SHA-256 hash
-of its encoded representation.
+Each chunk is compressed independently using the repository compression settings. In format versions 1 and 2 it is
+identified by the SHA-256 hash of its encoded representation; in format version 3, by the hash of its original content
+(see [Format versions](#format-versions)).
 
 Chunking avoids processing a large file as one object and improves deduplication when only part of the file changes.
 Chunks already present in the repository are reused by later snapshots, just like complete file objects.
@@ -724,9 +732,30 @@ repository/
 The format is identical for local, SSH, SMB, S3, GCS and WebDAV repositories. In S3 and GCS, directories are represented
 by object key prefixes rather than physical folders.
 
+### Format versions
+
+`stowmark init --version <n>` chooses the repository format. The default is version 2, so repositories created by
+earlier releases and by default keep working unchanged in both directions. Version 3 is opt-in:
+
+| | Version 1 and 2 | Version 3 |
+|---|---|---|
+| Object name | SHA-256 of the compressed data | SHA-256 of the original content, or HMAC-SHA256 with the metadata key when encrypted |
+| Deduplication across compression settings | No | Yes |
+| Object encryption | AES-256-GCM over the whole object | Streaming AES-256-GCM in 64 KiB segments, bound to the object name |
+| Manifests of encrypted repositories | Plain JSON | Encrypted and authenticated |
+| Directories, empty directories and symbolic links | Not stored | Stored and restored |
+| Permissions and modification times | Not stored | Stored and restored |
+| `--private-key` for `list`, `get`, `forget`, `prune` | Not needed | Needed when encrypted |
+
+Files larger than 8 MiB are chunked in version 3 exactly as in version 2. Streaming encryption means a large object
+no longer has to fit in memory to be encrypted or decrypted. Ownership (uid/gid) is not stored, and the modification
+time of a symbolic link itself is not restored. There is no migration command: create a new version 3 repository and
+take new snapshots into it.
+
 ### Objects
 
-Complete file objects and chunks are stored using the SHA-256 hash of their encoded representation. The first two
+In format versions 1 and 2, complete file objects and chunks are stored using the SHA-256 hash of their encoded
+representation. The first two
 characters are used as the directory name and the remaining characters as the file name:
 
 ```text
@@ -735,6 +764,7 @@ objects/<first-two-hash-characters>/<remaining-hash-characters>
 
 When two snapshots contain the same file or chunk content encoded with the same compression settings, they both
 reference the same stored object. The same original content encoded differently produces a different object and hash.
+Format version 3 names objects by their original content instead, and records the compression inside each object.
 
 In encrypted repositories, encrypted objects are stored in a generation-specific namespace under `objects/encrypted`.
 The active generation is recorded in `config.json`. A rekey writes a complete new generation before switching the
@@ -777,10 +807,14 @@ Each snapshot is stored as a JSON manifest containing:
 - The original source path.
 - The compression type and level used by the snapshot.
 - The path and original size of every file.
+- In format version 3, the directories and symbolic links (with their targets), and the permissions and modification
+  time of every entry.
 - A single object hash for files stored without chunking, or an ordered list of chunk hashes and sizes for chunked
   files.
 
-The manifest references objects but does not duplicate their contents.
+The manifest references objects but does not duplicate their contents. In encrypted format version 3 repositories the
+manifest is encrypted with a key derived from the metadata key and authenticated with its snapshot ID, so it cannot be
+read, modified or swapped with another snapshot's manifest without the private key.
 
 ## Integrity verification
 
@@ -821,6 +855,24 @@ Without flags it only reads the structure, so it is fast and does not need the p
 
 Reading the data of an encrypted repository needs `--private-key`. `check` takes a shared lock and exits with an error
 when it finds a corrupt manifest, a missing object or a corrupt object.
+
+## Go library
+
+The `pkg/stowmark` package exposes the same operations as the command line:
+
+```go
+handler, err := stowmark.NewHandler(ctx, "/backups/stowmark", stowmark.WithPrivateKey("keys/private.pem"))
+if err != nil {
+	return err
+}
+defer handler.Close()
+
+snapshots, err := handler.ListSnapshots(ctx)
+```
+
+`WithPrivateKey` is optional. It is the default key of every operation, and listing, reading, forgetting and pruning
+an encrypted format version 3 repository without it returns `stowmark.ErrPrivateKeyRequired`. Operations that take a
+private key argument use that argument when it is not `nil`.
 
 ## Observability
 
@@ -959,22 +1011,29 @@ What encryption protects, when a repository is created with `--public-key`:
 - Integrity: GCM authenticates every object, and restore, `snapshot verify` and `check --read-data` check the SHA-256 of every object
   against the manifest.
 
-What it does **not** protect yet:
+What it does **not** protect in format versions 1 and 2 (use [format version 3](#format-versions) for this):
 
 - Snapshot manifests are stored in plain JSON. Anyone with access to the backend can see file paths, sizes, snapshot
-  dates and the source directory.
+  dates and the source directory, and can edit them.
 - Object names are the SHA-256 of the stored data, so someone who already has a file can check whether the same file
   (with the same compression settings) is in the repository.
+- Objects are not bound to their names, so someone with write access could swap two objects without the decryption
+  failing (the hash check after decryption still detects it).
+
+In every format version, the number, sizes and timestamps of the stored objects and snapshots remain visible.
+
+What it does **not** protect:
+
 - "Immutable-style" means objects and manifests are never overwritten by Stowmark. It is not enforced by the storage:
   anyone with write access to the backend can still delete or replace them. Use bucket versioning, object lock or
   backend snapshots if you need protection against that.
 
 What is not backed up:
 
-- Only regular files are stored. Symbolic links, device files, sockets and named pipes are skipped, and
-  `snapshot create` prints a warning for each one.
-- Empty directories are not recorded.
-- File permissions, ownership and modification times are not stored; restored files are created with mode `0644`.
+- Device files, sockets and named pipes are skipped, and `snapshot create` prints a warning for each one.
+- In format versions 1 and 2, symbolic links are skipped too (with a warning), empty directories are not recorded, and
+  permissions and modification times are not stored; restored files are created with mode `0644`.
+- File ownership is not stored in any format version.
 
 ## Roadmap
 

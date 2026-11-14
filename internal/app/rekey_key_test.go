@@ -270,13 +270,13 @@ func TestRekeyKey_Handle(t *testing.T) {
 			encryptedRepo.ListEncryptedObjectsFunc = func(_ context.Context, _ uint64) ([]string, error) {
 				return tt.list, tt.listErr
 			}
-			encryptedRepo.ReadEncryptedObjectFunc = func(_ context.Context, _ string, _ uint64, _ []byte) (io.ReadCloser, error) {
+			encryptedRepo.ReadEncryptedObjectFunc = func(_ context.Context, _ string, _ repository.Codec) (io.ReadCloser, error) {
 				return tt.reader, tt.readObjectErr
 			}
 			encryptedRepo.AbortRekeyFunc = func(_ context.Context, _ uint64) error {
 				return tt.abortErr
 			}
-			encryptedRepo.SaveRekeyedObjectFunc = func(_ context.Context, _ string, _ io.Reader, _ uint64, _ []byte) error {
+			encryptedRepo.SaveRekeyedObjectFunc = func(_ context.Context, _ string, _ io.Reader, _ repository.Codec) error {
 				return tt.saveObjectErr
 			}
 			encryptedRepo.DeleteEncryptedGenerationFunc = func(_ context.Context, _ uint64) error {

@@ -57,6 +57,14 @@ func compressedHash(t *testing.T, comp *repository.Compression, data []byte) str
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 
+func codecWith(comp *repository.Compression, key []byte, generation uint64) repository.Codec {
+	codec := repository.NewCodec(repository.FormatVersionTwo, comp)
+	if key == nil {
+		return codec
+	}
+	return codec.WithDataKey(key, generation)
+}
+
 func writeSource(t *testing.T, data []byte) string {
 	t.Helper()
 
@@ -101,21 +109,18 @@ func TestObjectRepository_SaveAndRestore(t *testing.T) {
 				expectedKey = "objects/encrypted/3/" + hash[:2] + "/" + hash[2:]
 			}
 
-			require.NoError(t, repo.Save(ctx, writeSource(t, data), hash, comp, key, 3))
+			require.NoError(t, repo.Save(ctx, writeSource(t, data), hash, codecWith(comp, key, 3)))
 
 			require.Equal(t, []string{expectedKey}, store.Keys())
-			exists, err := repo.AlreadyExists(ctx, hash, key, 3)
+			exists, err := repo.AlreadyExists(ctx, hash, codecWith(nil, key, 3))
 			require.NoError(t, err)
 			require.True(t, exists)
-			reader, err := repo.ReadObject(ctx, hash, key, 3)
-			require.NoError(t, err)
-			stored := sha256.Sum256(readAll(t, reader))
-			require.Equal(t, hash, hex.EncodeToString(stored[:]))
+			require.NoError(t, repo.VerifyObject(ctx, hash, codecWith(nil, key, 3)))
 
 			destination := filepath.Join(t.TempDir(), "restored.bin")
 			size := int64(len(data))
 			file := fixtures.FileBuilder{Path: &destination, Size: &size, Hash: &hash}.Build()
-			require.NoError(t, repo.RestoreObject(ctx, comp, &file, key, 3))
+			require.NoError(t, repo.RestoreObject(ctx, &file, codecWith(comp, key, 3)))
 			restored, err := os.ReadFile(destination)
 			require.NoError(t, err)
 			require.Equal(t, data, restored)
@@ -141,15 +146,15 @@ func TestObjectRepository_SaveChunk(t *testing.T) {
 		first := compressedHash(t, comp, data[:half])
 		second := compressedHash(t, comp, data[half:])
 
-		require.NoError(t, repo.SaveChunk(ctx, sourcePath, first, 0, half, comp, key, 1))
-		require.NoError(t, repo.SaveChunk(ctx, sourcePath, second, half, int64(len(data))-half, comp, key, 1))
+		require.NoError(t, repo.SaveChunk(ctx, sourcePath, *snapshot.NewChunk(first, 0, half), codecWith(comp, key, 1)))
+		require.NoError(t, repo.SaveChunk(ctx, sourcePath, *snapshot.NewChunk(second, half, int64(len(data))-half), codecWith(comp, key, 1)))
 
 		destination := filepath.Join(t.TempDir(), "restored.bin")
 		file := snapshot.HydrateFile(destination, "", int64(len(data)), []snapshot.Chunk{
 			*snapshot.NewChunk(first, 0, half),
 			*snapshot.NewChunk(second, half, int64(len(data))-half),
 		})
-		require.NoError(t, repo.RestoreObject(ctx, comp, file, key, 1))
+		require.NoError(t, repo.RestoreObject(ctx, file, codecWith(comp, key, 1)))
 		restored, err := os.ReadFile(destination)
 		require.NoError(t, err)
 		require.Equal(t, data, restored)
@@ -172,22 +177,22 @@ func TestObjectRepository_Errors(t *testing.T) {
 		comp := zstdCompression(t)
 
 		for _, hash := range []string{"", "ab", "../../../etc/passwd", "AB12", "ab/cd", "ab-cd"} {
-			err := repo.Save(ctx, writeSource(t, data), hash, comp, nil, 0)
+			err := repo.Save(ctx, writeSource(t, data), hash, codecWith(comp, nil, 0))
 			require.ErrorIs(t, err, blob.ErrInvalidHash, hash)
-			_, err = repo.AlreadyExists(ctx, hash, nil, 0)
+			_, err = repo.AlreadyExists(ctx, hash, codecWith(nil, nil, 0))
 			require.ErrorIs(t, err, blob.ErrInvalidHash, hash)
-			_, err = repo.ReadObject(ctx, hash, nil, 0)
+			err = repo.VerifyObject(ctx, hash, codecWith(nil, nil, 0))
 			require.ErrorIs(t, err, blob.ErrInvalidHash, hash)
 		}
 		require.Empty(t, store.Keys())
 	})
 
 	t.Run(`Given a blob ObjectRepository,
-	when a missing object is read,
+	when a missing object is verified,
 	then it returns a snapshot not found error`, func(t *testing.T) {
 		t.Parallel()
 
-		_, err := blob.NewObjectRepository(blobtest.NewMemoryStore()).ReadObject(context.Background(), "abcdef", nil, 0)
+		err := blob.NewObjectRepository(blobtest.NewMemoryStore()).VerifyObject(context.Background(), "abcdef", codecWith(nil, nil, 0))
 
 		require.ErrorAs(t, err, new(snapshot.NotFoundError))
 	})
@@ -199,7 +204,7 @@ func TestObjectRepository_Errors(t *testing.T) {
 
 		store := blobtest.NewMemoryStore()
 
-		err := blob.NewObjectRepository(store).Save(context.Background(), writeSource(t, data), "abcdef", zstdCompression(t), nil, 0)
+		err := blob.NewObjectRepository(store).Save(context.Background(), writeSource(t, data), "abcdef", codecWith(zstdCompression(t), nil, 0))
 
 		require.ErrorIs(t, err, object.ErrHashMismatch)
 		require.Empty(t, store.Keys())
@@ -215,10 +220,10 @@ func TestObjectRepository_Errors(t *testing.T) {
 		repo := blob.NewObjectRepository(store)
 		comp := zstdCompression(t)
 		hash := compressedHash(t, comp, data)
-		require.NoError(t, repo.Save(ctx, writeSource(t, data), hash, comp, nil, 0))
+		require.NoError(t, repo.Save(ctx, writeSource(t, data), hash, codecWith(comp, nil, 0)))
 		other := []byte("other data")
 		otherHash := compressedHash(t, comp, other)
-		require.NoError(t, repo.Save(ctx, writeSource(t, other), otherHash, comp, nil, 0))
+		require.NoError(t, repo.Save(ctx, writeSource(t, other), otherHash, codecWith(comp, nil, 0)))
 		replacement, err := store.Get(ctx, "objects/"+otherHash[:2]+"/"+otherHash[2:])
 		require.NoError(t, err)
 		store.Corrupt("objects/"+hash[:2]+"/"+hash[2:], readAll(t, replacement))
@@ -226,7 +231,7 @@ func TestObjectRepository_Errors(t *testing.T) {
 		destination := filepath.Join(t.TempDir(), "restored.bin")
 		size := int64(len(data))
 		file := fixtures.FileBuilder{Path: &destination, Size: &size, Hash: &hash}.Build()
-		err = repo.RestoreObject(ctx, comp, &file, nil, 0)
+		err = repo.RestoreObject(ctx, &file, codecWith(comp, nil, 0))
 
 		require.ErrorIs(t, err, object.ErrHashMismatch)
 		require.NoFileExists(t, destination)
@@ -250,18 +255,18 @@ func TestObjectRepository_Rekey(t *testing.T) {
 		var hashes []string
 		for _, content := range []string{"first", "second", "third"} {
 			hash := compressedHash(t, comp, []byte(content))
-			require.NoError(t, repo.Save(ctx, writeSource(t, []byte(content)), hash, comp, oldKey, 1))
+			require.NoError(t, repo.Save(ctx, writeSource(t, []byte(content)), hash, codecWith(comp, oldKey, 1)))
 			hashes = append(hashes, hash)
 		}
-		require.NoError(t, repo.Save(ctx, writeSource(t, []byte("plain")), compressedHash(t, comp, []byte("plain")), comp, nil, 0))
+		require.NoError(t, repo.Save(ctx, writeSource(t, []byte("plain")), compressedHash(t, comp, []byte("plain")), codecWith(comp, nil, 0)))
 
 		listed, err := repo.ListEncryptedObjects(ctx, 1)
 		require.NoError(t, err)
 		require.ElementsMatch(t, hashes, listed)
 		for _, hash := range listed {
-			reader, err := repo.ReadEncryptedObject(ctx, hash, 1, oldKey)
+			reader, err := repo.ReadEncryptedObject(ctx, hash, codecWith(nil, oldKey, 1))
 			require.NoError(t, err)
-			require.NoError(t, repo.SaveRekeyedObject(ctx, hash, bytes.NewReader(readAll(t, reader)), 2, newKey))
+			require.NoError(t, repo.SaveRekeyedObject(ctx, hash, bytes.NewReader(readAll(t, reader)), codecWith(nil, newKey, 2)))
 		}
 		require.NoError(t, repo.DeleteEncryptedGeneration(ctx, 1))
 
@@ -272,10 +277,7 @@ func TestObjectRepository_Rekey(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, listed, rekeyed)
 		for _, hash := range rekeyed {
-			reader, err := repo.ReadObject(ctx, hash, newKey, 2)
-			require.NoError(t, err)
-			stored := sha256.Sum256(readAll(t, reader))
-			require.Equal(t, hash, hex.EncodeToString(stored[:]))
+			require.NoError(t, repo.VerifyObject(ctx, hash, codecWith(nil, newKey, 2)))
 		}
 		require.Len(t, store.Keys(), 4)
 	})
@@ -287,7 +289,7 @@ func TestObjectRepository_Rekey(t *testing.T) {
 
 		store := blobtest.NewMemoryStore()
 
-		err := blob.NewObjectRepository(store).SaveRekeyedObject(context.Background(), "abcdef", bytes.NewReader([]byte("tampered")), 2, newKey(t))
+		err := blob.NewObjectRepository(store).SaveRekeyedObject(context.Background(), "abcdef", bytes.NewReader([]byte("tampered")), codecWith(nil, newKey(t), 2))
 
 		require.ErrorIs(t, err, object.ErrHashMismatch)
 		require.Empty(t, store.Keys())
@@ -300,11 +302,11 @@ func TestObjectRepository_Rekey(t *testing.T) {
 
 		repo := blob.NewObjectRepository(blobtest.NewMemoryStore())
 
-		_, err := repo.ReadEncryptedObject(context.Background(), "abcdef", 1, nil)
+		_, err := repo.ReadEncryptedObject(context.Background(), "abcdef", codecWith(nil, nil, 1))
 		require.ErrorIs(t, err, blob.ErrSymmetricKeyRequired)
-		err = repo.SaveRekeyedObject(context.Background(), "abcdef", bytes.NewReader(nil), 1, nil)
+		err = repo.SaveRekeyedObject(context.Background(), "abcdef", bytes.NewReader(nil), codecWith(nil, nil, 1))
 		require.ErrorIs(t, err, blob.ErrSymmetricKeyRequired)
-		err = repo.SaveRekeyedObject(context.Background(), "abcdef", nil, 1, newKey(t))
+		err = repo.SaveRekeyedObject(context.Background(), "abcdef", nil, codecWith(nil, newKey(t), 1))
 		require.ErrorIs(t, err, blob.ErrSourceRequired)
 	})
 }
@@ -326,9 +328,9 @@ func TestObjectRepository_ListAndDeleteObjects(t *testing.T) {
 		firstHash := compressedHash(t, comp, first)
 		secondHash := compressedHash(t, comp, second)
 		key := newKey(t)
-		require.NoError(t, repo.Save(ctx, writeSource(t, first), firstHash, comp, nil, 0))
-		require.NoError(t, repo.Save(ctx, writeSource(t, second), secondHash, comp, nil, 0))
-		require.NoError(t, repo.Save(ctx, writeSource(t, first), firstHash, comp, key, 2))
+		require.NoError(t, repo.Save(ctx, writeSource(t, first), firstHash, codecWith(comp, nil, 0)))
+		require.NoError(t, repo.Save(ctx, writeSource(t, second), secondHash, codecWith(comp, nil, 0)))
+		require.NoError(t, repo.Save(ctx, writeSource(t, first), firstHash, codecWith(comp, key, 2)))
 		require.NoError(t, store.Put(ctx, "objects/readme.txt", func(io.Writer) error { return nil }))
 
 		plain, err := repo.ListObjects(ctx, false, 0)
@@ -366,10 +368,10 @@ func TestObjectRepository_ListEncryptedGenerations(t *testing.T) {
 		key := newKey(t)
 		for i, generation := range []uint64{3, 1, 3} {
 			data := []byte{byte(i)}
-			require.NoError(t, repo.Save(ctx, writeSource(t, data), compressedHash(t, comp, data), comp, key, generation))
+			require.NoError(t, repo.Save(ctx, writeSource(t, data), compressedHash(t, comp, data), codecWith(comp, key, generation)))
 		}
 		plain := []byte("plain")
-		require.NoError(t, repo.Save(ctx, writeSource(t, plain), compressedHash(t, comp, plain), comp, nil, 0))
+		require.NoError(t, repo.Save(ctx, writeSource(t, plain), compressedHash(t, comp, plain), codecWith(comp, nil, 0)))
 		require.NoError(t, store.Put(ctx, "objects/encrypted/notes.txt", func(io.Writer) error { return nil }))
 		require.NoError(t, store.Put(ctx, "objects/encrypted/x/ab/cd", func(io.Writer) error { return nil }))
 
@@ -380,11 +382,11 @@ func TestObjectRepository_ListEncryptedGenerations(t *testing.T) {
 	})
 }
 
-func TestObjectRepository_ReadObject_Tampered(t *testing.T) {
+func TestObjectRepository_VerifyObject_Tampered(t *testing.T) {
 	t.Parallel()
 
 	t.Run(`Given a blob ObjectRepository with an encrypted object whose bytes were replaced,
-	when ReadObject is called,
+	when VerifyObject is called,
 	then it returns a corrupt object error`, func(t *testing.T) {
 		t.Parallel()
 
@@ -395,10 +397,10 @@ func TestObjectRepository_ReadObject_Tampered(t *testing.T) {
 		data := []byte("object that will be tampered")
 		hash := compressedHash(t, comp, data)
 		key := newKey(t)
-		require.NoError(t, repo.Save(ctx, writeSource(t, data), hash, comp, key, 1))
+		require.NoError(t, repo.Save(ctx, writeSource(t, data), hash, codecWith(comp, key, 1)))
 		store.Corrupt("objects/encrypted/1/"+hash[:2]+"/"+hash[2:], bytes.Repeat([]byte("x"), 64))
 
-		_, err := repo.ReadObject(ctx, hash, key, 1)
+		err := repo.VerifyObject(ctx, hash, codecWith(nil, key, 1))
 
 		require.ErrorIs(t, err, snapshot.ErrCorruptObject)
 	})
@@ -448,4 +450,122 @@ func TestObjectRepository_DeleteTemporaryObjects(t *testing.T) {
 			}
 		})
 	}
+}
+
+func v3Codec(comp *repository.Compression, dataKey, metadataKey []byte, generation uint64) repository.Codec {
+	codec := repository.NewCodec(repository.FormatVersionThree, comp)
+	if dataKey == nil {
+		return codec
+	}
+	return codec.WithDataKey(dataKey, generation).WithMetadataKey(metadataKey)
+}
+
+func contentID(t *testing.T, codec repository.Codec, data []byte) string {
+	t.Helper()
+	hash, err := object.Digest(context.Background(), bytes.NewReader(data), codec, compression.NewHandlersFactory())
+	require.NoError(t, err)
+	return hash
+}
+
+func TestObjectRepository_ContentAddressed(t *testing.T) {
+	t.Parallel()
+
+	data := bytes.Repeat([]byte("stowmark v3 blob "), 8192)
+	metadataKey := newKey(t)
+
+	for _, encrypted := range []bool{false, true} {
+		t.Run(`Given a format version 3 blob ObjectRepository,
+		when an object is saved, verified and restored,
+		then it is stored under its content id and restores the original data`, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := context.Background()
+			store := blobtest.NewMemoryStore()
+			repo := blob.NewObjectRepository(store)
+			var key []byte
+			if encrypted {
+				key = newKey(t)
+			}
+			codec := v3Codec(zstdCompression(t), key, metadataKey, 4)
+			hash := contentID(t, codec, data)
+			expectedKey := "objects/" + hash[:2] + "/" + hash[2:]
+			if encrypted {
+				expectedKey = "objects/encrypted/4/" + hash[:2] + "/" + hash[2:]
+			}
+
+			require.NoError(t, repo.Save(ctx, writeSource(t, data), hash, codec))
+
+			require.Equal(t, []string{expectedKey}, store.Keys())
+			require.NoError(t, repo.VerifyObject(ctx, hash, codec))
+			destination := filepath.Join(t.TempDir(), "restored.bin")
+			file := *snapshot.HydrateFile(destination, hash, int64(len(data)), nil)
+			require.NoError(t, repo.RestoreObject(ctx, &file, codec.WithCompression(nil)))
+			restored, err := os.ReadFile(destination)
+			require.NoError(t, err)
+			require.Equal(t, data, restored)
+		})
+	}
+
+	t.Run(`Given an encrypted format version 3 blob ObjectRepository with two objects,
+	when one object is copied over the other,
+	then VerifyObject reports it as corrupt because the id is bound to the encryption`, func(t *testing.T) {
+		t.Parallel()
+
+		ctx := context.Background()
+		store := blobtest.NewMemoryStore()
+		repo := blob.NewObjectRepository(store)
+		codec := v3Codec(zstdCompression(t), newKey(t), metadataKey, 1)
+		first := contentID(t, codec, []byte("first"))
+		second := contentID(t, codec, []byte("second"))
+		require.NoError(t, repo.Save(ctx, writeSource(t, []byte("first")), first, codec))
+		require.NoError(t, repo.Save(ctx, writeSource(t, []byte("second")), second, codec))
+		replacement, err := store.Get(ctx, "objects/encrypted/1/"+second[:2]+"/"+second[2:])
+		require.NoError(t, err)
+		store.Corrupt("objects/encrypted/1/"+first[:2]+"/"+first[2:], readAll(t, replacement))
+
+		err = repo.VerifyObject(ctx, first, codec)
+
+		require.ErrorIs(t, err, snapshot.ErrCorruptObject)
+		require.NoError(t, repo.VerifyObject(ctx, second, codec))
+	})
+
+	t.Run(`Given an encrypted format version 3 object in generation 1,
+	when it is read with the old key and saved into generation 2 with a new key,
+	then the new generation keeps the same id and verifies only with the new key`, func(t *testing.T) {
+		t.Parallel()
+
+		ctx := context.Background()
+		repo := blob.NewObjectRepository(blobtest.NewMemoryStore())
+		oldCodec := v3Codec(zstdCompression(t), newKey(t), metadataKey, 1)
+		newCodec := v3Codec(zstdCompression(t), newKey(t), metadataKey, 2)
+		hash := contentID(t, oldCodec, data)
+		require.Equal(t, hash, contentID(t, newCodec, data), "the id does not depend on the data key")
+		require.NoError(t, repo.Save(ctx, writeSource(t, data), hash, oldCodec))
+
+		reader, err := repo.ReadEncryptedObject(ctx, hash, oldCodec)
+		require.NoError(t, err)
+		require.NoError(t, repo.SaveRekeyedObject(ctx, hash, bytes.NewReader(readAll(t, reader)), newCodec))
+
+		require.NoError(t, repo.VerifyObject(ctx, hash, newCodec))
+		require.ErrorIs(t, repo.VerifyObject(ctx, hash, newCodec.WithDataKey(oldCodec.DataKey(), 2)), snapshot.ErrCorruptObject)
+	})
+
+	t.Run(`Given an encrypted format version 3 object,
+	when it is read for a rekey with another key,
+	then it returns a corrupt object error`, func(t *testing.T) {
+		t.Parallel()
+
+		ctx := context.Background()
+		repo := blob.NewObjectRepository(blobtest.NewMemoryStore())
+		codec := v3Codec(zstdCompression(t), newKey(t), metadataKey, 1)
+		hash := contentID(t, codec, data)
+		require.NoError(t, repo.Save(ctx, writeSource(t, data), hash, codec))
+
+		reader, err := repo.ReadEncryptedObject(ctx, hash, codec.WithDataKey(newKey(t), 1))
+		if err == nil {
+			_, err = io.ReadAll(reader)
+		}
+
+		require.ErrorIs(t, err, encrypt.ErrDecryptionFailed)
+	})
 }

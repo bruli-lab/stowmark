@@ -32,8 +32,8 @@ func TestCommandHandlers_InvalidCommand(t *testing.T) {
 		app.InitCommandName:            app.NewInit(nil, nil, nil, nil),
 		app.GenerateKeyCommandName:     app.NewGenerateKey(nil, nil),
 		app.RekeyKeyCommandName:        app.NewRekeyKey(nil, nil, nil, nil, nil),
-		app.RestoreFileCommandName:     app.NewRestoreFile(nil, nil, nil, nil, nil, nil),
-		app.RestoreSnapshotCommandName: app.NewRestoreSnapshot(nil, nil, nil, nil, nil, nil),
+		app.RestoreFileCommandName:     app.NewRestoreFile(nil, nil, nil, nil, nil, nil, nil),
+		app.RestoreSnapshotCommandName: app.NewRestoreSnapshot(nil, nil, nil, nil, nil, nil, nil),
 		app.RewrapKeyCommandName:       app.NewRewrapKey(nil, nil, nil, nil),
 		app.UnlockCommandName:          app.NewUnlock(nil),
 	}
@@ -56,8 +56,8 @@ func TestQueryHandlers_InvalidQuery(t *testing.T) {
 	t.Parallel()
 
 	handlers := map[string]cqs.QueryHandler{
-		app.ListQueryName:           app.NewSnapshotList(nil),
-		app.SnapshotGetQueryName:    app.NewManifestGet(nil),
+		app.ListQueryName:           app.NewSnapshotList(nil, nil, nil, nil),
+		app.SnapshotGetQueryName:    app.NewManifestGet(nil, nil, nil, nil),
 		app.VerifySnapshotQueryName: app.NewVerifySnapshot(nil, nil, nil, nil, nil, nil),
 	}
 
@@ -94,20 +94,20 @@ func TestSnapshotList_Handle(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		list           func(ctx context.Context) ([]snapshot.Manifest, error)
+		list           func(ctx context.Context, codec repository.Codec) ([]snapshot.Manifest, error)
 		expectedResult []snapshot.ManifestResume
 		expectedErr    error
 	}{
 		{
 			name: "and the repository fails, then it returns the repository error",
-			list: func(context.Context) ([]snapshot.Manifest, error) {
+			list: func(context.Context, repository.Codec) ([]snapshot.Manifest, error) {
 				return nil, errRepository
 			},
 			expectedErr: errRepository,
 		},
 		{
 			name: "and the repository has manifests, then it returns their resumes",
-			list: func(context.Context) ([]snapshot.Manifest, error) {
+			list: func(context.Context, repository.Codec) ([]snapshot.Manifest, error) {
 				return []snapshot.Manifest{manifestWithFiles(t, 10, 20)}, nil
 			},
 			expectedResult: []snapshot.ManifestResume{
@@ -122,9 +122,9 @@ func TestSnapshotList_Handle(t *testing.T) {
 			t.Parallel()
 
 			manifestRepo := &app.ManifestRepositoryMock{ListFunc: tt.list}
-			handler := app.NewSnapshotList(manifestRepo)
+			handler := app.NewSnapshotList(plainFolderRepository(t), manifestRepo, nil, nil)
 
-			result, err := handler.Handle(context.Background(), app.SnapshotListQuery{})
+			result, err := handler.Handle(context.Background(), app.SnapshotListQuery{RepositoryPath: "repo"})
 
 			if tt.expectedErr != nil {
 				require.ErrorIs(t, err, tt.expectedErr)
@@ -146,13 +146,13 @@ func TestManifestGet_Handle(t *testing.T) {
 
 		manifest := manifestWithFiles(t, 5)
 		manifestRepo := &app.ManifestRepositoryMock{
-			GetFunc: func(context.Context, string) (*snapshot.Manifest, error) {
+			GetFunc: func(context.Context, string, repository.Codec) (*snapshot.Manifest, error) {
 				return &manifest, nil
 			},
 		}
-		handler := app.NewManifestGet(manifestRepo)
+		handler := app.NewManifestGet(plainFolderRepository(t), manifestRepo, nil, nil)
 
-		result, err := handler.Handle(context.Background(), app.ManifestGetQuery{SnapshotID: manifest.ID()})
+		result, err := handler.Handle(context.Background(), app.ManifestGetQuery{RepositoryPath: "repo", SnapshotID: manifest.ID()})
 
 		require.NoError(t, err)
 		require.Equal(t, &manifest, result)
@@ -172,25 +172,25 @@ func TestRestoreSnapshot_Handle(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		getManifest   func(ctx context.Context, snapshotID string) (*snapshot.Manifest, error)
-		restoreObject func(ctx context.Context, comp *repository.Compression, obj *snapshot.File, key []byte, generation uint64) error
+		getManifest   func(ctx context.Context, snapshotID string, codec repository.Codec) (*snapshot.Manifest, error)
+		restoreObject func(ctx context.Context, obj *snapshot.File, codec repository.Codec) error
 		expectedEvent *expectedRestore
 		expectedErr   error
 	}{
 		{
 			name: "and the manifest cannot be read, then it returns the repository error",
-			getManifest: func(context.Context, string) (*snapshot.Manifest, error) {
+			getManifest: func(context.Context, string, repository.Codec) (*snapshot.Manifest, error) {
 				return nil, errRepository
 			},
 			expectedErr: errRepository,
 		},
 		{
 			name: "and one file fails, then it returns an unsuccessful event with the failed file",
-			getManifest: func(context.Context, string) (*snapshot.Manifest, error) {
+			getManifest: func(context.Context, string, repository.Codec) (*snapshot.Manifest, error) {
 				manifest := manifestWithFiles(t, 1, 2)
 				return &manifest, nil
 			},
-			restoreObject: func(_ context.Context, _ *repository.Compression, obj *snapshot.File, _ []byte, _ uint64) error {
+			restoreObject: func(_ context.Context, obj *snapshot.File, _ repository.Codec) error {
 				if obj.Size() == 2 {
 					return errRepository
 				}
@@ -203,11 +203,11 @@ func TestRestoreSnapshot_Handle(t *testing.T) {
 		},
 		{
 			name: "and every file is restored, then it returns a successful event",
-			getManifest: func(context.Context, string) (*snapshot.Manifest, error) {
+			getManifest: func(context.Context, string, repository.Codec) (*snapshot.Manifest, error) {
 				manifest := manifestWithFiles(t, 1, 2)
 				return &manifest, nil
 			},
-			restoreObject: func(context.Context, *repository.Compression, *snapshot.File, []byte, uint64) error {
+			restoreObject: func(context.Context, *snapshot.File, repository.Codec) error {
 				return nil
 			},
 			expectedEvent: &expectedRestore{
@@ -224,9 +224,9 @@ func TestRestoreSnapshot_Handle(t *testing.T) {
 
 			manifestRepo := &app.ManifestRepositoryMock{GetFunc: tt.getManifest}
 			objectRepo := &app.ObjectRepositoryMock{RestoreObjectFunc: tt.restoreObject}
-			handler := app.NewRestoreSnapshot(manifestRepo, objectRepo, nil, nil, nil, newUnlockedLocker())
+			handler := app.NewRestoreSnapshot(manifestRepo, objectRepo, &app.RestoreDestinationMock{}, plainFolderRepository(t), nil, nil, newUnlockedLocker())
 
-			events, err := handler.Handle(context.Background(), app.RestoreSnapshotCommand{SnapshotID: "20261113T222314Z-abcdef01"})
+			events, err := handler.Handle(context.Background(), app.RestoreSnapshotCommand{RepositoryPath: "repo", SnapshotID: "20261113T222314Z-abcdef01"})
 
 			if tt.expectedErr != nil {
 				require.ErrorIs(t, err, tt.expectedErr)

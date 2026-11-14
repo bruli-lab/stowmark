@@ -6,7 +6,6 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
-	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -15,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
+	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/fixtures"
 	"github.com/bruli-lab/stowmark/internal/infra/compression"
 	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
@@ -45,6 +45,14 @@ func compressedHash(t *testing.T, comp *repository.Compression, data []byte) str
 	require.NoError(t, encoder.Closer())
 
 	return hex.EncodeToString(hasher.Sum(nil))
+}
+
+func diskCodec(comp *repository.Compression, key []byte, generation uint64) repository.Codec {
+	codec := repository.NewCodec(repository.FormatVersionTwo, comp)
+	if key == nil {
+		return codec
+	}
+	return codec.WithDataKey(key, generation)
 }
 
 func newSymmetricKey(t *testing.T) []byte {
@@ -131,13 +139,13 @@ func TestObjectRepository_Save(t *testing.T) {
 			repo, err := newObjectRepository(repositoryPath)
 			require.NoError(t, err)
 
-			err = repo.Save(ctx, sourcePath, tt.hash, comp, key, 1)
+			err = repo.Save(ctx, sourcePath, tt.hash, diskCodec(comp, key, 1))
 
 			if tt.expectedErr != nil {
 				require.ErrorIs(t, err, tt.expectedErr)
 				require.Empty(t, repositoryFiles(t, repositoryPath))
 
-				exists, existsErr := repo.AlreadyExists(ctx, tt.hash, key, 1)
+				exists, existsErr := repo.AlreadyExists(ctx, tt.hash, diskCodec(nil, key, 1))
 				require.NoError(t, existsErr)
 				require.False(t, exists)
 				return
@@ -146,19 +154,11 @@ func TestObjectRepository_Save(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, repositoryFiles(t, repositoryPath), 1)
 
-			exists, err := repo.AlreadyExists(ctx, tt.hash, key, 1)
+			exists, err := repo.AlreadyExists(ctx, tt.hash, diskCodec(nil, key, 1))
 			require.NoError(t, err)
 			require.True(t, exists)
 
-			reader, err := repo.ReadObject(ctx, tt.hash, key, 1)
-			require.NoError(t, err)
-			defer func() {
-				_ = reader.Close()
-			}()
-			stored, err := io.ReadAll(reader)
-			require.NoError(t, err)
-			calculated := sha256.Sum256(stored)
-			require.Equal(t, tt.hash, hex.EncodeToString(calculated[:]))
+			require.NoError(t, repo.VerifyObject(ctx, tt.hash, diskCodec(nil, key, 1)))
 		})
 	}
 }
@@ -178,7 +178,7 @@ func TestObjectRepository_SaveChunk(t *testing.T) {
 		repo, err := newObjectRepository(repositoryPath)
 		require.NoError(t, err)
 
-		err = repo.SaveChunk(context.Background(), writeSourceFile(t, data), strings.Repeat("cd", sha256.Size), 0, 1024, comp, newSymmetricKey(t), 1)
+		err = repo.SaveChunk(context.Background(), writeSourceFile(t, data), *snapshot.NewChunk(strings.Repeat("cd", sha256.Size), 0, 1024), diskCodec(comp, newSymmetricKey(t), 1))
 
 		require.ErrorIs(t, err, object.ErrHashMismatch)
 		require.Empty(t, repositoryFiles(t, repositoryPath))
@@ -198,10 +198,10 @@ func TestObjectRepository_SaveChunk(t *testing.T) {
 		chunk := data[1024:2048]
 		hash := compressedHash(t, comp, chunk)
 
-		err = repo.SaveChunk(context.Background(), writeSourceFile(t, data), hash, 1024, 1024, comp, nil, 0)
+		err = repo.SaveChunk(context.Background(), writeSourceFile(t, data), *snapshot.NewChunk(hash, 1024, 1024), diskCodec(comp, nil, 0))
 
 		require.NoError(t, err)
-		exists, err := repo.AlreadyExists(context.Background(), hash, nil, 0)
+		exists, err := repo.AlreadyExists(context.Background(), hash, diskCodec(nil, nil, 0))
 		require.NoError(t, err)
 		require.True(t, exists)
 	})
@@ -224,7 +224,7 @@ func TestObjectRepository_ListEncryptedObjects(t *testing.T) {
 		repo, err := newObjectRepository(repositoryPath)
 		require.NoError(t, err)
 		key := newSymmetricKey(t)
-		require.NoError(t, repo.Save(ctx, writeSourceFile(t, data), hash, comp, key, 1))
+		require.NoError(t, repo.Save(ctx, writeSourceFile(t, data), hash, diskCodec(comp, key, 1)))
 
 		leftover := filepath.Join(repositoryPath, "objects", "encrypted", "1", hash[:2], "."+hash[2:]+".tmp-123")
 		require.NoError(t, os.WriteFile(leftover, []byte("partial"), 0o600))
@@ -285,11 +285,11 @@ func TestObjectRepository_RestoreObject(t *testing.T) {
 				key = newSymmetricKey(t)
 			}
 			hash := compressedHash(t, comp, original)
-			require.NoError(t, repo.Save(ctx, writeSourceFile(t, original), hash, comp, key, 1))
+			require.NoError(t, repo.Save(ctx, writeSourceFile(t, original), hash, diskCodec(comp, key, 1)))
 
 			if tt.tamper {
 				otherHash := compressedHash(t, comp, replaced)
-				require.NoError(t, repo.Save(ctx, writeSourceFile(t, replaced), otherHash, comp, key, 1))
+				require.NoError(t, repo.Save(ctx, writeSourceFile(t, replaced), otherHash, diskCodec(comp, key, 1)))
 				originalPath := objectPath(repositoryPath, hash, key, 1)
 				otherPath := objectPath(repositoryPath, otherHash, key, 1)
 				require.NoError(t, os.Rename(otherPath, originalPath))
@@ -303,7 +303,7 @@ func TestObjectRepository_RestoreObject(t *testing.T) {
 			size := int64(len(original))
 			file := fixtures.FileBuilder{Path: &destination, Size: &size, Hash: &hash}.Build()
 
-			err = repo.RestoreObject(ctx, comp, &file, key, 1)
+			err = repo.RestoreObject(ctx, &file, diskCodec(comp, key, 1))
 
 			if tt.expectedErr != nil {
 				require.ErrorIs(t, err, tt.expectedErr)

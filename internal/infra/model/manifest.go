@@ -16,10 +16,14 @@ type Chunk struct {
 }
 
 type File struct {
-	Path   string  `json:"path"`
-	Hash   string  `json:"hash,omitempty"`
-	Size   int64   `json:"size"`
-	Chunks []Chunk `json:"chunks,omitempty"`
+	Path    string     `json:"path"`
+	Kind    string     `json:"kind,omitempty"`
+	Hash    string     `json:"hash,omitempty"`
+	Size    int64      `json:"size"`
+	Chunks  []Chunk    `json:"chunks,omitempty"`
+	Target  string     `json:"target,omitempty"`
+	Mode    *uint32    `json:"mode,omitempty"`
+	ModTime *time.Time `json:"mtime,omitempty"`
 }
 
 type Manifest struct {
@@ -44,11 +48,11 @@ func BuildManifestDomain(data []byte, manifestPath string) (*snapshot.Manifest, 
 		len(mo.Files),
 	)
 	for i, modelFile := range mo.Files {
-		chunks := make([]snapshot.Chunk, len(modelFile.Chunks))
-		for j, chunk := range modelFile.Chunks {
-			chunks[j] = *snapshot.NewChunk(chunk.Hash, chunk.Offset, chunk.Size)
+		file, err := modelFile.domain()
+		if err != nil {
+			return nil, fmt.Errorf("failed to read manifest %q: %w", manifestPath, err)
 		}
-		snapshotFiles[i] = *snapshot.HydrateFile(modelFile.Path, modelFile.Hash, modelFile.Size, chunks)
+		snapshotFiles[i] = file
 	}
 	compType, err := repository.ParseCompressionType(mo.Compression.Type)
 	if err != nil {
@@ -84,6 +88,16 @@ func NewManifest(m *snapshot.Manifest) Manifest {
 			Hash:   f.Hash(),
 			Size:   f.Size(),
 			Chunks: chunks,
+			Target: f.Target(),
+		}
+		if f.Kind() != snapshot.RegularEntry {
+			files[i].Kind = string(f.Kind())
+		}
+		if metadata, ok := f.Metadata(); ok {
+			mode := unixMode(metadata.Mode())
+			modTime := metadata.ModTime()
+			files[i].Mode = &mode
+			files[i].ModTime = &modTime
 		}
 	}
 	man := Manifest{

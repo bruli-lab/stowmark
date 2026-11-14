@@ -47,7 +47,11 @@ func (h *Handler) PlanForget(ctx context.Context, policy RetentionPolicy) ([]Sna
 	if err != nil {
 		return nil, err
 	}
-	decisions, err := app.QueryResult[[]snapshot.RetentionDecision](h.repository.ForgetPlan().Handle(ctx, app.ForgetPlanQuery{Policy: retention}))
+	decisions, err := app.QueryResult[[]snapshot.RetentionDecision](h.repository.ForgetPlan().Handle(ctx, app.ForgetPlanQuery{
+		RepositoryPath: h.repository.Path(),
+		PrivateKeyPath: h.privateKey,
+		Policy:         retention,
+	}))
 	if err != nil {
 		return nil, err
 	}
@@ -78,6 +82,7 @@ func (h *Handler) Forget(ctx context.Context, policy RetentionPolicy) ([]Forgott
 	}
 	events, err := h.repository.ForgetSnapshots().Handle(ctx, app.ForgetSnapshotsCommand{
 		RepositoryPath: h.repository.Path(),
+		PrivateKeyPath: h.privateKey,
 		Policy:         retention,
 	})
 	if err != nil {

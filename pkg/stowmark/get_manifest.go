@@ -2,6 +2,7 @@ package stowmark
 
 import (
 	"context"
+	"io/fs"
 	"time"
 
 	"github.com/bruli-lab/stowmark/internal/app"
@@ -13,11 +14,23 @@ type Chunk struct {
 	Size   int64
 	Offset int64
 }
+type EntryKind string
+
+const (
+	RegularFile EntryKind = "file"
+	Directory   EntryKind = "dir"
+	Symlink     EntryKind = "symlink"
+)
+
 type ManifestFile struct {
-	Path   string
-	Hash   string
-	Size   int64
-	Chunks []Chunk
+	Path    string
+	Hash    string
+	Size    int64
+	Chunks  []Chunk
+	Kind    EntryKind
+	Target  string
+	Mode    fs.FileMode
+	ModTime time.Time
 }
 
 type Manifest struct {
@@ -28,7 +41,11 @@ type Manifest struct {
 }
 
 func (h *Handler) GetManifest(ctx context.Context, id string) (*Manifest, error) {
-	manifest, err := app.QueryResult[*snapshot.Manifest](h.repository.ManifestGet().Handle(ctx, app.ManifestGetQuery{SnapshotID: id}))
+	manifest, err := app.QueryResult[*snapshot.Manifest](h.repository.ManifestGet().Handle(ctx, app.ManifestGetQuery{
+		RepositoryPath: h.repository.Path(),
+		PrivateKeyPath: h.privateKey,
+		SnapshotID:     id,
+	}))
 	if err != nil {
 		return nil, err
 	}
@@ -48,6 +65,12 @@ func (h *Handler) GetManifest(ctx context.Context, id string) (*Manifest, error)
 			Hash:   file.Hash(),
 			Size:   file.Size(),
 			Chunks: chunks,
+			Kind:   EntryKind(file.Kind()),
+			Target: file.Target(),
+		}
+		if metadata, ok := file.Metadata(); ok {
+			files[i].Mode = metadata.Mode()
+			files[i].ModTime = metadata.ModTime()
 		}
 	}
 

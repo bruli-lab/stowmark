@@ -4,20 +4,39 @@ import (
 	"context"
 	"errors"
 
+	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/bootstrap"
 	"github.com/bruli-lab/stowmark/internal/config"
 )
 
+var ErrPrivateKeyRequired = app.ErrPrivateKeyRequired
+
 type Handler struct {
 	runtime    *bootstrap.Runtime
 	repository *bootstrap.Repository
+	privateKey *string
+}
+
+type Option func(*Handler)
+
+func WithPrivateKey(path string) Option {
+	return func(h *Handler) {
+		h.privateKey = &path
+	}
 }
 
 func (h *Handler) Close() error {
 	return errors.Join(h.repository.Close(), h.runtime.Close(context.Background()))
 }
 
-func NewHandler(ctx context.Context, repositoryPath string) (*Handler, error) {
+func (h *Handler) key(explicit *string) *string {
+	if explicit != nil {
+		return explicit
+	}
+	return h.privateKey
+}
+
+func NewHandler(ctx context.Context, repositoryPath string, options ...Option) (*Handler, error) {
 	runtime, err := bootstrap.NewRuntime(ctx, config.ProcessEnvironment())
 	if err != nil {
 		return nil, err
@@ -26,5 +45,9 @@ func NewHandler(ctx context.Context, repositoryPath string) (*Handler, error) {
 	if err != nil {
 		return nil, errors.Join(err, runtime.Close(ctx))
 	}
-	return &Handler{runtime: runtime, repository: repo}, nil
+	handler := &Handler{runtime: runtime, repository: repo}
+	for _, option := range options {
+		option(handler)
+	}
+	return handler, nil
 }

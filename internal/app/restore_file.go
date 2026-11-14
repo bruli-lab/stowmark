@@ -22,7 +22,7 @@ func (r RestoreFileCommand) Name() string {
 
 type RestoreFile struct {
 	manifestRepo ManifestRepository
-	objectRepo   ObjectRepository
+	restorer     restorer
 	keys         keyring
 	locker       *RepositoryLocker
 }
@@ -43,11 +43,11 @@ func (r *RestoreFile) Handle(ctx context.Context, cmd cqs.Command) ([]event.Even
 }
 
 func (r *RestoreFile) restore(ctx context.Context, co RestoreFileCommand) error {
-	key, err := r.keys.forRepository(ctx, co.RepositoryPath, co.PrivateKeyPath)
+	codec, err := r.keys.forRepository(ctx, co.RepositoryPath, co.PrivateKeyPath)
 	if err != nil {
 		return err
 	}
-	man, err := r.manifestRepo.Get(ctx, co.SnapshotID)
+	man, err := r.manifestRepo.Get(ctx, co.SnapshotID, codec)
 	if err != nil {
 		return err
 	}
@@ -55,12 +55,13 @@ func (r *RestoreFile) restore(ctx context.Context, co RestoreFileCommand) error 
 	if err != nil {
 		return err
 	}
-	return restoreFile(ctx, r.objectRepo, man, *file, co.DestinationPath, key)
+	return r.restorer.restoreEntry(ctx, man, *file, codec, co.DestinationPath)
 }
 
 func NewRestoreFile(
 	manifestRepo ManifestRepository,
 	objectRepo ObjectRepository,
+	destination RestoreDestination,
 	folderRepo FolderRepository,
 	asymmetricRepo AsymmetricKeyPairRepository,
 	symmetricRepo SymmetricKeyRepository,
@@ -68,7 +69,7 @@ func NewRestoreFile(
 ) *RestoreFile {
 	return &RestoreFile{
 		manifestRepo: manifestRepo,
-		objectRepo:   objectRepo,
+		restorer:     restorer{objectRepo: objectRepo, destination: destination},
 		keys:         newKeyring(folderRepo, asymmetricRepo, symmetricRepo),
 		locker:       locker,
 	}

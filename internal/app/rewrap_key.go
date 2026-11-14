@@ -47,13 +47,16 @@ func (r *RewrapKey) rewrap(ctx context.Context, co RewrapKeyCommand) (*encryptio
 	if encryptionConf == nil {
 		return nil, ErrRepositoryNotEncrypted
 	}
-	symmetricKey, err := r.keys.unwrap(ctx, co.OldPrivateKey, encryptionConf)
+	keys, err := r.keys.unwrap(ctx, co.OldPrivateKey, encryptionConf)
 	if err != nil {
 		return nil, err
 	}
-	defer clear(symmetricKey)
-	wrapped, err := r.keys.wrap(ctx, co.NewPublicKey, symmetricKey)
+	defer keys.clear()
+	wrapped, err := r.keys.wrap(ctx, co.NewPublicKey, keys.data)
 	if err != nil {
+		return nil, err
+	}
+	if err := r.keys.rewrapMetadataKey(ctx, co.NewPublicKey, keys.metadata, encryptionConf); err != nil {
 		return nil, err
 	}
 	encryptionConf.ChangeEncryptedKey(wrapped.encodedKey)

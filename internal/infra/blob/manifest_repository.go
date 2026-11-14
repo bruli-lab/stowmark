@@ -1,6 +1,7 @@
 package blob
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
+	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
 	"github.com/bruli-lab/stowmark/internal/infra/model"
 )
 
@@ -19,7 +21,12 @@ type ManifestRepository struct {
 	store Store
 }
 
-func (m ManifestRepository) Save(ctx context.Context, manifest *snapshot.Manifest) error {
+var (
+	ErrEncryptedManifest   = errors.New("the manifest is encrypted: the private key is required")
+	ErrUnencryptedManifest = errors.New("the manifest of an encrypted repository is not encrypted")
+)
+
+func (m ManifestRepository) Save(ctx context.Context, manifest *snapshot.Manifest, codec repository.Codec) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -36,12 +43,55 @@ func (m ManifestRepository) Save(ctx context.Context, manifest *snapshot.Manifes
 	data = append(data, '\n')
 
 	return m.store.Put(ctx, key, func(destination io.Writer) error {
-		_, err := destination.Write(data)
-		return err
+		if !codec.EncryptsMetadata() {
+			_, err := destination.Write(data)
+			return err
+		}
+		return encryptManifest(destination, data, manifest.ID(), codec)
 	})
 }
 
-func (m ManifestRepository) Get(ctx context.Context, snapshotID string) (*snapshot.Manifest, error) {
+func encryptManifest(destination io.Writer, data []byte, snapshotID string, codec repository.Codec) error {
+	key, err := encrypt.ManifestKey(codec.MetadataKey())
+	if err != nil {
+		return err
+	}
+	stream, err := encrypt.NewStreamWriter(destination, key, manifestAAD(snapshotID))
+	if err != nil {
+		return fmt.Errorf("encrypt manifest %q: %w", snapshotID, err)
+	}
+	if _, err := stream.Write(data); err != nil {
+		return fmt.Errorf("encrypt manifest %q: %w", snapshotID, err)
+	}
+	return stream.Close()
+}
+
+func decryptManifest(data []byte, snapshotID string, codec repository.Codec) ([]byte, error) {
+	if !codec.EncryptsMetadata() {
+		if encrypt.IsStream(data) {
+			return nil, ErrEncryptedManifest
+		}
+		return data, nil
+	}
+	if !encrypt.IsStream(data) {
+		return nil, ErrUnencryptedManifest
+	}
+	key, err := encrypt.ManifestKey(codec.MetadataKey())
+	if err != nil {
+		return nil, err
+	}
+	stream, err := encrypt.NewStreamReader(bytes.NewReader(data), key, manifestAAD(snapshotID))
+	if err != nil {
+		return nil, err
+	}
+	return io.ReadAll(stream)
+}
+
+func manifestAAD(snapshotID string) []byte {
+	return []byte("manifest/" + snapshotID)
+}
+
+func (m ManifestRepository) Get(ctx context.Context, snapshotID string, codec repository.Codec) (*snapshot.Manifest, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -51,10 +101,10 @@ func (m ManifestRepository) Get(ctx context.Context, snapshotID string) (*snapsh
 		return nil, err
 	}
 
-	return m.read(ctx, key)
+	return m.read(ctx, key, codec)
 }
 
-func (m ManifestRepository) List(ctx context.Context) ([]snapshot.Manifest, error) {
+func (m ManifestRepository) List(ctx context.Context, codec repository.Codec) ([]snapshot.Manifest, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -70,7 +120,7 @@ func (m ManifestRepository) List(ctx context.Context) ([]snapshot.Manifest, erro
 			continue
 		}
 
-		manifest, err := m.read(ctx, key)
+		manifest, err := m.read(ctx, key, codec)
 		if err != nil {
 			return nil, err
 		}
@@ -97,7 +147,7 @@ func (m ManifestRepository) ListIDs(ctx context.Context) ([]string, error) {
 	ids := make([]string, 0, len(keys))
 	for _, key := range keys {
 		if isManifestKey(key) {
-			ids = append(ids, strings.TrimSuffix(path.Base(key), manifestExtension))
+			ids = append(ids, manifestID(key))
 		}
 	}
 	slices.Sort(ids)
@@ -122,7 +172,7 @@ func (m ManifestRepository) Delete(ctx context.Context, snapshotID string) error
 	return nil
 }
 
-func (m ManifestRepository) read(ctx context.Context, key string) (*snapshot.Manifest, error) {
+func (m ManifestRepository) read(ctx context.Context, key string, codec repository.Codec) (*snapshot.Manifest, error) {
 	reader, err := m.store.Get(ctx, key)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
@@ -139,7 +189,16 @@ func (m ManifestRepository) read(ctx context.Context, key string) (*snapshot.Man
 		return nil, fmt.Errorf("read manifest %q: %w", key, err)
 	}
 
-	return model.BuildManifestDomain(data, key)
+	decrypted, err := decryptManifest(data, manifestID(key), codec)
+	if err != nil {
+		return nil, fmt.Errorf("read manifest %q: %w", key, err)
+	}
+
+	return model.BuildManifestDomain(decrypted, key)
+}
+
+func manifestID(key string) string {
+	return strings.TrimSuffix(path.Base(key), manifestExtension)
 }
 
 func NewManifestRepository(store Store) *ManifestRepository {

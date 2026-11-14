@@ -8,5 +8,6 @@ func Versions() map[string]int {
 	return map[string]int{
 		"1": repository.FormatVersionOne.Int(),
 		"2": repository.FormatVersionTwo.Int(),
+		"3": repository.FormatVersionThree.Int(),
 	}
 }

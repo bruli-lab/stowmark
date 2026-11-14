@@ -10,22 +10,31 @@ import (
 
 var ErrUnknownCalculator = errors.New("unknown calculator")
 
-type hashCalculator func(ctx context.Context, file snapshot.File, comp *repository.Compression) (snapshot.File, error)
+type hashCalculator func(ctx context.Context, file snapshot.File, codec repository.Codec) (snapshot.File, error)
 
 func newHashCalculator(sourceRepo SourceRepository, version repository.FormatVersion) (hashCalculator, error) {
 	switch version {
 	case repository.FormatVersionOne:
-		return wholeFileHashCalculator(sourceRepo), nil
-	case repository.FormatVersionTwo:
-		return chunkedHashCalculator(sourceRepo), nil
+		return contentOnly(wholeFileHashCalculator(sourceRepo)), nil
+	case repository.FormatVersionTwo, repository.FormatVersionThree:
+		return contentOnly(chunkedHashCalculator(sourceRepo)), nil
 	default:
 		return nil, ErrUnknownCalculator
 	}
 }
 
+func contentOnly(calculate hashCalculator) hashCalculator {
+	return func(ctx context.Context, file snapshot.File, codec repository.Codec) (snapshot.File, error) {
+		if !file.HasContent() {
+			return file, nil
+		}
+		return calculate(ctx, file, codec)
+	}
+}
+
 func wholeFileHashCalculator(sourceRepo SourceRepository) hashCalculator {
-	return func(ctx context.Context, file snapshot.File, comp *repository.Compression) (snapshot.File, error) {
-		hash, err := sourceRepo.CalculateHash(ctx, file.Path(), comp)
+	return func(ctx context.Context, file snapshot.File, codec repository.Codec) (snapshot.File, error) {
+		hash, err := sourceRepo.CalculateHash(ctx, file.Path(), codec)
 		if err != nil {
 			return snapshot.File{}, err
 		}
@@ -34,15 +43,15 @@ func wholeFileHashCalculator(sourceRepo SourceRepository) hashCalculator {
 }
 
 func chunkedHashCalculator(sourceRepo SourceRepository) hashCalculator {
-	return func(ctx context.Context, file snapshot.File, comp *repository.Compression) (snapshot.File, error) {
+	return func(ctx context.Context, file snapshot.File, codec repository.Codec) (snapshot.File, error) {
 		if file.Size() >= snapshot.ChunkThreshold {
-			chunks, err := sourceRepo.CalculateChunks(ctx, file.Path(), snapshot.ChunkSize, comp)
+			chunks, err := sourceRepo.CalculateChunks(ctx, file.Path(), snapshot.ChunkSize, codec)
 			if err != nil {
 				return snapshot.File{}, err
 			}
 			return file.WithChunks(chunks), nil
 		}
-		hash, err := sourceRepo.CalculateHash(ctx, file.Path(), comp)
+		hash, err := sourceRepo.CalculateHash(ctx, file.Path(), codec)
 		if err != nil {
 			return snapshot.File{}, err
 		}

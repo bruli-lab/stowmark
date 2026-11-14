@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/localfile"
 )
@@ -25,12 +24,9 @@ var (
 
 type PartReader func(ctx context.Context, hash string, destination io.Writer) (int64, error)
 
-func RestoreFile(ctx context.Context, comp *repository.Compression, file *snapshot.File, readPart PartReader) error {
+func RestoreFile(ctx context.Context, file *snapshot.File, readPart PartReader) error {
 	if err := ctx.Err(); err != nil {
 		return err
-	}
-	if comp == nil {
-		return ErrCompressionRequired
 	}
 	if file == nil {
 		return ErrFileRequired

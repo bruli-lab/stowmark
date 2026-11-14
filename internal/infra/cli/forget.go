@@ -17,6 +17,7 @@ import (
 func newForgetCommand() *cobra.Command {
 	var (
 		repositoryPath string
+		privateKeyPath string
 		rules          snapshot.RetentionRules
 		within         string
 		dryRun         bool
@@ -39,12 +40,14 @@ func newForgetCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			privateKey := optionalPath(privateKeyPath)
 			return withRepository(cmd, repositoryPath, func(repo *bootstrap.Repository) error {
 				if dryRun {
-					return runForgetPlan(cmd.Context(), cmd.OutOrStdout(), repo, policy)
+					return runForgetPlan(cmd.Context(), cmd.OutOrStdout(), repo, policy, privateKey)
 				}
 				events, err := repo.ForgetSnapshots().Handle(cmd.Context(), app.ForgetSnapshotsCommand{
 					RepositoryPath: repo.Path(),
+					PrivateKeyPath: privateKey,
 					Policy:         policy,
 				})
 				if err != nil {
@@ -59,12 +62,13 @@ func newForgetCommand() *cobra.Command {
 				if _, err := fmt.Fprintln(cmd.OutOrStdout()); err != nil {
 					return err
 				}
-				return runPrune(cmd.Context(), cmd.OutOrStdout(), repo)
+				return runPrune(cmd.Context(), cmd.OutOrStdout(), repo, privateKey)
 			})
 		},
 	}
 
 	cmd.Flags().StringVar(&repositoryPath, "repo", "", "path to the Stowmark repository")
+	cmd.Flags().StringVar(&privateKeyPath, "private-key", "", metadataPrivateKeyUsage)
 	cmd.Flags().IntVar(&rules.Last, "keep-last", 0, "keep the N most recent snapshots")
 	cmd.Flags().IntVar(&rules.Daily, "keep-daily", 0, "keep the most recent snapshot of the last N days that have snapshots")
 	cmd.Flags().IntVar(&rules.Weekly, "keep-weekly", 0, "keep the most recent snapshot of the last N weeks that have snapshots")
@@ -79,8 +83,12 @@ func newForgetCommand() *cobra.Command {
 	return cmd
 }
 
-func runForgetPlan(ctx context.Context, output io.Writer, repo *bootstrap.Repository, policy *snapshot.RetentionPolicy) error {
-	decisions, err := app.QueryResult[[]snapshot.RetentionDecision](repo.ForgetPlan().Handle(ctx, app.ForgetPlanQuery{Policy: policy}))
+func runForgetPlan(ctx context.Context, output io.Writer, repo *bootstrap.Repository, policy *snapshot.RetentionPolicy, privateKey *string) error {
+	decisions, err := app.QueryResult[[]snapshot.RetentionDecision](repo.ForgetPlan().Handle(ctx, app.ForgetPlanQuery{
+		RepositoryPath: repo.Path(),
+		PrivateKeyPath: privateKey,
+		Policy:         policy,
+	}))
 	if err != nil {
 		return fmt.Errorf("failed to plan forget: %w", err)
 	}

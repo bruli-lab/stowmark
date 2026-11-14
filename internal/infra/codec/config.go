@@ -22,6 +22,7 @@ func MarshalConfig(ctx context.Context, c *repository.Config) ([]byte, error) {
 			EncryptedKey:         c.Encryption().EncryptedKey(),
 			PublicKeyFingerprint: c.Encryption().PublicKeyFingerprint(),
 			Generation:           c.Encryption().Generation(),
+			EncryptedMetadataKey: c.Encryption().EncryptedMetadataKey(),
 		}
 	}
 

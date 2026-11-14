@@ -10,8 +10,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const metadataPrivateKeyUsage = "private key, required to read an encrypted format version 3 repository"
+
 func newSnapshotListCommand() *cobra.Command {
-	var repositoryPath string
+	var (
+		repositoryPath string
+		privateKeyPath string
+	)
 
 	cmd := &cobra.Command{
 		Use:   "list",
@@ -19,7 +24,10 @@ func newSnapshotListCommand() *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return withRepository(cmd, repositoryPath, func(repo *bootstrap.Repository) error {
-				snapshots, err := app.QueryResult[[]snapshot.ManifestResume](repo.SnapshotList().Handle(cmd.Context(), app.SnapshotListQuery{}))
+				snapshots, err := app.QueryResult[[]snapshot.ManifestResume](repo.SnapshotList().Handle(cmd.Context(), app.SnapshotListQuery{
+					RepositoryPath: repo.Path(),
+					PrivateKeyPath: optionalPath(privateKeyPath),
+				}))
 				if err != nil {
 					return err
 				}
@@ -49,6 +57,7 @@ func newSnapshotListCommand() *cobra.Command {
 		"",
 		"path to the Stowmark repository",
 	)
+	cmd.Flags().StringVar(&privateKeyPath, "private-key", "", metadataPrivateKeyUsage)
 
 	_ = cmd.MarkFlagRequired("repo")
 

@@ -14,6 +14,7 @@ import (
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/disk"
 	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
+	"github.com/bruli-lab/stowmark/internal/infra/localfile"
 	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 	observabilityinfra "github.com/bruli-lab/stowmark/internal/infra/observability"
 )
@@ -43,6 +44,7 @@ type Runtime struct {
 	symmetric     app.SymmetricKeyRepository
 	keyGenerator  app.KeyGenerator
 	source        app.SourceRepository
+	destination   app.RestoreDestination
 }
 
 func NewRuntime(ctx context.Context, environment map[string]string) (*Runtime, error) {
@@ -79,6 +81,7 @@ func NewRuntime(ctx context.Context, environment map[string]string) (*Runtime, e
 		symmetric:     encrypt.NewSymmetricRepository(),
 		keyGenerator:  encrypt.NewRSAKeyGenerator(),
 		source:        disk.NewSourceRepository(),
+		destination:   localfile.NewRestoreDestination(),
 	}, nil
 }
 

@@ -251,10 +251,10 @@ var _ SourceRepository = &SourceRepositoryMock{}
 //
 //		// make and configure a mocked SourceRepository
 //		mockedSourceRepository := &SourceRepositoryMock{
-//			CalculateChunksFunc: func(ctx context.Context, filePath string, size int64, comp *repository.Compression) ([]snapshot.Chunk, error) {
+//			CalculateChunksFunc: func(ctx context.Context, filePath string, size int64, codec repository.Codec) ([]snapshot.Chunk, error) {
 //				panic("mock out the CalculateChunks method")
 //			},
-//			CalculateHashFunc: func(ctx context.Context, filePath string, comp *repository.Compression) (string, error) {
+//			CalculateHashFunc: func(ctx context.Context, filePath string, codec repository.Codec) (string, error) {
 //				panic("mock out the CalculateHash method")
 //			},
 //			ExploreFunc: func(ctx context.Context, sourcePath string, rules *snapshot.ExcludeRules) (*snapshot.Source, error) {
@@ -271,10 +271,10 @@ var _ SourceRepository = &SourceRepositoryMock{}
 //	}
 type SourceRepositoryMock struct {
 	// CalculateChunksFunc mocks the CalculateChunks method.
-	CalculateChunksFunc func(ctx context.Context, filePath string, size int64, comp *repository.Compression) ([]snapshot.Chunk, error)
+	CalculateChunksFunc func(ctx context.Context, filePath string, size int64, codec repository.Codec) ([]snapshot.Chunk, error)
 
 	// CalculateHashFunc mocks the CalculateHash method.
-	CalculateHashFunc func(ctx context.Context, filePath string, comp *repository.Compression) (string, error)
+	CalculateHashFunc func(ctx context.Context, filePath string, codec repository.Codec) (string, error)
 
 	// ExploreFunc mocks the Explore method.
 	ExploreFunc func(ctx context.Context, sourcePath string, rules *snapshot.ExcludeRules) (*snapshot.Source, error)
@@ -292,8 +292,8 @@ type SourceRepositoryMock struct {
 			FilePath string
 			// Size is the size argument value.
 			Size int64
-			// Comp is the comp argument value.
-			Comp *repository.Compression
+			// Codec is the codec argument value.
+			Codec repository.Codec
 		}
 		// CalculateHash holds details about calls to the CalculateHash method.
 		CalculateHash []struct {
@@ -301,8 +301,8 @@ type SourceRepositoryMock struct {
 			Ctx context.Context
 			// FilePath is the filePath argument value.
 			FilePath string
-			// Comp is the comp argument value.
-			Comp *repository.Compression
+			// Codec is the codec argument value.
+			Codec repository.Codec
 		}
 		// Explore holds details about calls to the Explore method.
 		Explore []struct {
@@ -328,7 +328,7 @@ type SourceRepositoryMock struct {
 }
 
 // CalculateChunks calls CalculateChunksFunc.
-func (mock *SourceRepositoryMock) CalculateChunks(ctx context.Context, filePath string, size int64, comp *repository.Compression) ([]snapshot.Chunk, error) {
+func (mock *SourceRepositoryMock) CalculateChunks(ctx context.Context, filePath string, size int64, codec repository.Codec) ([]snapshot.Chunk, error) {
 	if mock.CalculateChunksFunc == nil {
 		panic("SourceRepositoryMock.CalculateChunksFunc: method is nil but SourceRepository.CalculateChunks was just called")
 	}
@@ -336,17 +336,17 @@ func (mock *SourceRepositoryMock) CalculateChunks(ctx context.Context, filePath 
 		Ctx      context.Context
 		FilePath string
 		Size     int64
-		Comp     *repository.Compression
+		Codec    repository.Codec
 	}{
 		Ctx:      ctx,
 		FilePath: filePath,
 		Size:     size,
-		Comp:     comp,
+		Codec:    codec,
 	}
 	mock.lockCalculateChunks.Lock()
 	mock.calls.CalculateChunks = append(mock.calls.CalculateChunks, callInfo)
 	mock.lockCalculateChunks.Unlock()
-	return mock.CalculateChunksFunc(ctx, filePath, size, comp)
+	return mock.CalculateChunksFunc(ctx, filePath, size, codec)
 }
 
 // CalculateChunksCalls gets all the calls that were made to CalculateChunks.
@@ -357,13 +357,13 @@ func (mock *SourceRepositoryMock) CalculateChunksCalls() []struct {
 	Ctx      context.Context
 	FilePath string
 	Size     int64
-	Comp     *repository.Compression
+	Codec    repository.Codec
 } {
 	var calls []struct {
 		Ctx      context.Context
 		FilePath string
 		Size     int64
-		Comp     *repository.Compression
+		Codec    repository.Codec
 	}
 	mock.lockCalculateChunks.RLock()
 	calls = mock.calls.CalculateChunks
@@ -372,23 +372,23 @@ func (mock *SourceRepositoryMock) CalculateChunksCalls() []struct {
 }
 
 // CalculateHash calls CalculateHashFunc.
-func (mock *SourceRepositoryMock) CalculateHash(ctx context.Context, filePath string, comp *repository.Compression) (string, error) {
+func (mock *SourceRepositoryMock) CalculateHash(ctx context.Context, filePath string, codec repository.Codec) (string, error) {
 	if mock.CalculateHashFunc == nil {
 		panic("SourceRepositoryMock.CalculateHashFunc: method is nil but SourceRepository.CalculateHash was just called")
 	}
 	callInfo := struct {
 		Ctx      context.Context
 		FilePath string
-		Comp     *repository.Compression
+		Codec    repository.Codec
 	}{
 		Ctx:      ctx,
 		FilePath: filePath,
-		Comp:     comp,
+		Codec:    codec,
 	}
 	mock.lockCalculateHash.Lock()
 	mock.calls.CalculateHash = append(mock.calls.CalculateHash, callInfo)
 	mock.lockCalculateHash.Unlock()
-	return mock.CalculateHashFunc(ctx, filePath, comp)
+	return mock.CalculateHashFunc(ctx, filePath, codec)
 }
 
 // CalculateHashCalls gets all the calls that were made to CalculateHash.
@@ -398,12 +398,12 @@ func (mock *SourceRepositoryMock) CalculateHash(ctx context.Context, filePath st
 func (mock *SourceRepositoryMock) CalculateHashCalls() []struct {
 	Ctx      context.Context
 	FilePath string
-	Comp     *repository.Compression
+	Codec    repository.Codec
 } {
 	var calls []struct {
 		Ctx      context.Context
 		FilePath string
-		Comp     *repository.Compression
+		Codec    repository.Codec
 	}
 	mock.lockCalculateHash.RLock()
 	calls = mock.calls.CalculateHash
@@ -500,16 +500,16 @@ var _ ManifestRepository = &ManifestRepositoryMock{}
 //			DeleteFunc: func(ctx context.Context, snapshotID string) error {
 //				panic("mock out the Delete method")
 //			},
-//			GetFunc: func(ctx context.Context, snapshotID string) (*snapshot.Manifest, error) {
+//			GetFunc: func(ctx context.Context, snapshotID string, codec repository.Codec) (*snapshot.Manifest, error) {
 //				panic("mock out the Get method")
 //			},
-//			ListFunc: func(ctx context.Context) ([]snapshot.Manifest, error) {
+//			ListFunc: func(ctx context.Context, codec repository.Codec) ([]snapshot.Manifest, error) {
 //				panic("mock out the List method")
 //			},
 //			ListIDsFunc: func(ctx context.Context) ([]string, error) {
 //				panic("mock out the ListIDs method")
 //			},
-//			SaveFunc: func(ctx context.Context, m *snapshot.Manifest) error {
+//			SaveFunc: func(ctx context.Context, m *snapshot.Manifest, codec repository.Codec) error {
 //				panic("mock out the Save method")
 //			},
 //		}
@@ -523,16 +523,16 @@ type ManifestRepositoryMock struct {
 	DeleteFunc func(ctx context.Context, snapshotID string) error
 
 	// GetFunc mocks the Get method.
-	GetFunc func(ctx context.Context, snapshotID string) (*snapshot.Manifest, error)
+	GetFunc func(ctx context.Context, snapshotID string, codec repository.Codec) (*snapshot.Manifest, error)
 
 	// ListFunc mocks the List method.
-	ListFunc func(ctx context.Context) ([]snapshot.Manifest, error)
+	ListFunc func(ctx context.Context, codec repository.Codec) ([]snapshot.Manifest, error)
 
 	// ListIDsFunc mocks the ListIDs method.
 	ListIDsFunc func(ctx context.Context) ([]string, error)
 
 	// SaveFunc mocks the Save method.
-	SaveFunc func(ctx context.Context, m *snapshot.Manifest) error
+	SaveFunc func(ctx context.Context, m *snapshot.Manifest, codec repository.Codec) error
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -549,11 +549,15 @@ type ManifestRepositoryMock struct {
 			Ctx context.Context
 			// SnapshotID is the snapshotID argument value.
 			SnapshotID string
+			// Codec is the codec argument value.
+			Codec repository.Codec
 		}
 		// List holds details about calls to the List method.
 		List []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
+			// Codec is the codec argument value.
+			Codec repository.Codec
 		}
 		// ListIDs holds details about calls to the ListIDs method.
 		ListIDs []struct {
@@ -566,6 +570,8 @@ type ManifestRepositoryMock struct {
 			Ctx context.Context
 			// M is the m argument value.
 			M *snapshot.Manifest
+			// Codec is the codec argument value.
+			Codec repository.Codec
 		}
 	}
 	lockDelete  sync.RWMutex
@@ -612,21 +618,23 @@ func (mock *ManifestRepositoryMock) DeleteCalls() []struct {
 }
 
 // Get calls GetFunc.
-func (mock *ManifestRepositoryMock) Get(ctx context.Context, snapshotID string) (*snapshot.Manifest, error) {
+func (mock *ManifestRepositoryMock) Get(ctx context.Context, snapshotID string, codec repository.Codec) (*snapshot.Manifest, error) {
 	if mock.GetFunc == nil {
 		panic("ManifestRepositoryMock.GetFunc: method is nil but ManifestRepository.Get was just called")
 	}
 	callInfo := struct {
 		Ctx        context.Context
 		SnapshotID string
+		Codec      repository.Codec
 	}{
 		Ctx:        ctx,
 		SnapshotID: snapshotID,
+		Codec:      codec,
 	}
 	mock.lockGet.Lock()
 	mock.calls.Get = append(mock.calls.Get, callInfo)
 	mock.lockGet.Unlock()
-	return mock.GetFunc(ctx, snapshotID)
+	return mock.GetFunc(ctx, snapshotID, codec)
 }
 
 // GetCalls gets all the calls that were made to Get.
@@ -636,10 +644,12 @@ func (mock *ManifestRepositoryMock) Get(ctx context.Context, snapshotID string) 
 func (mock *ManifestRepositoryMock) GetCalls() []struct {
 	Ctx        context.Context
 	SnapshotID string
+	Codec      repository.Codec
 } {
 	var calls []struct {
 		Ctx        context.Context
 		SnapshotID string
+		Codec      repository.Codec
 	}
 	mock.lockGet.RLock()
 	calls = mock.calls.Get
@@ -648,19 +658,21 @@ func (mock *ManifestRepositoryMock) GetCalls() []struct {
 }
 
 // List calls ListFunc.
-func (mock *ManifestRepositoryMock) List(ctx context.Context) ([]snapshot.Manifest, error) {
+func (mock *ManifestRepositoryMock) List(ctx context.Context, codec repository.Codec) ([]snapshot.Manifest, error) {
 	if mock.ListFunc == nil {
 		panic("ManifestRepositoryMock.ListFunc: method is nil but ManifestRepository.List was just called")
 	}
 	callInfo := struct {
-		Ctx context.Context
+		Ctx   context.Context
+		Codec repository.Codec
 	}{
-		Ctx: ctx,
+		Ctx:   ctx,
+		Codec: codec,
 	}
 	mock.lockList.Lock()
 	mock.calls.List = append(mock.calls.List, callInfo)
 	mock.lockList.Unlock()
-	return mock.ListFunc(ctx)
+	return mock.ListFunc(ctx, codec)
 }
 
 // ListCalls gets all the calls that were made to List.
@@ -668,10 +680,12 @@ func (mock *ManifestRepositoryMock) List(ctx context.Context) ([]snapshot.Manife
 //
 //	len(mockedManifestRepository.ListCalls())
 func (mock *ManifestRepositoryMock) ListCalls() []struct {
-	Ctx context.Context
+	Ctx   context.Context
+	Codec repository.Codec
 } {
 	var calls []struct {
-		Ctx context.Context
+		Ctx   context.Context
+		Codec repository.Codec
 	}
 	mock.lockList.RLock()
 	calls = mock.calls.List
@@ -712,21 +726,23 @@ func (mock *ManifestRepositoryMock) ListIDsCalls() []struct {
 }
 
 // Save calls SaveFunc.
-func (mock *ManifestRepositoryMock) Save(ctx context.Context, m *snapshot.Manifest) error {
+func (mock *ManifestRepositoryMock) Save(ctx context.Context, m *snapshot.Manifest, codec repository.Codec) error {
 	if mock.SaveFunc == nil {
 		panic("ManifestRepositoryMock.SaveFunc: method is nil but ManifestRepository.Save was just called")
 	}
 	callInfo := struct {
-		Ctx context.Context
-		M   *snapshot.Manifest
+		Ctx   context.Context
+		M     *snapshot.Manifest
+		Codec repository.Codec
 	}{
-		Ctx: ctx,
-		M:   m,
+		Ctx:   ctx,
+		M:     m,
+		Codec: codec,
 	}
 	mock.lockSave.Lock()
 	mock.calls.Save = append(mock.calls.Save, callInfo)
 	mock.lockSave.Unlock()
-	return mock.SaveFunc(ctx, m)
+	return mock.SaveFunc(ctx, m, codec)
 }
 
 // SaveCalls gets all the calls that were made to Save.
@@ -734,12 +750,14 @@ func (mock *ManifestRepositoryMock) Save(ctx context.Context, m *snapshot.Manife
 //
 //	len(mockedManifestRepository.SaveCalls())
 func (mock *ManifestRepositoryMock) SaveCalls() []struct {
-	Ctx context.Context
-	M   *snapshot.Manifest
+	Ctx   context.Context
+	M     *snapshot.Manifest
+	Codec repository.Codec
 } {
 	var calls []struct {
-		Ctx context.Context
-		M   *snapshot.Manifest
+		Ctx   context.Context
+		M     *snapshot.Manifest
+		Codec repository.Codec
 	}
 	mock.lockSave.RLock()
 	calls = mock.calls.Save
@@ -757,7 +775,7 @@ var _ ObjectRepository = &ObjectRepositoryMock{}
 //
 //		// make and configure a mocked ObjectRepository
 //		mockedObjectRepository := &ObjectRepositoryMock{
-//			AlreadyExistsFunc: func(ctx context.Context, hash string, symmetricKey []byte, generation uint64) (bool, error) {
+//			AlreadyExistsFunc: func(ctx context.Context, hash string, codec repository.Codec) (bool, error) {
 //				panic("mock out the AlreadyExists method")
 //			},
 //			DeleteObjectFunc: func(ctx context.Context, hash string, encrypted bool, generation uint64) error {
@@ -769,17 +787,17 @@ var _ ObjectRepository = &ObjectRepositoryMock{}
 //			ListObjectsFunc: func(ctx context.Context, encrypted bool, generation uint64) ([]string, error) {
 //				panic("mock out the ListObjects method")
 //			},
-//			ReadObjectFunc: func(ctx context.Context, hash string, symmetricKey []byte, generation uint64) (io.ReadCloser, error) {
-//				panic("mock out the ReadObject method")
-//			},
-//			RestoreObjectFunc: func(ctx context.Context, comp *repository.Compression, obj *snapshot.File, symmetricKey []byte, generation uint64) error {
+//			RestoreObjectFunc: func(ctx context.Context, file *snapshot.File, codec repository.Codec) error {
 //				panic("mock out the RestoreObject method")
 //			},
-//			SaveFunc: func(ctx context.Context, filePath string, hash string, comp *repository.Compression, symmetricKey []byte, generation uint64) error {
+//			SaveFunc: func(ctx context.Context, filePath string, hash string, codec repository.Codec) error {
 //				panic("mock out the Save method")
 //			},
-//			SaveChunkFunc: func(ctx context.Context, filePath string, hash string, offset int64, size int64, comp *repository.Compression, key []byte, generation uint64) error {
+//			SaveChunkFunc: func(ctx context.Context, filePath string, chunk snapshot.Chunk, codec repository.Codec) error {
 //				panic("mock out the SaveChunk method")
+//			},
+//			VerifyObjectFunc: func(ctx context.Context, hash string, codec repository.Codec) error {
+//				panic("mock out the VerifyObject method")
 //			},
 //		}
 //
@@ -789,7 +807,7 @@ var _ ObjectRepository = &ObjectRepositoryMock{}
 //	}
 type ObjectRepositoryMock struct {
 	// AlreadyExistsFunc mocks the AlreadyExists method.
-	AlreadyExistsFunc func(ctx context.Context, hash string, symmetricKey []byte, generation uint64) (bool, error)
+	AlreadyExistsFunc func(ctx context.Context, hash string, codec repository.Codec) (bool, error)
 
 	// DeleteObjectFunc mocks the DeleteObject method.
 	DeleteObjectFunc func(ctx context.Context, hash string, encrypted bool, generation uint64) error
@@ -800,17 +818,17 @@ type ObjectRepositoryMock struct {
 	// ListObjectsFunc mocks the ListObjects method.
 	ListObjectsFunc func(ctx context.Context, encrypted bool, generation uint64) ([]string, error)
 
-	// ReadObjectFunc mocks the ReadObject method.
-	ReadObjectFunc func(ctx context.Context, hash string, symmetricKey []byte, generation uint64) (io.ReadCloser, error)
-
 	// RestoreObjectFunc mocks the RestoreObject method.
-	RestoreObjectFunc func(ctx context.Context, comp *repository.Compression, obj *snapshot.File, symmetricKey []byte, generation uint64) error
+	RestoreObjectFunc func(ctx context.Context, file *snapshot.File, codec repository.Codec) error
 
 	// SaveFunc mocks the Save method.
-	SaveFunc func(ctx context.Context, filePath string, hash string, comp *repository.Compression, symmetricKey []byte, generation uint64) error
+	SaveFunc func(ctx context.Context, filePath string, hash string, codec repository.Codec) error
 
 	// SaveChunkFunc mocks the SaveChunk method.
-	SaveChunkFunc func(ctx context.Context, filePath string, hash string, offset int64, size int64, comp *repository.Compression, key []byte, generation uint64) error
+	SaveChunkFunc func(ctx context.Context, filePath string, chunk snapshot.Chunk, codec repository.Codec) error
+
+	// VerifyObjectFunc mocks the VerifyObject method.
+	VerifyObjectFunc func(ctx context.Context, hash string, codec repository.Codec) error
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -820,10 +838,8 @@ type ObjectRepositoryMock struct {
 			Ctx context.Context
 			// Hash is the hash argument value.
 			Hash string
-			// SymmetricKey is the symmetricKey argument value.
-			SymmetricKey []byte
-			// Generation is the generation argument value.
-			Generation uint64
+			// Codec is the codec argument value.
+			Codec repository.Codec
 		}
 		// DeleteObject holds details about calls to the DeleteObject method.
 		DeleteObject []struct {
@@ -850,29 +866,14 @@ type ObjectRepositoryMock struct {
 			// Generation is the generation argument value.
 			Generation uint64
 		}
-		// ReadObject holds details about calls to the ReadObject method.
-		ReadObject []struct {
-			// Ctx is the ctx argument value.
-			Ctx context.Context
-			// Hash is the hash argument value.
-			Hash string
-			// SymmetricKey is the symmetricKey argument value.
-			SymmetricKey []byte
-			// Generation is the generation argument value.
-			Generation uint64
-		}
 		// RestoreObject holds details about calls to the RestoreObject method.
 		RestoreObject []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// Comp is the comp argument value.
-			Comp *repository.Compression
-			// Obj is the obj argument value.
-			Obj *snapshot.File
-			// SymmetricKey is the symmetricKey argument value.
-			SymmetricKey []byte
-			// Generation is the generation argument value.
-			Generation uint64
+			// File is the file argument value.
+			File *snapshot.File
+			// Codec is the codec argument value.
+			Codec repository.Codec
 		}
 		// Save holds details about calls to the Save method.
 		Save []struct {
@@ -882,12 +883,8 @@ type ObjectRepositoryMock struct {
 			FilePath string
 			// Hash is the hash argument value.
 			Hash string
-			// Comp is the comp argument value.
-			Comp *repository.Compression
-			// SymmetricKey is the symmetricKey argument value.
-			SymmetricKey []byte
-			// Generation is the generation argument value.
-			Generation uint64
+			// Codec is the codec argument value.
+			Codec repository.Codec
 		}
 		// SaveChunk holds details about calls to the SaveChunk method.
 		SaveChunk []struct {
@@ -895,50 +892,49 @@ type ObjectRepositoryMock struct {
 			Ctx context.Context
 			// FilePath is the filePath argument value.
 			FilePath string
+			// Chunk is the chunk argument value.
+			Chunk snapshot.Chunk
+			// Codec is the codec argument value.
+			Codec repository.Codec
+		}
+		// VerifyObject holds details about calls to the VerifyObject method.
+		VerifyObject []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
 			// Hash is the hash argument value.
 			Hash string
-			// Offset is the offset argument value.
-			Offset int64
-			// Size is the size argument value.
-			Size int64
-			// Comp is the comp argument value.
-			Comp *repository.Compression
-			// Key is the key argument value.
-			Key []byte
-			// Generation is the generation argument value.
-			Generation uint64
+			// Codec is the codec argument value.
+			Codec repository.Codec
 		}
 	}
 	lockAlreadyExists          sync.RWMutex
 	lockDeleteObject           sync.RWMutex
 	lockDeleteTemporaryObjects sync.RWMutex
 	lockListObjects            sync.RWMutex
-	lockReadObject             sync.RWMutex
 	lockRestoreObject          sync.RWMutex
 	lockSave                   sync.RWMutex
 	lockSaveChunk              sync.RWMutex
+	lockVerifyObject           sync.RWMutex
 }
 
 // AlreadyExists calls AlreadyExistsFunc.
-func (mock *ObjectRepositoryMock) AlreadyExists(ctx context.Context, hash string, symmetricKey []byte, generation uint64) (bool, error) {
+func (mock *ObjectRepositoryMock) AlreadyExists(ctx context.Context, hash string, codec repository.Codec) (bool, error) {
 	if mock.AlreadyExistsFunc == nil {
 		panic("ObjectRepositoryMock.AlreadyExistsFunc: method is nil but ObjectRepository.AlreadyExists was just called")
 	}
 	callInfo := struct {
-		Ctx          context.Context
-		Hash         string
-		SymmetricKey []byte
-		Generation   uint64
+		Ctx   context.Context
+		Hash  string
+		Codec repository.Codec
 	}{
-		Ctx:          ctx,
-		Hash:         hash,
-		SymmetricKey: symmetricKey,
-		Generation:   generation,
+		Ctx:   ctx,
+		Hash:  hash,
+		Codec: codec,
 	}
 	mock.lockAlreadyExists.Lock()
 	mock.calls.AlreadyExists = append(mock.calls.AlreadyExists, callInfo)
 	mock.lockAlreadyExists.Unlock()
-	return mock.AlreadyExistsFunc(ctx, hash, symmetricKey, generation)
+	return mock.AlreadyExistsFunc(ctx, hash, codec)
 }
 
 // AlreadyExistsCalls gets all the calls that were made to AlreadyExists.
@@ -946,16 +942,14 @@ func (mock *ObjectRepositoryMock) AlreadyExists(ctx context.Context, hash string
 //
 //	len(mockedObjectRepository.AlreadyExistsCalls())
 func (mock *ObjectRepositoryMock) AlreadyExistsCalls() []struct {
-	Ctx          context.Context
-	Hash         string
-	SymmetricKey []byte
-	Generation   uint64
+	Ctx   context.Context
+	Hash  string
+	Codec repository.Codec
 } {
 	var calls []struct {
-		Ctx          context.Context
-		Hash         string
-		SymmetricKey []byte
-		Generation   uint64
+		Ctx   context.Context
+		Hash  string
+		Codec repository.Codec
 	}
 	mock.lockAlreadyExists.RLock()
 	calls = mock.calls.AlreadyExists
@@ -1079,72 +1073,24 @@ func (mock *ObjectRepositoryMock) ListObjectsCalls() []struct {
 	return calls
 }
 
-// ReadObject calls ReadObjectFunc.
-func (mock *ObjectRepositoryMock) ReadObject(ctx context.Context, hash string, symmetricKey []byte, generation uint64) (io.ReadCloser, error) {
-	if mock.ReadObjectFunc == nil {
-		panic("ObjectRepositoryMock.ReadObjectFunc: method is nil but ObjectRepository.ReadObject was just called")
-	}
-	callInfo := struct {
-		Ctx          context.Context
-		Hash         string
-		SymmetricKey []byte
-		Generation   uint64
-	}{
-		Ctx:          ctx,
-		Hash:         hash,
-		SymmetricKey: symmetricKey,
-		Generation:   generation,
-	}
-	mock.lockReadObject.Lock()
-	mock.calls.ReadObject = append(mock.calls.ReadObject, callInfo)
-	mock.lockReadObject.Unlock()
-	return mock.ReadObjectFunc(ctx, hash, symmetricKey, generation)
-}
-
-// ReadObjectCalls gets all the calls that were made to ReadObject.
-// Check the length with:
-//
-//	len(mockedObjectRepository.ReadObjectCalls())
-func (mock *ObjectRepositoryMock) ReadObjectCalls() []struct {
-	Ctx          context.Context
-	Hash         string
-	SymmetricKey []byte
-	Generation   uint64
-} {
-	var calls []struct {
-		Ctx          context.Context
-		Hash         string
-		SymmetricKey []byte
-		Generation   uint64
-	}
-	mock.lockReadObject.RLock()
-	calls = mock.calls.ReadObject
-	mock.lockReadObject.RUnlock()
-	return calls
-}
-
 // RestoreObject calls RestoreObjectFunc.
-func (mock *ObjectRepositoryMock) RestoreObject(ctx context.Context, comp *repository.Compression, obj *snapshot.File, symmetricKey []byte, generation uint64) error {
+func (mock *ObjectRepositoryMock) RestoreObject(ctx context.Context, file *snapshot.File, codec repository.Codec) error {
 	if mock.RestoreObjectFunc == nil {
 		panic("ObjectRepositoryMock.RestoreObjectFunc: method is nil but ObjectRepository.RestoreObject was just called")
 	}
 	callInfo := struct {
-		Ctx          context.Context
-		Comp         *repository.Compression
-		Obj          *snapshot.File
-		SymmetricKey []byte
-		Generation   uint64
+		Ctx   context.Context
+		File  *snapshot.File
+		Codec repository.Codec
 	}{
-		Ctx:          ctx,
-		Comp:         comp,
-		Obj:          obj,
-		SymmetricKey: symmetricKey,
-		Generation:   generation,
+		Ctx:   ctx,
+		File:  file,
+		Codec: codec,
 	}
 	mock.lockRestoreObject.Lock()
 	mock.calls.RestoreObject = append(mock.calls.RestoreObject, callInfo)
 	mock.lockRestoreObject.Unlock()
-	return mock.RestoreObjectFunc(ctx, comp, obj, symmetricKey, generation)
+	return mock.RestoreObjectFunc(ctx, file, codec)
 }
 
 // RestoreObjectCalls gets all the calls that were made to RestoreObject.
@@ -1152,18 +1098,14 @@ func (mock *ObjectRepositoryMock) RestoreObject(ctx context.Context, comp *repos
 //
 //	len(mockedObjectRepository.RestoreObjectCalls())
 func (mock *ObjectRepositoryMock) RestoreObjectCalls() []struct {
-	Ctx          context.Context
-	Comp         *repository.Compression
-	Obj          *snapshot.File
-	SymmetricKey []byte
-	Generation   uint64
+	Ctx   context.Context
+	File  *snapshot.File
+	Codec repository.Codec
 } {
 	var calls []struct {
-		Ctx          context.Context
-		Comp         *repository.Compression
-		Obj          *snapshot.File
-		SymmetricKey []byte
-		Generation   uint64
+		Ctx   context.Context
+		File  *snapshot.File
+		Codec repository.Codec
 	}
 	mock.lockRestoreObject.RLock()
 	calls = mock.calls.RestoreObject
@@ -1172,29 +1114,25 @@ func (mock *ObjectRepositoryMock) RestoreObjectCalls() []struct {
 }
 
 // Save calls SaveFunc.
-func (mock *ObjectRepositoryMock) Save(ctx context.Context, filePath string, hash string, comp *repository.Compression, symmetricKey []byte, generation uint64) error {
+func (mock *ObjectRepositoryMock) Save(ctx context.Context, filePath string, hash string, codec repository.Codec) error {
 	if mock.SaveFunc == nil {
 		panic("ObjectRepositoryMock.SaveFunc: method is nil but ObjectRepository.Save was just called")
 	}
 	callInfo := struct {
-		Ctx          context.Context
-		FilePath     string
-		Hash         string
-		Comp         *repository.Compression
-		SymmetricKey []byte
-		Generation   uint64
+		Ctx      context.Context
+		FilePath string
+		Hash     string
+		Codec    repository.Codec
 	}{
-		Ctx:          ctx,
-		FilePath:     filePath,
-		Hash:         hash,
-		Comp:         comp,
-		SymmetricKey: symmetricKey,
-		Generation:   generation,
+		Ctx:      ctx,
+		FilePath: filePath,
+		Hash:     hash,
+		Codec:    codec,
 	}
 	mock.lockSave.Lock()
 	mock.calls.Save = append(mock.calls.Save, callInfo)
 	mock.lockSave.Unlock()
-	return mock.SaveFunc(ctx, filePath, hash, comp, symmetricKey, generation)
+	return mock.SaveFunc(ctx, filePath, hash, codec)
 }
 
 // SaveCalls gets all the calls that were made to Save.
@@ -1202,20 +1140,16 @@ func (mock *ObjectRepositoryMock) Save(ctx context.Context, filePath string, has
 //
 //	len(mockedObjectRepository.SaveCalls())
 func (mock *ObjectRepositoryMock) SaveCalls() []struct {
-	Ctx          context.Context
-	FilePath     string
-	Hash         string
-	Comp         *repository.Compression
-	SymmetricKey []byte
-	Generation   uint64
+	Ctx      context.Context
+	FilePath string
+	Hash     string
+	Codec    repository.Codec
 } {
 	var calls []struct {
-		Ctx          context.Context
-		FilePath     string
-		Hash         string
-		Comp         *repository.Compression
-		SymmetricKey []byte
-		Generation   uint64
+		Ctx      context.Context
+		FilePath string
+		Hash     string
+		Codec    repository.Codec
 	}
 	mock.lockSave.RLock()
 	calls = mock.calls.Save
@@ -1224,33 +1158,25 @@ func (mock *ObjectRepositoryMock) SaveCalls() []struct {
 }
 
 // SaveChunk calls SaveChunkFunc.
-func (mock *ObjectRepositoryMock) SaveChunk(ctx context.Context, filePath string, hash string, offset int64, size int64, comp *repository.Compression, key []byte, generation uint64) error {
+func (mock *ObjectRepositoryMock) SaveChunk(ctx context.Context, filePath string, chunk snapshot.Chunk, codec repository.Codec) error {
 	if mock.SaveChunkFunc == nil {
 		panic("ObjectRepositoryMock.SaveChunkFunc: method is nil but ObjectRepository.SaveChunk was just called")
 	}
 	callInfo := struct {
-		Ctx        context.Context
-		FilePath   string
-		Hash       string
-		Offset     int64
-		Size       int64
-		Comp       *repository.Compression
-		Key        []byte
-		Generation uint64
+		Ctx      context.Context
+		FilePath string
+		Chunk    snapshot.Chunk
+		Codec    repository.Codec
 	}{
-		Ctx:        ctx,
-		FilePath:   filePath,
-		Hash:       hash,
-		Offset:     offset,
-		Size:       size,
-		Comp:       comp,
-		Key:        key,
-		Generation: generation,
+		Ctx:      ctx,
+		FilePath: filePath,
+		Chunk:    chunk,
+		Codec:    codec,
 	}
 	mock.lockSaveChunk.Lock()
 	mock.calls.SaveChunk = append(mock.calls.SaveChunk, callInfo)
 	mock.lockSaveChunk.Unlock()
-	return mock.SaveChunkFunc(ctx, filePath, hash, offset, size, comp, key, generation)
+	return mock.SaveChunkFunc(ctx, filePath, chunk, codec)
 }
 
 // SaveChunkCalls gets all the calls that were made to SaveChunk.
@@ -1258,28 +1184,60 @@ func (mock *ObjectRepositoryMock) SaveChunk(ctx context.Context, filePath string
 //
 //	len(mockedObjectRepository.SaveChunkCalls())
 func (mock *ObjectRepositoryMock) SaveChunkCalls() []struct {
-	Ctx        context.Context
-	FilePath   string
-	Hash       string
-	Offset     int64
-	Size       int64
-	Comp       *repository.Compression
-	Key        []byte
-	Generation uint64
+	Ctx      context.Context
+	FilePath string
+	Chunk    snapshot.Chunk
+	Codec    repository.Codec
 } {
 	var calls []struct {
-		Ctx        context.Context
-		FilePath   string
-		Hash       string
-		Offset     int64
-		Size       int64
-		Comp       *repository.Compression
-		Key        []byte
-		Generation uint64
+		Ctx      context.Context
+		FilePath string
+		Chunk    snapshot.Chunk
+		Codec    repository.Codec
 	}
 	mock.lockSaveChunk.RLock()
 	calls = mock.calls.SaveChunk
 	mock.lockSaveChunk.RUnlock()
+	return calls
+}
+
+// VerifyObject calls VerifyObjectFunc.
+func (mock *ObjectRepositoryMock) VerifyObject(ctx context.Context, hash string, codec repository.Codec) error {
+	if mock.VerifyObjectFunc == nil {
+		panic("ObjectRepositoryMock.VerifyObjectFunc: method is nil but ObjectRepository.VerifyObject was just called")
+	}
+	callInfo := struct {
+		Ctx   context.Context
+		Hash  string
+		Codec repository.Codec
+	}{
+		Ctx:   ctx,
+		Hash:  hash,
+		Codec: codec,
+	}
+	mock.lockVerifyObject.Lock()
+	mock.calls.VerifyObject = append(mock.calls.VerifyObject, callInfo)
+	mock.lockVerifyObject.Unlock()
+	return mock.VerifyObjectFunc(ctx, hash, codec)
+}
+
+// VerifyObjectCalls gets all the calls that were made to VerifyObject.
+// Check the length with:
+//
+//	len(mockedObjectRepository.VerifyObjectCalls())
+func (mock *ObjectRepositoryMock) VerifyObjectCalls() []struct {
+	Ctx   context.Context
+	Hash  string
+	Codec repository.Codec
+} {
+	var calls []struct {
+		Ctx   context.Context
+		Hash  string
+		Codec repository.Codec
+	}
+	mock.lockVerifyObject.RLock()
+	calls = mock.calls.VerifyObject
+	mock.lockVerifyObject.RUnlock()
 	return calls
 }
 
@@ -1305,10 +1263,10 @@ var _ EncryptedObjectRepository = &EncryptedObjectRepositoryMock{}
 //			ListEncryptedObjectsFunc: func(ctx context.Context, generation uint64) ([]string, error) {
 //				panic("mock out the ListEncryptedObjects method")
 //			},
-//			ReadEncryptedObjectFunc: func(ctx context.Context, hash string, generation uint64, key []byte) (io.ReadCloser, error) {
+//			ReadEncryptedObjectFunc: func(ctx context.Context, hash string, codec repository.Codec) (io.ReadCloser, error) {
 //				panic("mock out the ReadEncryptedObject method")
 //			},
-//			SaveRekeyedObjectFunc: func(ctx context.Context, hash string, source io.Reader, generation uint64, key []byte) error {
+//			SaveRekeyedObjectFunc: func(ctx context.Context, hash string, source io.Reader, codec repository.Codec) error {
 //				panic("mock out the SaveRekeyedObject method")
 //			},
 //		}
@@ -1331,10 +1289,10 @@ type EncryptedObjectRepositoryMock struct {
 	ListEncryptedObjectsFunc func(ctx context.Context, generation uint64) ([]string, error)
 
 	// ReadEncryptedObjectFunc mocks the ReadEncryptedObject method.
-	ReadEncryptedObjectFunc func(ctx context.Context, hash string, generation uint64, key []byte) (io.ReadCloser, error)
+	ReadEncryptedObjectFunc func(ctx context.Context, hash string, codec repository.Codec) (io.ReadCloser, error)
 
 	// SaveRekeyedObjectFunc mocks the SaveRekeyedObject method.
-	SaveRekeyedObjectFunc func(ctx context.Context, hash string, source io.Reader, generation uint64, key []byte) error
+	SaveRekeyedObjectFunc func(ctx context.Context, hash string, source io.Reader, codec repository.Codec) error
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -1370,10 +1328,8 @@ type EncryptedObjectRepositoryMock struct {
 			Ctx context.Context
 			// Hash is the hash argument value.
 			Hash string
-			// Generation is the generation argument value.
-			Generation uint64
-			// Key is the key argument value.
-			Key []byte
+			// Codec is the codec argument value.
+			Codec repository.Codec
 		}
 		// SaveRekeyedObject holds details about calls to the SaveRekeyedObject method.
 		SaveRekeyedObject []struct {
@@ -1383,10 +1339,8 @@ type EncryptedObjectRepositoryMock struct {
 			Hash string
 			// Source is the source argument value.
 			Source io.Reader
-			// Generation is the generation argument value.
-			Generation uint64
-			// Key is the key argument value.
-			Key []byte
+			// Codec is the codec argument value.
+			Codec repository.Codec
 		}
 	}
 	lockAbortRekey                sync.RWMutex
@@ -1538,25 +1492,23 @@ func (mock *EncryptedObjectRepositoryMock) ListEncryptedObjectsCalls() []struct 
 }
 
 // ReadEncryptedObject calls ReadEncryptedObjectFunc.
-func (mock *EncryptedObjectRepositoryMock) ReadEncryptedObject(ctx context.Context, hash string, generation uint64, key []byte) (io.ReadCloser, error) {
+func (mock *EncryptedObjectRepositoryMock) ReadEncryptedObject(ctx context.Context, hash string, codec repository.Codec) (io.ReadCloser, error) {
 	if mock.ReadEncryptedObjectFunc == nil {
 		panic("EncryptedObjectRepositoryMock.ReadEncryptedObjectFunc: method is nil but EncryptedObjectRepository.ReadEncryptedObject was just called")
 	}
 	callInfo := struct {
-		Ctx        context.Context
-		Hash       string
-		Generation uint64
-		Key        []byte
+		Ctx   context.Context
+		Hash  string
+		Codec repository.Codec
 	}{
-		Ctx:        ctx,
-		Hash:       hash,
-		Generation: generation,
-		Key:        key,
+		Ctx:   ctx,
+		Hash:  hash,
+		Codec: codec,
 	}
 	mock.lockReadEncryptedObject.Lock()
 	mock.calls.ReadEncryptedObject = append(mock.calls.ReadEncryptedObject, callInfo)
 	mock.lockReadEncryptedObject.Unlock()
-	return mock.ReadEncryptedObjectFunc(ctx, hash, generation, key)
+	return mock.ReadEncryptedObjectFunc(ctx, hash, codec)
 }
 
 // ReadEncryptedObjectCalls gets all the calls that were made to ReadEncryptedObject.
@@ -1564,16 +1516,14 @@ func (mock *EncryptedObjectRepositoryMock) ReadEncryptedObject(ctx context.Conte
 //
 //	len(mockedEncryptedObjectRepository.ReadEncryptedObjectCalls())
 func (mock *EncryptedObjectRepositoryMock) ReadEncryptedObjectCalls() []struct {
-	Ctx        context.Context
-	Hash       string
-	Generation uint64
-	Key        []byte
+	Ctx   context.Context
+	Hash  string
+	Codec repository.Codec
 } {
 	var calls []struct {
-		Ctx        context.Context
-		Hash       string
-		Generation uint64
-		Key        []byte
+		Ctx   context.Context
+		Hash  string
+		Codec repository.Codec
 	}
 	mock.lockReadEncryptedObject.RLock()
 	calls = mock.calls.ReadEncryptedObject
@@ -1582,27 +1532,25 @@ func (mock *EncryptedObjectRepositoryMock) ReadEncryptedObjectCalls() []struct {
 }
 
 // SaveRekeyedObject calls SaveRekeyedObjectFunc.
-func (mock *EncryptedObjectRepositoryMock) SaveRekeyedObject(ctx context.Context, hash string, source io.Reader, generation uint64, key []byte) error {
+func (mock *EncryptedObjectRepositoryMock) SaveRekeyedObject(ctx context.Context, hash string, source io.Reader, codec repository.Codec) error {
 	if mock.SaveRekeyedObjectFunc == nil {
 		panic("EncryptedObjectRepositoryMock.SaveRekeyedObjectFunc: method is nil but EncryptedObjectRepository.SaveRekeyedObject was just called")
 	}
 	callInfo := struct {
-		Ctx        context.Context
-		Hash       string
-		Source     io.Reader
-		Generation uint64
-		Key        []byte
+		Ctx    context.Context
+		Hash   string
+		Source io.Reader
+		Codec  repository.Codec
 	}{
-		Ctx:        ctx,
-		Hash:       hash,
-		Source:     source,
-		Generation: generation,
-		Key:        key,
+		Ctx:    ctx,
+		Hash:   hash,
+		Source: source,
+		Codec:  codec,
 	}
 	mock.lockSaveRekeyedObject.Lock()
 	mock.calls.SaveRekeyedObject = append(mock.calls.SaveRekeyedObject, callInfo)
 	mock.lockSaveRekeyedObject.Unlock()
-	return mock.SaveRekeyedObjectFunc(ctx, hash, source, generation, key)
+	return mock.SaveRekeyedObjectFunc(ctx, hash, source, codec)
 }
 
 // SaveRekeyedObjectCalls gets all the calls that were made to SaveRekeyedObject.
@@ -1610,22 +1558,204 @@ func (mock *EncryptedObjectRepositoryMock) SaveRekeyedObject(ctx context.Context
 //
 //	len(mockedEncryptedObjectRepository.SaveRekeyedObjectCalls())
 func (mock *EncryptedObjectRepositoryMock) SaveRekeyedObjectCalls() []struct {
-	Ctx        context.Context
-	Hash       string
-	Source     io.Reader
-	Generation uint64
-	Key        []byte
+	Ctx    context.Context
+	Hash   string
+	Source io.Reader
+	Codec  repository.Codec
 } {
 	var calls []struct {
-		Ctx        context.Context
-		Hash       string
-		Source     io.Reader
-		Generation uint64
-		Key        []byte
+		Ctx    context.Context
+		Hash   string
+		Source io.Reader
+		Codec  repository.Codec
 	}
 	mock.lockSaveRekeyedObject.RLock()
 	calls = mock.calls.SaveRekeyedObject
 	mock.lockSaveRekeyedObject.RUnlock()
+	return calls
+}
+
+// Ensure, that RestoreDestinationMock does implement RestoreDestination.
+// If this is not the case, regenerate this file with moq.
+var _ RestoreDestination = &RestoreDestinationMock{}
+
+// RestoreDestinationMock is a mock implementation of RestoreDestination.
+//
+//	func TestSomethingThatUsesRestoreDestination(t *testing.T) {
+//
+//		// make and configure a mocked RestoreDestination
+//		mockedRestoreDestination := &RestoreDestinationMock{
+//			ApplyMetadataFunc: func(ctx context.Context, path string, metadata snapshot.Metadata) error {
+//				panic("mock out the ApplyMetadata method")
+//			},
+//			CreateDirectoryFunc: func(ctx context.Context, path string) error {
+//				panic("mock out the CreateDirectory method")
+//			},
+//			CreateSymlinkFunc: func(ctx context.Context, path string, target string) error {
+//				panic("mock out the CreateSymlink method")
+//			},
+//		}
+//
+//		// use mockedRestoreDestination in code that requires RestoreDestination
+//		// and then make assertions.
+//
+//	}
+type RestoreDestinationMock struct {
+	// ApplyMetadataFunc mocks the ApplyMetadata method.
+	ApplyMetadataFunc func(ctx context.Context, path string, metadata snapshot.Metadata) error
+
+	// CreateDirectoryFunc mocks the CreateDirectory method.
+	CreateDirectoryFunc func(ctx context.Context, path string) error
+
+	// CreateSymlinkFunc mocks the CreateSymlink method.
+	CreateSymlinkFunc func(ctx context.Context, path string, target string) error
+
+	// calls tracks calls to the methods.
+	calls struct {
+		// ApplyMetadata holds details about calls to the ApplyMetadata method.
+		ApplyMetadata []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Path is the path argument value.
+			Path string
+			// Metadata is the metadata argument value.
+			Metadata snapshot.Metadata
+		}
+		// CreateDirectory holds details about calls to the CreateDirectory method.
+		CreateDirectory []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Path is the path argument value.
+			Path string
+		}
+		// CreateSymlink holds details about calls to the CreateSymlink method.
+		CreateSymlink []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Path is the path argument value.
+			Path string
+			// Target is the target argument value.
+			Target string
+		}
+	}
+	lockApplyMetadata   sync.RWMutex
+	lockCreateDirectory sync.RWMutex
+	lockCreateSymlink   sync.RWMutex
+}
+
+// ApplyMetadata calls ApplyMetadataFunc.
+func (mock *RestoreDestinationMock) ApplyMetadata(ctx context.Context, path string, metadata snapshot.Metadata) error {
+	if mock.ApplyMetadataFunc == nil {
+		panic("RestoreDestinationMock.ApplyMetadataFunc: method is nil but RestoreDestination.ApplyMetadata was just called")
+	}
+	callInfo := struct {
+		Ctx      context.Context
+		Path     string
+		Metadata snapshot.Metadata
+	}{
+		Ctx:      ctx,
+		Path:     path,
+		Metadata: metadata,
+	}
+	mock.lockApplyMetadata.Lock()
+	mock.calls.ApplyMetadata = append(mock.calls.ApplyMetadata, callInfo)
+	mock.lockApplyMetadata.Unlock()
+	return mock.ApplyMetadataFunc(ctx, path, metadata)
+}
+
+// ApplyMetadataCalls gets all the calls that were made to ApplyMetadata.
+// Check the length with:
+//
+//	len(mockedRestoreDestination.ApplyMetadataCalls())
+func (mock *RestoreDestinationMock) ApplyMetadataCalls() []struct {
+	Ctx      context.Context
+	Path     string
+	Metadata snapshot.Metadata
+} {
+	var calls []struct {
+		Ctx      context.Context
+		Path     string
+		Metadata snapshot.Metadata
+	}
+	mock.lockApplyMetadata.RLock()
+	calls = mock.calls.ApplyMetadata
+	mock.lockApplyMetadata.RUnlock()
+	return calls
+}
+
+// CreateDirectory calls CreateDirectoryFunc.
+func (mock *RestoreDestinationMock) CreateDirectory(ctx context.Context, path string) error {
+	if mock.CreateDirectoryFunc == nil {
+		panic("RestoreDestinationMock.CreateDirectoryFunc: method is nil but RestoreDestination.CreateDirectory was just called")
+	}
+	callInfo := struct {
+		Ctx  context.Context
+		Path string
+	}{
+		Ctx:  ctx,
+		Path: path,
+	}
+	mock.lockCreateDirectory.Lock()
+	mock.calls.CreateDirectory = append(mock.calls.CreateDirectory, callInfo)
+	mock.lockCreateDirectory.Unlock()
+	return mock.CreateDirectoryFunc(ctx, path)
+}
+
+// CreateDirectoryCalls gets all the calls that were made to CreateDirectory.
+// Check the length with:
+//
+//	len(mockedRestoreDestination.CreateDirectoryCalls())
+func (mock *RestoreDestinationMock) CreateDirectoryCalls() []struct {
+	Ctx  context.Context
+	Path string
+} {
+	var calls []struct {
+		Ctx  context.Context
+		Path string
+	}
+	mock.lockCreateDirectory.RLock()
+	calls = mock.calls.CreateDirectory
+	mock.lockCreateDirectory.RUnlock()
+	return calls
+}
+
+// CreateSymlink calls CreateSymlinkFunc.
+func (mock *RestoreDestinationMock) CreateSymlink(ctx context.Context, path string, target string) error {
+	if mock.CreateSymlinkFunc == nil {
+		panic("RestoreDestinationMock.CreateSymlinkFunc: method is nil but RestoreDestination.CreateSymlink was just called")
+	}
+	callInfo := struct {
+		Ctx    context.Context
+		Path   string
+		Target string
+	}{
+		Ctx:    ctx,
+		Path:   path,
+		Target: target,
+	}
+	mock.lockCreateSymlink.Lock()
+	mock.calls.CreateSymlink = append(mock.calls.CreateSymlink, callInfo)
+	mock.lockCreateSymlink.Unlock()
+	return mock.CreateSymlinkFunc(ctx, path, target)
+}
+
+// CreateSymlinkCalls gets all the calls that were made to CreateSymlink.
+// Check the length with:
+//
+//	len(mockedRestoreDestination.CreateSymlinkCalls())
+func (mock *RestoreDestinationMock) CreateSymlinkCalls() []struct {
+	Ctx    context.Context
+	Path   string
+	Target string
+} {
+	var calls []struct {
+		Ctx    context.Context
+		Path   string
+		Target string
+	}
+	mock.lockCreateSymlink.RLock()
+	calls = mock.calls.CreateSymlink
+	mock.lockCreateSymlink.RUnlock()
 	return calls
 }
 

@@ -17,6 +17,7 @@ import (
 func newPruneCommand() *cobra.Command {
 	var (
 		repositoryPath string
+		privateKeyPath string
 		dryRun         bool
 	)
 
@@ -28,24 +29,29 @@ func newPruneCommand() *cobra.Command {
 			"It takes an exclusive repository lock, so no other command can use the repository while it runs.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			privateKey := optionalPath(privateKeyPath)
 			return withRepository(cmd, repositoryPath, func(repo *bootstrap.Repository) error {
 				if dryRun {
-					return runPrunePlan(cmd.Context(), cmd.OutOrStdout(), repo)
+					return runPrunePlan(cmd.Context(), cmd.OutOrStdout(), repo, privateKey)
 				}
-				return runPrune(cmd.Context(), cmd.OutOrStdout(), repo)
+				return runPrune(cmd.Context(), cmd.OutOrStdout(), repo, privateKey)
 			})
 		},
 	}
 
 	cmd.Flags().StringVar(&repositoryPath, "repo", "", "path to the Stowmark repository")
+	cmd.Flags().StringVar(&privateKeyPath, "private-key", "", metadataPrivateKeyUsage)
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "only report the unreferenced objects, do not delete them")
 	_ = cmd.MarkFlagRequired("repo")
 
 	return cmd
 }
 
-func runPrunePlan(ctx context.Context, output io.Writer, repo *bootstrap.Repository) error {
-	plan, err := app.QueryResult[*snapshot.PrunePlan](repo.PrunePlan().Handle(ctx, app.PrunePlanQuery{RepositoryPath: repo.Path()}))
+func runPrunePlan(ctx context.Context, output io.Writer, repo *bootstrap.Repository, privateKey *string) error {
+	plan, err := app.QueryResult[*snapshot.PrunePlan](repo.PrunePlan().Handle(ctx, app.PrunePlanQuery{
+		RepositoryPath: repo.Path(),
+		PrivateKeyPath: privateKey,
+	}))
 	if err != nil {
 		return fmt.Errorf("failed to plan prune: %w", err)
 	}
@@ -63,8 +69,11 @@ func runPrunePlan(ctx context.Context, output io.Writer, repo *bootstrap.Reposit
 	return printMissingObjects(output, len(plan.Missing()))
 }
 
-func runPrune(ctx context.Context, output io.Writer, repo *bootstrap.Repository) error {
-	events, err := repo.PruneRepository().Handle(ctx, app.PruneRepositoryCommand{RepositoryPath: repo.Path()})
+func runPrune(ctx context.Context, output io.Writer, repo *bootstrap.Repository, privateKey *string) error {
+	events, err := repo.PruneRepository().Handle(ctx, app.PruneRepositoryCommand{
+		RepositoryPath: repo.Path(),
+		PrivateKeyPath: privateKey,
+	})
 	if err != nil {
 		return fmt.Errorf("failed to prune repository: %w", err)
 	}

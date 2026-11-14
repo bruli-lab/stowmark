@@ -34,7 +34,7 @@ type ObjectRepository struct {
 	encryptionHandler *encrypt.AESGCMHandler
 }
 
-func (o ObjectRepository) Save(ctx context.Context, filePath, hash string, comp *repository.Compression, symmetricKey []byte, generation uint64) error {
+func (o ObjectRepository) Save(ctx context.Context, filePath, hash string, codec repository.Codec) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -47,19 +47,19 @@ func (o ObjectRepository) Save(ctx context.Context, filePath, hash string, comp 
 		_ = source.Close()
 	}()
 
-	if err := o.write(ctx, source, hash, comp, symmetricKey, generation); err != nil {
+	if err := o.write(ctx, source, hash, codec); err != nil {
 		return fmt.Errorf("save object %q from %q: %w", hash, filePath, err)
 	}
 
 	return nil
 }
 
-func (o ObjectRepository) SaveChunk(ctx context.Context, filePath, hash string, offset, size int64, comp *repository.Compression, symmetricKey []byte, generation uint64) error {
+func (o ObjectRepository) SaveChunk(ctx context.Context, filePath string, chunk snapshot.Chunk, codec repository.Codec) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 
-	source, err := chunkio.OpenSource(filePath, hash, offset, size, comp)
+	source, err := chunkio.OpenSource(filePath, chunk.Hash(), chunk.Offset(), chunk.Size())
 	if err != nil {
 		return err
 	}
@@ -67,30 +67,30 @@ func (o ObjectRepository) SaveChunk(ctx context.Context, filePath, hash string, 
 		_ = source.Close()
 	}()
 
-	if err := o.write(ctx, io.NewSectionReader(source, offset, size), hash, comp, symmetricKey, generation); err != nil {
-		return fmt.Errorf("save chunk %q from %q at offset %d: %w", hash, filePath, offset, err)
+	if err := o.write(ctx, io.NewSectionReader(source, chunk.Offset(), chunk.Size()), chunk.Hash(), codec); err != nil {
+		return fmt.Errorf("save chunk %q from %q at offset %d: %w", chunk.Hash(), filePath, chunk.Offset(), err)
 	}
 
 	return nil
 }
 
-func (o ObjectRepository) write(ctx context.Context, source io.Reader, hash string, comp *repository.Compression, symmetricKey []byte, generation uint64) error {
-	key, err := objectKey(hash, len(symmetricKey) > 0, generation)
+func (o ObjectRepository) write(ctx context.Context, source io.Reader, hash string, codec repository.Codec) error {
+	key, err := objectKey(hash, codec.EncryptsData(), codec.Generation())
 	if err != nil {
 		return err
 	}
 
 	return o.store.Put(ctx, key, func(destination io.Writer) error {
-		return o.pipeline.Write(ctx, destination, source, comp, symmetricKey, hash)
+		return o.pipeline.Write(ctx, destination, source, codec, hash)
 	})
 }
 
-func (o ObjectRepository) AlreadyExists(ctx context.Context, hash string, symmetricKey []byte, generation uint64) (bool, error) {
+func (o ObjectRepository) AlreadyExists(ctx context.Context, hash string, codec repository.Codec) (bool, error) {
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}
 
-	key, err := objectKey(hash, len(symmetricKey) > 0, generation)
+	key, err := objectKey(hash, codec.EncryptsData(), codec.Generation())
 	if err != nil {
 		return false, err
 	}
@@ -98,26 +98,36 @@ func (o ObjectRepository) AlreadyExists(ctx context.Context, hash string, symmet
 	return o.store.Exists(ctx, key)
 }
 
-func (o ObjectRepository) ReadObject(ctx context.Context, hash string, symmetricKey []byte, generation uint64) (io.ReadCloser, error) {
+func (o ObjectRepository) VerifyObject(ctx context.Context, hash string, codec repository.Codec) error {
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return err
 	}
 
-	reader, err := o.open(ctx, hash, len(symmetricKey) > 0, generation)
+	reader, err := o.open(ctx, hash, codec.EncryptsData(), codec.Generation())
 	if err != nil {
-		return nil, err
+		return err
 	}
+	defer func() {
+		_ = reader.Close()
+	}()
 
-	if len(symmetricKey) == 0 {
-		return reader, nil
+	tracked := &trackedReader{reader: reader}
+	verifyErr := o.pipeline.Verify(ctx, tracked, codec, hash)
+	switch {
+	case verifyErr == nil:
+		return nil
+	case tracked.err != nil:
+		return fmt.Errorf("read object %q: %w", hash, tracked.err)
+	case ctx.Err() != nil:
+		return ctx.Err()
+	default:
+		return fmt.Errorf("%w: %w", snapshot.ErrCorruptObject, verifyErr)
 	}
-
-	return o.decrypt(reader, hash, symmetricKey)
 }
 
-func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Compression, obj *snapshot.File, symmetricKey []byte, generation uint64) error {
-	return object.RestoreFile(ctx, comp, obj, func(ctx context.Context, hash string, destination io.Writer) (int64, error) {
-		reader, err := o.open(ctx, hash, len(symmetricKey) > 0, generation)
+func (o ObjectRepository) RestoreObject(ctx context.Context, file *snapshot.File, codec repository.Codec) error {
+	return object.RestoreFile(ctx, file, func(ctx context.Context, hash string, destination io.Writer) (int64, error) {
+		reader, err := o.open(ctx, hash, codec.EncryptsData(), codec.Generation())
 		if err != nil {
 			return 0, err
 		}
@@ -125,7 +135,7 @@ func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Co
 			_ = reader.Close()
 		}()
 
-		written, err := o.pipeline.Read(ctx, destination, reader, comp, symmetricKey, hash)
+		written, err := o.pipeline.Read(ctx, destination, reader, codec, hash)
 		if err != nil {
 			return written, fmt.Errorf("restore object %q: %w", hash, err)
 		}
@@ -214,24 +224,33 @@ func (o ObjectRepository) ListEncryptedGenerations(ctx context.Context) ([]uint6
 	return generations, nil
 }
 
-func (o ObjectRepository) ReadEncryptedObject(ctx context.Context, hash string, generation uint64, symmetricKey []byte) (io.ReadCloser, error) {
+func (o ObjectRepository) ReadEncryptedObject(ctx context.Context, hash string, codec repository.Codec) (io.ReadCloser, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 
-	if len(symmetricKey) == 0 {
+	if !codec.EncryptsData() {
 		return nil, ErrSymmetricKeyRequired
 	}
 
-	reader, err := o.open(ctx, hash, true, generation)
+	reader, err := o.open(ctx, hash, true, codec.Generation())
 	if err != nil {
-		return nil, fmt.Errorf("read encrypted object from generation %d: %w", generation, err)
+		return nil, fmt.Errorf("read encrypted object from generation %d: %w", codec.Generation(), err)
 	}
 
-	return o.decrypt(reader, hash, symmetricKey)
+	if codec.ContentAddressed() {
+		decrypted, err := object.DecryptContent(reader, codec, hash)
+		if err != nil {
+			_ = reader.Close()
+			return nil, corruptObjectError(hash, err)
+		}
+		return &model.ReadCloser{Reader: decrypted, Closer: reader}, nil
+	}
+
+	return o.decrypt(reader, hash, codec.DataKey())
 }
 
-func (o ObjectRepository) SaveRekeyedObject(ctx context.Context, hash string, source io.Reader, generation uint64, symmetricKey []byte) error {
+func (o ObjectRepository) SaveRekeyedObject(ctx context.Context, hash string, source io.Reader, codec repository.Codec) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -240,37 +259,58 @@ func (o ObjectRepository) SaveRekeyedObject(ctx context.Context, hash string, so
 		return ErrSourceRequired
 	}
 
-	if len(symmetricKey) == 0 {
+	if !codec.EncryptsData() {
 		return ErrSymmetricKeyRequired
 	}
 
-	key, err := objectKey(hash, true, generation)
+	key, err := objectKey(hash, true, codec.Generation())
 	if err != nil {
 		return err
 	}
 
 	return o.store.Put(ctx, key, func(destination io.Writer) error {
-		encoder, err := o.encryptionHandler.Encode(destination, symmetricKey)
-		if err != nil {
-			return fmt.Errorf("create encryption encoder for object %q: %w", hash, err)
+		if codec.ContentAddressed() {
+			return o.reencryptContent(ctx, destination, source, hash, codec)
 		}
-
-		hasher := sha256.New()
-		if _, err := io.Copy(encoder.Writer, io.TeeReader(model.ContextReader{Ctx: ctx, Reader: source}, hasher)); err != nil {
-			return fmt.Errorf("encrypt rekeyed object %q: %w", hash, err)
-		}
-
-		calculatedHash := hex.EncodeToString(hasher.Sum(nil))
-		if calculatedHash != hash {
-			return fmt.Errorf("%w: expected %s, calculated %s", object.ErrHashMismatch, hash, calculatedHash)
-		}
-
-		if err := encoder.Closer(); err != nil {
-			return fmt.Errorf("finish encryption of rekeyed object %q: %w", hash, err)
-		}
-
-		return nil
+		return o.reencryptCompressed(ctx, destination, source, hash, codec)
 	})
+}
+
+func (o ObjectRepository) reencryptContent(ctx context.Context, destination io.Writer, source io.Reader, hash string, codec repository.Codec) error {
+	stream, err := object.EncryptContent(destination, codec, hash)
+	if err != nil {
+		return fmt.Errorf("create encryption stream for object %q: %w", hash, err)
+	}
+	if _, err := io.Copy(stream, model.ContextReader{Ctx: ctx, Reader: source}); err != nil {
+		return fmt.Errorf("encrypt rekeyed object %q: %w", hash, err)
+	}
+	if err := stream.Close(); err != nil {
+		return fmt.Errorf("finish encryption of rekeyed object %q: %w", hash, err)
+	}
+	return nil
+}
+
+func (o ObjectRepository) reencryptCompressed(ctx context.Context, destination io.Writer, source io.Reader, hash string, codec repository.Codec) error {
+	encoder, err := o.encryptionHandler.Encode(destination, codec.DataKey())
+	if err != nil {
+		return fmt.Errorf("create encryption encoder for object %q: %w", hash, err)
+	}
+
+	hasher := sha256.New()
+	if _, err := io.Copy(encoder.Writer, io.TeeReader(model.ContextReader{Ctx: ctx, Reader: source}, hasher)); err != nil {
+		return fmt.Errorf("encrypt rekeyed object %q: %w", hash, err)
+	}
+
+	calculatedHash := hex.EncodeToString(hasher.Sum(nil))
+	if calculatedHash != hash {
+		return fmt.Errorf("%w: expected %s, calculated %s", object.ErrHashMismatch, hash, calculatedHash)
+	}
+
+	if err := encoder.Closer(); err != nil {
+		return fmt.Errorf("finish encryption of rekeyed object %q: %w", hash, err)
+	}
+
+	return nil
 }
 
 func (o ObjectRepository) DeleteTemporaryObjects(ctx context.Context) (int, error) {
@@ -329,13 +369,30 @@ func (o ObjectRepository) decrypt(reader io.ReadCloser, hash string, symmetricKe
 	decoded, err := o.encryptionHandler.Decode(reader, symmetricKey)
 	if err != nil {
 		_ = reader.Close()
-		if errors.Is(err, encrypt.ErrDecryptionFailed) {
-			return nil, fmt.Errorf("%w: decrypt object %q: %w", snapshot.ErrCorruptObject, hash, err)
-		}
-		return nil, fmt.Errorf("decrypt object %q: %w", hash, err)
+		return nil, corruptObjectError(hash, err)
 	}
 
 	return &model.ReadCloser{Reader: decoded, Closer: reader}, nil
+}
+
+func corruptObjectError(hash string, err error) error {
+	if errors.Is(err, encrypt.ErrDecryptionFailed) {
+		return fmt.Errorf("%w: decrypt object %q: %w", snapshot.ErrCorruptObject, hash, err)
+	}
+	return fmt.Errorf("decrypt object %q: %w", hash, err)
+}
+
+type trackedReader struct {
+	reader io.Reader
+	err    error
+}
+
+func (t *trackedReader) Read(data []byte) (int, error) {
+	n, err := t.reader.Read(data)
+	if err != nil && !errors.Is(err, io.EOF) {
+		t.err = err
+	}
+	return n, err
 }
 
 func NewObjectRepository(store Store) *ObjectRepository {

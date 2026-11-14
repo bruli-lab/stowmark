@@ -36,7 +36,7 @@ func newInitCommand() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("create compression configuration: %w", err)
 			}
-			version, err := repository.ParseFormatVersionOrCurrent(formatVersion)
+			version, err := repository.ParseFormatVersionOrDefault(formatVersion)
 			if err != nil {
 				return err
 			}
@@ -90,7 +90,7 @@ func newInitCommand() *cobra.Command {
 		&formatVersion,
 		"version",
 		0,
-		"repository format version (1 or 2); defaults to the current version",
+		"repository format version (1, 2 or 3); defaults to 2. Version 3 identifies objects by their content, streams the encryption, encrypts the manifests and stores file metadata",
 	)
 
 	cmd.Flags().IntVar(

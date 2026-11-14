@@ -51,7 +51,7 @@ func (h *Handler) Check(ctx context.Context, options CheckOptions) (*CheckResult
 		RepositoryPath: h.repository.Path(),
 		ReadData:       options.ReadData,
 		Subset:         subset,
-		PrivateKeyPath: options.PrivateKey,
+		PrivateKeyPath: h.key(options.PrivateKey),
 	}))
 	if err != nil {
 		return nil, err

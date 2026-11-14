@@ -18,7 +18,7 @@ type ConfigBuilder struct {
 
 func (c ConfigBuilder) Build(t *testing.T) repository.Config {
 	id := fixtures.SetData(uuid.New(), c.ID)
-	version := fixtures.SetData(repository.CurrentFormatVersion, c.FormatVersion)
+	version := fixtures.SetData(repository.DefaultFormatVersion, c.FormatVersion)
 	co := repository.NewConfig(id, version, CompressionBuilder{}.Build(t), c.EncryptionConfig)
 	return *co
 }

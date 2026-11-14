@@ -18,6 +18,7 @@ var ErrMissingRetentionPolicy = errors.New("retention policy is required")
 
 type ForgetSnapshotsCommand struct {
 	RepositoryPath string
+	PrivateKeyPath *string
 	Policy         *snapshot.RetentionPolicy
 }
 
@@ -27,6 +28,7 @@ func (f ForgetSnapshotsCommand) Name() string {
 
 type ForgetSnapshots struct {
 	manifestRepo ManifestRepository
+	keys         keyring
 	locker       *RepositoryLocker
 }
 
@@ -41,7 +43,11 @@ func (f *ForgetSnapshots) Handle(ctx context.Context, cmd cqs.Command) ([]event.
 
 	events := make([]event.Event, 0)
 	err := f.locker.WithLock(ctx, repository.ExclusiveLock, func(ctx context.Context) error {
-		decisions, err := applyRetention(ctx, f.manifestRepo, co.Policy)
+		codec, err := f.keys.forRepository(ctx, co.RepositoryPath, co.PrivateKeyPath)
+		if err != nil {
+			return err
+		}
+		decisions, err := applyRetention(ctx, f.manifestRepo, codec, co.Policy)
 		if err != nil {
 			return err
 		}
@@ -64,8 +70,8 @@ func (f *ForgetSnapshots) Handle(ctx context.Context, cmd cqs.Command) ([]event.
 	return events, nil
 }
 
-func applyRetention(ctx context.Context, manifestRepo ManifestRepository, policy *snapshot.RetentionPolicy) ([]snapshot.RetentionDecision, error) {
-	manifests, err := manifestRepo.List(ctx)
+func applyRetention(ctx context.Context, manifestRepo ManifestRepository, codec repository.Codec, policy *snapshot.RetentionPolicy) ([]snapshot.RetentionDecision, error) {
+	manifests, err := manifestRepo.List(ctx, codec)
 	if err != nil {
 		return nil, err
 	}
@@ -78,6 +84,12 @@ func applyRetention(ctx context.Context, manifestRepo ManifestRepository, policy
 	return policy.Apply(resumes, time.Now()), nil
 }
 
-func NewForgetSnapshots(manifestRepo ManifestRepository, locker *RepositoryLocker) *ForgetSnapshots {
-	return &ForgetSnapshots{manifestRepo: manifestRepo, locker: locker}
+func NewForgetSnapshots(
+	folderRepo FolderRepository,
+	manifestRepo ManifestRepository,
+	asymmetricRepo AsymmetricKeyPairRepository,
+	symmetricRepo SymmetricKeyRepository,
+	locker *RepositoryLocker,
+) *ForgetSnapshots {
+	return &ForgetSnapshots{manifestRepo: manifestRepo, keys: newKeyring(folderRepo, asymmetricRepo, symmetricRepo), locker: locker}
 }

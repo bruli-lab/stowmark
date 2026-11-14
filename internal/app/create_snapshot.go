@@ -68,12 +68,13 @@ func (c *CreateSnapshot) create(ctx context.Context, co CreateSnapshotCommand) (
 		return nil, err
 	}
 
-	source, err := c.sourceRepo.Explore(ctx, co.SourcePath, rules)
+	explored, err := c.sourceRepo.Explore(ctx, co.SourcePath, rules)
 	if err != nil {
 		return nil, err
 	}
+	source := explored.ForFormat(conf.FormatVersion())
 
-	key, err := c.keys.forConfig(ctx, conf.Encryption(), co.PrivateKey)
+	codec, err := c.keys.forConfig(ctx, conf, co.PrivateKey)
 	if err != nil {
 		return nil, err
 	}
@@ -94,13 +95,13 @@ func (c *CreateSnapshot) create(ctx context.Context, co CreateSnapshotCommand) (
 		}
 
 		group.Go(func() error {
-			hashed, err := calculate(groupCtx, files[i], conf.Compression())
+			hashed, err := calculate(groupCtx, files[i], codec)
 			if err != nil {
 				return err
 			}
 			files[i] = hashed
 
-			savedSize, err := c.saveFileObjects(groupCtx, &files[i], conf.Compression(), key)
+			savedSize, err := c.saveFileObjects(groupCtx, &files[i], codec)
 			if err != nil {
 				return err
 			}
@@ -124,7 +125,7 @@ func (c *CreateSnapshot) create(ctx context.Context, co CreateSnapshotCommand) (
 
 	manifest := snapshot.NewManifest(snapshot.NewID(), files, time.Now().UTC(), source.AbsolutePath(), conf.Compression())
 
-	if err := c.manifestRepo.Save(ctx, manifest); err != nil {
+	if err := c.manifestRepo.Save(ctx, manifest, codec); err != nil {
 		return nil, err
 	}
 	return snapshot.NewSnapshotCreated(manifest, int(savedFiles.Load()), totalSize.Load(), source.Skipped()), nil
@@ -142,14 +143,17 @@ func (c *CreateSnapshot) excludeRules(ctx context.Context, co CreateSnapshotComm
 	return rules, nil
 }
 
-func (c *CreateSnapshot) saveFileObjects(ctx context.Context, file *snapshot.File, comp *repository.Compression, key objectKey) (int64, error) {
+func (c *CreateSnapshot) saveFileObjects(ctx context.Context, file *snapshot.File, codec repository.Codec) (int64, error) {
+	if !file.HasContent() {
+		return 0, nil
+	}
 	if len(file.Chunks()) == 0 {
-		return c.saveObject(ctx, file, comp, key)
+		return c.saveObject(ctx, file, codec)
 	}
 
 	var savedSize int64
 	for _, chunk := range file.Chunks() {
-		size, err := c.saveChunk(ctx, file.Path(), chunk, comp, key)
+		size, err := c.saveChunk(ctx, file.Path(), chunk, codec)
 		if err != nil {
 			return 0, err
 		}
@@ -159,35 +163,35 @@ func (c *CreateSnapshot) saveFileObjects(ctx context.Context, file *snapshot.Fil
 	return savedSize, nil
 }
 
-func (c *CreateSnapshot) saveObject(ctx context.Context, file *snapshot.File, comp *repository.Compression, key objectKey) (int64, error) {
-	exists, err := c.objectRepo.AlreadyExists(ctx, file.Hash(), key.symmetricKey, key.generation)
+func (c *CreateSnapshot) saveObject(ctx context.Context, file *snapshot.File, codec repository.Codec) (int64, error) {
+	exists, err := c.objectRepo.AlreadyExists(ctx, file.Hash(), codec)
 	if err != nil || exists {
 		return 0, err
 	}
 
-	release, err := c.budget.reserve(ctx, key, file.Size())
+	release, err := c.budget.reserve(ctx, codec, file.Size())
 	if err != nil {
 		return 0, err
 	}
 	defer release()
-	if err := c.objectRepo.Save(ctx, file.Path(), file.Hash(), comp, key.symmetricKey, key.generation); err != nil {
+	if err := c.objectRepo.Save(ctx, file.Path(), file.Hash(), codec); err != nil {
 		return 0, err
 	}
 	return file.Size(), nil
 }
 
-func (c *CreateSnapshot) saveChunk(ctx context.Context, filePath string, chunk snapshot.Chunk, comp *repository.Compression, key objectKey) (int64, error) {
-	exists, err := c.objectRepo.AlreadyExists(ctx, chunk.Hash(), key.symmetricKey, key.generation)
+func (c *CreateSnapshot) saveChunk(ctx context.Context, filePath string, chunk snapshot.Chunk, codec repository.Codec) (int64, error) {
+	exists, err := c.objectRepo.AlreadyExists(ctx, chunk.Hash(), codec)
 	if err != nil || exists {
 		return 0, err
 	}
 
-	release, err := c.budget.reserve(ctx, key, chunk.Size())
+	release, err := c.budget.reserve(ctx, codec, chunk.Size())
 	if err != nil {
 		return 0, err
 	}
 	defer release()
-	if err := c.objectRepo.SaveChunk(ctx, filePath, chunk.Hash(), chunk.Offset(), chunk.Size(), comp, key.symmetricKey, key.generation); err != nil {
+	if err := c.objectRepo.SaveChunk(ctx, filePath, chunk, codec); err != nil {
 		return 0, err
 	}
 	return chunk.Size(), nil

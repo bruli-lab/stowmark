@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/disk"
@@ -20,7 +21,7 @@ func writeTree(t *testing.T, root string, files ...string) {
 	}
 }
 
-func explored(t *testing.T, root string, patterns ...string) []string {
+func explored(t *testing.T, root string, kind snapshot.EntryKind, patterns ...string) []string {
 	t.Helper()
 	rules, err := snapshot.NewExcludeRules(patterns)
 	require.NoError(t, err)
@@ -30,6 +31,9 @@ func explored(t *testing.T, root string, patterns ...string) []string {
 
 	paths := make([]string, 0, len(source.Files()))
 	for _, file := range source.Files() {
+		if file.Kind() != kind {
+			continue
+		}
 		relative, err := filepath.Rel(source.AbsolutePath(), file.Path())
 		require.NoError(t, err)
 		paths = append(paths, filepath.ToSlash(relative))
@@ -53,28 +57,33 @@ func TestSourceExplorer_Explore(t *testing.T) {
 	}
 
 	tests := []struct {
-		name     string
-		patterns []string
-		expected []string
+		name        string
+		patterns    []string
+		expected    []string
+		directories []string
 	}{
 		{
-			name:     "without patterns, then it returns every regular file",
-			expected: files,
+			name:        "without patterns, then it returns every regular file and directory",
+			expected:    files,
+			directories: []string{"web", "web/node_modules", "web/node_modules/lib", "logs", "build", "app", "app/build"},
 		},
 		{
-			name:     "with basename, directory and anchored patterns, then it skips the excluded files and directories",
-			patterns: []string{"*.log", "node_modules/", "/build"},
-			expected: []string{".stowmarkignore", "main.go", "web/app.js", "logs/keep.txt", "app/build/out.bin"},
+			name:        "with basename, directory and anchored patterns, then it skips the excluded files and directories",
+			patterns:    []string{"*.log", "node_modules/", "/build"},
+			expected:    []string{".stowmarkignore", "main.go", "web/app.js", "logs/keep.txt", "app/build/out.bin"},
+			directories: []string{"web", "logs", "app", "app/build"},
 		},
 		{
-			name:     "with a negation inside an excluded directory, then the directory stays excluded",
-			patterns: []string{"logs/", "!logs/keep.txt"},
-			expected: []string{".stowmarkignore", "main.go", "debug.log", "web/node_modules/lib/index.js", "web/app.js", "build/out.bin", "app/build/out.bin"},
+			name:        "with a negation inside an excluded directory, then the directory stays excluded",
+			patterns:    []string{"logs/", "!logs/keep.txt"},
+			expected:    []string{".stowmarkignore", "main.go", "debug.log", "web/node_modules/lib/index.js", "web/app.js", "build/out.bin", "app/build/out.bin"},
+			directories: []string{"web", "web/node_modules", "web/node_modules/lib", "build", "app", "app/build"},
 		},
 		{
-			name:     "with a trailing double star and a negation, then the negated file is kept",
-			patterns: []string{"logs/**", "!logs/keep.txt"},
-			expected: []string{".stowmarkignore", "main.go", "debug.log", "web/node_modules/lib/index.js", "web/app.js", "logs/keep.txt", "build/out.bin", "app/build/out.bin"},
+			name:        "with a trailing double star and a negation, then the negated file is kept",
+			patterns:    []string{"logs/**", "!logs/keep.txt"},
+			expected:    []string{".stowmarkignore", "main.go", "debug.log", "web/node_modules/lib/index.js", "web/app.js", "logs/keep.txt", "build/out.bin", "app/build/out.bin"},
+			directories: []string{"web", "web/node_modules", "web/node_modules/lib", "logs", "build", "app", "app/build"},
 		},
 	}
 	for _, tt := range tests {
@@ -85,9 +94,43 @@ func TestSourceExplorer_Explore(t *testing.T) {
 			root := t.TempDir()
 			writeTree(t, root, files...)
 
-			require.ElementsMatch(t, tt.expected, explored(t, root, tt.patterns...))
+			require.ElementsMatch(t, tt.expected, explored(t, root, snapshot.RegularEntry, tt.patterns...))
+			require.ElementsMatch(t, tt.directories, explored(t, root, snapshot.DirectoryEntry, tt.patterns...))
 		})
 	}
+}
+
+func TestSourceExplorer_Explore_Metadata(t *testing.T) {
+	t.Parallel()
+
+	t.Run(`Given a source file with permissions and a modification time,
+	when Explore is called,
+	then the entry carries them`, func(t *testing.T) {
+		t.Parallel()
+
+		root := t.TempDir()
+		writeTree(t, root, "bin/run.sh")
+		path := filepath.Join(root, "bin", "run.sh")
+		modTime := time.Date(2024, 3, 4, 5, 6, 7, 0, time.UTC)
+		require.NoError(t, os.Chmod(path, 0o750))
+		require.NoError(t, os.Chtimes(path, modTime, modTime))
+
+		source, err := disk.NewSourceRepository().Explore(context.Background(), root, nil)
+
+		require.NoError(t, err)
+		var found bool
+		for _, file := range source.Files() {
+			if file.Path() != path {
+				continue
+			}
+			found = true
+			metadata, ok := file.Metadata()
+			require.True(t, ok)
+			require.Equal(t, os.FileMode(0o750), metadata.Mode())
+			require.True(t, modTime.Equal(metadata.ModTime()))
+		}
+		require.True(t, found)
+	})
 }
 
 func TestSourceExplorer_IgnorePatterns(t *testing.T) {

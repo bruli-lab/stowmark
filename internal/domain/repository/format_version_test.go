@@ -27,8 +27,13 @@ func TestParseFormatVersion(t *testing.T) {
 			expectedVersion: repository.FormatVersionTwo,
 		},
 		{
+			name:            "with version three, then it returns the version",
+			value:           3,
+			expectedVersion: repository.FormatVersionThree,
+		},
+		{
 			name:        "with a future version, then it returns an unsupported format version error",
-			value:       3,
+			value:       4,
 			expectedErr: repository.ErrUnsupportedFormatVersion,
 		},
 		{
@@ -59,7 +64,7 @@ func TestParseFormatVersion(t *testing.T) {
 	}
 }
 
-func TestParseFormatVersionOrCurrent(t *testing.T) {
+func TestParseFormatVersionOrDefault(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -69,9 +74,9 @@ func TestParseFormatVersionOrCurrent(t *testing.T) {
 		expectedErr     error
 	}{
 		{
-			name:            "with zero, then it returns the current version",
+			name:            "with zero, then it returns the default version two",
 			value:           0,
-			expectedVersion: repository.CurrentFormatVersion,
+			expectedVersion: repository.DefaultFormatVersion,
 		},
 		{
 			name:            "with version one, then it returns the version",
@@ -79,17 +84,22 @@ func TestParseFormatVersionOrCurrent(t *testing.T) {
 			expectedVersion: repository.FormatVersionOne,
 		},
 		{
+			name:            "with version three, then it returns the version",
+			value:           3,
+			expectedVersion: repository.FormatVersionThree,
+		},
+		{
 			name:        "with a future version, then it returns an unsupported format version error",
-			value:       3,
+			value:       4,
 			expectedErr: repository.ErrUnsupportedFormatVersion,
 		},
 	}
 	for _, tt := range tests {
-		t.Run(`Given a ParseFormatVersionOrCurrent function,
+		t.Run(`Given a ParseFormatVersionOrDefault function,
 		when it is called `+tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got, err := repository.ParseFormatVersionOrCurrent(tt.value)
+			got, err := repository.ParseFormatVersionOrDefault(tt.value)
 
 			if tt.expectedErr != nil {
 				require.ErrorIs(t, err, tt.expectedErr)
@@ -99,4 +109,19 @@ func TestParseFormatVersionOrCurrent(t *testing.T) {
 			require.Equal(t, tt.expectedVersion, got)
 		})
 	}
+}
+
+func TestFormatVersion_ContentAddressed(t *testing.T) {
+	t.Parallel()
+
+	t.Run(`Given every format version,
+	when ContentAddressed is called,
+	then only version three identifies objects by their original content`, func(t *testing.T) {
+		t.Parallel()
+
+		require.False(t, repository.FormatVersionOne.ContentAddressed())
+		require.False(t, repository.FormatVersionTwo.ContentAddressed())
+		require.True(t, repository.FormatVersionThree.ContentAddressed())
+		require.Equal(t, repository.FormatVersionTwo, repository.DefaultFormatVersion)
+	})
 }

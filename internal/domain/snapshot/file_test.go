@@ -1,8 +1,10 @@
 package snapshot_test
 
 import (
+	"io/fs"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/fixtures"
@@ -109,5 +111,75 @@ func TestHydrateFile(t *testing.T) {
 		require.Equal(t, "abc", file.Hash())
 		require.Equal(t, int64(4), file.Size())
 		require.Equal(t, chunks, file.Chunks())
+	})
+}
+
+func TestFile_Kinds(t *testing.T) {
+	t.Parallel()
+
+	modTime := time.Date(2026, 11, 14, 10, 0, 0, 0, time.FixedZone("CET", 3600))
+	chunked := snapshot.HydrateFile("/data/big.bin", "", 8, []snapshot.Chunk{*snapshot.NewChunk("aa", 0, 4), *snapshot.NewChunk("bb", 4, 4)})
+
+	tests := []struct {
+		name           string
+		file           snapshot.File
+		expectedKind   snapshot.EntryKind
+		expectedHashes []string
+	}{
+		{
+			name:           "with a regular file, then it has content stored in a single object",
+			file:           *snapshot.HydrateFile("/data/file.txt", "abc", 3, nil),
+			expectedKind:   snapshot.RegularEntry,
+			expectedHashes: []string{"abc"},
+		},
+		{
+			name:           "with a chunked file, then its objects are the chunks",
+			file:           *chunked,
+			expectedKind:   snapshot.RegularEntry,
+			expectedHashes: []string{"aa", "bb"},
+		},
+		{
+			name:         "with a directory, then it has no content",
+			file:         *snapshot.NewDirectory("/data/docs"),
+			expectedKind: snapshot.DirectoryEntry,
+		},
+		{
+			name:         "with a symlink, then it has no content",
+			file:         *snapshot.NewSymlink("/data/link", "docs/file.txt"),
+			expectedKind: snapshot.SymlinkEntry,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(`Given a File,
+		when its kind and objects are read `+tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			require.Equal(t, tt.expectedKind, tt.file.Kind())
+			require.Equal(t, tt.expectedKind == snapshot.RegularEntry, tt.file.HasContent())
+			require.Equal(t, tt.expectedHashes, tt.file.ObjectHashes())
+		})
+	}
+
+	t.Run(`Given a File with metadata,
+	when the metadata is added and removed,
+	then the mode keeps only permission bits, the time is in UTC and the original file never changes`, func(t *testing.T) {
+		t.Parallel()
+
+		file := *snapshot.NewSymlink("/data/link", "target")
+		metadata := snapshot.NewMetadata(fs.ModeSymlink|fs.ModeSetuid|0o755, modTime)
+
+		withMetadata := file.WithMetadata(metadata)
+		got, ok := withMetadata.Metadata()
+
+		require.True(t, ok)
+		require.Equal(t, fs.ModeSetuid|0o755, got.Mode())
+		require.Equal(t, time.UTC, got.ModTime().Location())
+		require.True(t, modTime.Equal(got.ModTime()))
+		require.Equal(t, "target", withMetadata.Target())
+		_, ok = file.Metadata()
+		require.False(t, ok)
+		_, ok = withMetadata.WithoutMetadata().Metadata()
+		require.False(t, ok)
 	})
 }

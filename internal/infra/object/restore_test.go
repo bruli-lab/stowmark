@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/fixtures"
 	"github.com/bruli-lab/stowmark/internal/infra/object"
 	"github.com/stretchr/testify/require"
@@ -35,12 +34,8 @@ func TestRestoreFile(t *testing.T) {
 
 	const previous = "previous content"
 	const restored = "restored content"
-	none, err := repository.NewCompression(repository.NoneCompressionType, nil)
-	require.NoError(t, err)
-
 	tests := []struct {
 		name            string
-		comp            *repository.Compression
 		size            int64
 		readPart        object.PartReader
 		canceled        bool
@@ -48,15 +43,7 @@ func TestRestoreFile(t *testing.T) {
 		expectedContent string
 	}{
 		{
-			name:            "without compression configuration, then it returns a compression required error and keeps the existing file",
-			size:            int64(len(restored)),
-			readPart:        writingPart(restored),
-			expectedErr:     object.ErrCompressionRequired,
-			expectedContent: previous,
-		},
-		{
 			name:            "with a canceled context, then it returns a context canceled error and keeps the existing file",
-			comp:            none,
 			size:            int64(len(restored)),
 			readPart:        writingPart(restored),
 			canceled:        true,
@@ -65,7 +52,6 @@ func TestRestoreFile(t *testing.T) {
 		},
 		{
 			name:            "with a part that fails after writing data, then it returns the part error and keeps the existing file",
-			comp:            none,
 			size:            int64(len(restored)),
 			readPart:        failingPart(restored),
 			expectedErr:     errPartFailed,
@@ -73,7 +59,6 @@ func TestRestoreFile(t *testing.T) {
 		},
 		{
 			name:            "with a restored size that does not match the file, then it returns a size mismatch error and keeps the existing file",
-			comp:            none,
 			size:            int64(len(restored)) + 1,
 			readPart:        writingPart(restored),
 			expectedErr:     object.ErrSizeMismatch,
@@ -81,7 +66,6 @@ func TestRestoreFile(t *testing.T) {
 		},
 		{
 			name:            "with parts that match the file, then it replaces the existing file",
-			comp:            none,
 			size:            int64(len(restored)),
 			readPart:        writingPart(restored),
 			expectedContent: restored,
@@ -105,7 +89,7 @@ func TestRestoreFile(t *testing.T) {
 				cancel()
 			}
 
-			err := object.RestoreFile(ctx, tt.comp, &file, tt.readPart)
+			err := object.RestoreFile(ctx, &file, tt.readPart)
 
 			if tt.expectedErr != nil {
 				require.ErrorIs(t, err, tt.expectedErr)
@@ -126,7 +110,7 @@ func TestRestoreFile(t *testing.T) {
 	then it returns a file required error`, func(t *testing.T) {
 		t.Parallel()
 
-		err := object.RestoreFile(context.Background(), none, nil, writingPart(restored))
+		err := object.RestoreFile(context.Background(), nil, writingPart(restored))
 
 		require.ErrorIs(t, err, object.ErrFileRequired)
 	})

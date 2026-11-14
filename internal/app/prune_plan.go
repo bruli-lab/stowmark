@@ -12,6 +12,7 @@ const PrunePlanQueryName = "prune-plan"
 
 type PrunePlanQuery struct {
 	RepositoryPath string
+	PrivateKeyPath *string
 }
 
 func (p PrunePlanQuery) Name() string {
@@ -31,7 +32,7 @@ func (p *PrunePlan) Handle(ctx context.Context, query cqs.Query) (any, error) {
 
 	var plan *snapshot.PrunePlan
 	err := p.locker.WithLock(ctx, repository.SharedLock, func(ctx context.Context) error {
-		target, err := p.planner.plan(ctx, q.RepositoryPath)
+		target, err := p.planner.plan(ctx, q.RepositoryPath, q.PrivateKeyPath)
 		if err != nil {
 			return err
 		}
@@ -50,10 +51,12 @@ func NewPrunePlan(
 	manifestRepo ManifestRepository,
 	objectRepo ObjectRepository,
 	encryptedRepo EncryptedObjectRepository,
+	asymmetricRepo AsymmetricKeyPairRepository,
+	symmetricRepo SymmetricKeyRepository,
 	locker *RepositoryLocker,
 ) *PrunePlan {
 	return &PrunePlan{
-		planner: newPrunePlanner(folderRepo, manifestRepo, objectRepo, encryptedRepo),
+		planner: newPrunePlanner(folderRepo, manifestRepo, objectRepo, encryptedRepo, newKeyring(folderRepo, asymmetricRepo, symmetricRepo)),
 		locker:  locker,
 	}
 }

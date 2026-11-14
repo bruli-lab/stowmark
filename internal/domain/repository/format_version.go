@@ -10,25 +10,31 @@ func (c FormatVersion) Int() int {
 	return int(c)
 }
 
+func (c FormatVersion) ContentAddressed() bool {
+	return c >= FormatVersionThree
+}
+
 const (
 	FormatVersionOne FormatVersion = iota + 1
 	FormatVersionTwo
-	CurrentFormatVersion = FormatVersionTwo
+	FormatVersionThree
+	DefaultFormatVersion = FormatVersionTwo
+	LatestFormatVersion  = FormatVersionThree
 )
 
 func ParseFormatVersion(value int) (FormatVersion, error) {
 	version := FormatVersion(value)
 
-	if version < FormatVersionOne || version > CurrentFormatVersion {
-		return 0, fmt.Errorf("%w: %d (supported: %d-%d)", ErrUnsupportedFormatVersion, value, FormatVersionOne, CurrentFormatVersion)
+	if version < FormatVersionOne || version > LatestFormatVersion {
+		return 0, fmt.Errorf("%w: %d (supported: %d-%d)", ErrUnsupportedFormatVersion, value, FormatVersionOne, LatestFormatVersion)
 	}
 
 	return version, nil
 }
 
-func ParseFormatVersionOrCurrent(value int) (FormatVersion, error) {
+func ParseFormatVersionOrDefault(value int) (FormatVersion, error) {
 	if value == 0 {
-		return CurrentFormatVersion, nil
+		return DefaultFormatVersion, nil
 	}
 
 	return ParseFormatVersion(value)

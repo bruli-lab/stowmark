@@ -3,8 +3,6 @@ package app_test
 import (
 	"context"
 	"fmt"
-	"io"
-	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -24,8 +22,8 @@ type concurrentReads struct {
 	maximum atomic.Int32
 }
 
-func (c *concurrentReads) read(contents map[string]string) func(context.Context, string, []byte, uint64) (io.ReadCloser, error) {
-	return func(_ context.Context, hash string, _ []byte, _ uint64) (io.ReadCloser, error) {
+func (c *concurrentReads) verify(contents map[string]string) func(context.Context, string, repository.Codec) error {
+	return func(_ context.Context, hash string, _ repository.Codec) error {
 		active := c.active.Add(1)
 		defer c.active.Add(-1)
 		for {
@@ -35,7 +33,10 @@ func (c *concurrentReads) read(contents map[string]string) func(context.Context,
 			}
 		}
 		time.Sleep(20 * time.Millisecond)
-		return io.NopCloser(strings.NewReader(contents[hash])), nil
+		if _, ok := contents[hash]; !ok {
+			return snapshot.NewNotFoundError(hash)
+		}
+		return nil
 	}
 }
 
@@ -79,8 +80,8 @@ func TestVerifySnapshot_Handle_MemoryBudget(t *testing.T) {
 			reads := &concurrentReads{}
 			asymmetric, symmetric := keyRepositories()
 			handler := app.NewVerifySnapshotWithWorkers(
-				&app.ManifestRepositoryMock{GetFunc: func(context.Context, string) (*snapshot.Manifest, error) { return manifest, nil }},
-				&app.ObjectRepositoryMock{ReadObjectFunc: reads.read(contents)},
+				&app.ManifestRepositoryMock{GetFunc: func(context.Context, string, repository.Codec) (*snapshot.Manifest, error) { return manifest, nil }},
+				&app.ObjectRepositoryMock{VerifyObjectFunc: reads.verify(contents)},
 				&app.FolderRepositoryMock{GetConfigFunc: func(context.Context, string) (*repository.Config, error) { return &config, nil }},
 				asymmetric, symmetric, newUnlockedLocker(), 4,
 			)
@@ -104,8 +105,8 @@ func TestVerifySnapshot_Handle_MemoryBudget(t *testing.T) {
 		config := fixtures.ConfigBuilder{}.Build(t)
 		reads := &concurrentReads{}
 		handler := app.NewVerifySnapshotWithWorkers(
-			&app.ManifestRepositoryMock{GetFunc: func(context.Context, string) (*snapshot.Manifest, error) { return manifest, nil }},
-			&app.ObjectRepositoryMock{ReadObjectFunc: reads.read(contents)},
+			&app.ManifestRepositoryMock{GetFunc: func(context.Context, string, repository.Codec) (*snapshot.Manifest, error) { return manifest, nil }},
+			&app.ObjectRepositoryMock{VerifyObjectFunc: reads.verify(contents)},
 			&app.FolderRepositoryMock{GetConfigFunc: func(context.Context, string) (*repository.Config, error) { return &config, nil }},
 			&app.AsymmetricKeyPairRepositoryMock{}, &app.SymmetricKeyRepositoryMock{}, newUnlockedLocker(), 4,
 		)

@@ -58,18 +58,18 @@ func TestRestoreSnapshot_HandleResult(t *testing.T) {
 		when Handle method is called `+tt.name, func(t *testing.T) {
 			t.Parallel()
 			manifestRepo := &app.ManifestRepositoryMock{}
-			manifestRepo.GetFunc = func(_ context.Context, _ string) (*snapshot.Manifest, error) {
+			manifestRepo.GetFunc = func(_ context.Context, _ string, _ repository.Codec) (*snapshot.Manifest, error) {
 				return tt.manifest, tt.manifestErr
 			}
 			objectRepo := &app.ObjectRepositoryMock{}
-			objectRepo.RestoreObjectFunc = func(_ context.Context, _ *repository.Compression, _ *snapshot.File, _ []byte, _ uint64) error {
+			objectRepo.RestoreObjectFunc = func(_ context.Context, _ *snapshot.File, _ repository.Codec) error {
 				return tt.restoreErr
 			}
-			folderRepo := &app.FolderRepositoryMock{}
+			folderRepo := plainFolderRepository(t)
 			symmetricRepo := &app.SymmetricKeyRepositoryMock{}
 			asymmetricRepo := &app.AsymmetricKeyPairRepositoryMock{}
 
-			handler := app.NewRestoreSnapshot(manifestRepo, objectRepo, folderRepo, asymmetricRepo, symmetricRepo, newUnlockedLocker())
+			handler := app.NewRestoreSnapshot(manifestRepo, objectRepo, &app.RestoreDestinationMock{}, folderRepo, asymmetricRepo, symmetricRepo, newUnlockedLocker())
 			events, err := handler.Handle(t.Context(), app.RestoreSnapshotCommand{
 				SnapshotID:      tt.args.snapshotID,
 				RepositoryPath:  "repository-path",
@@ -84,7 +84,7 @@ func TestRestoreSnapshot_HandleResult(t *testing.T) {
 			require.Len(t, events, 1)
 			result, ok := events[0].(*snapshot.SnapshotRestored)
 			require.True(t, ok)
-			require.Equal(t, tt.args.snapshotID, result.SnapshotID())
+			require.Equal(t, tt.manifest.ID(), result.SnapshotID())
 			require.Equal(t, tt.expectedSuccess, result.IsSuccess())
 			require.Len(t, result.Failed(), tt.expectedFailedLen)
 		})

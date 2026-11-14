@@ -6,8 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
-	"strings"
 	"testing"
 
 	"github.com/bruli-lab/stowmark/internal/app"
@@ -54,20 +52,20 @@ func newCreateDependencies(t *testing.T, files []snapshot.File) createDependenci
 			ExploreFunc: func(context.Context, string, *snapshot.ExcludeRules) (*snapshot.Source, error) {
 				return &source, nil
 			},
-			CalculateHashFunc: func(_ context.Context, filePath string, _ *repository.Compression) (string, error) {
+			CalculateHashFunc: func(_ context.Context, filePath string, _ repository.Codec) (string, error) {
 				return hashOf(filePath), nil
 			},
 		},
 		manifestRepo: &app.ManifestRepositoryMock{
-			SaveFunc: func(_ context.Context, _ *snapshot.Manifest) error {
+			SaveFunc: func(_ context.Context, _ *snapshot.Manifest, _ repository.Codec) error {
 				return nil
 			},
 		},
 		objectRepo: &app.ObjectRepositoryMock{
-			AlreadyExistsFunc: func(_ context.Context, _ string, _ []byte, _ uint64) (bool, error) {
+			AlreadyExistsFunc: func(_ context.Context, _ string, _ repository.Codec) (bool, error) {
 				return false, nil
 			},
-			SaveChunkFunc: func(_ context.Context, _, _ string, _, _ int64, _ *repository.Compression, _ []byte, _ uint64) error {
+			SaveChunkFunc: func(_ context.Context, _ string, _ snapshot.Chunk, _ repository.Codec) error {
 				return nil
 			},
 		},
@@ -126,8 +124,8 @@ func TestCreateSnapshot_Handle_Concurrency(t *testing.T) {
 		files := sourceFiles(concurrentFiles)
 		deps := newCreateDependencies(t, files)
 		failingHash := hashOf(files[concurrentFiles/2].Path())
-		deps.objectRepo.SaveChunkFunc = func(_ context.Context, _, hash string, _, _ int64, _ *repository.Compression, _ []byte, _ uint64) error {
-			if hash == failingHash {
+		deps.objectRepo.SaveChunkFunc = func(_ context.Context, _ string, chunk snapshot.Chunk, _ repository.Codec) error {
+			if chunk.Hash() == failingHash {
 				return errSave
 			}
 			return nil
@@ -149,7 +147,7 @@ func TestCreateSnapshot_Handle_Concurrency(t *testing.T) {
 		defer cancel()
 		files := sourceFiles(concurrentFiles)
 		deps := newCreateDependencies(t, files)
-		deps.objectRepo.SaveChunkFunc = func(_ context.Context, _, _ string, _, _ int64, _ *repository.Compression, _ []byte, _ uint64) error {
+		deps.objectRepo.SaveChunkFunc = func(_ context.Context, _ string, _ snapshot.Chunk, _ repository.Codec) error {
 			cancel()
 			return nil
 		}
@@ -162,15 +160,24 @@ func TestCreateSnapshot_Handle_Concurrency(t *testing.T) {
 	})
 }
 
-func newVerifier(objectRepo *app.ObjectRepositoryMock, manifest *snapshot.Manifest) *app.VerifySnapshot {
+func plainFolderRepository(t *testing.T) *app.FolderRepositoryMock {
+	t.Helper()
+	config := fixtures.ConfigBuilder{}.Build(t)
+	return &app.FolderRepositoryMock{
+		GetConfigFunc: func(context.Context, string) (*repository.Config, error) { return &config, nil },
+	}
+}
+
+func newVerifier(t *testing.T, objectRepo *app.ObjectRepositoryMock, manifest *snapshot.Manifest) *app.VerifySnapshot {
+	t.Helper()
 	return app.NewVerifySnapshot(
 		&app.ManifestRepositoryMock{
-			GetFunc: func(_ context.Context, _ string) (*snapshot.Manifest, error) {
+			GetFunc: func(_ context.Context, _ string, _ repository.Codec) (*snapshot.Manifest, error) {
 				return manifest, nil
 			},
 		},
 		objectRepo,
-		&app.FolderRepositoryMock{},
+		plainFolderRepository(t),
 		&app.AsymmetricKeyPairRepositoryMock{},
 		&app.SymmetricKeyRepositoryMock{},
 		newUnlockedLocker(),
@@ -210,16 +217,15 @@ func TestVerifySnapshot_Handle_Concurrency(t *testing.T) {
 			missing++
 		}
 		objectRepo := &app.ObjectRepositoryMock{
-			ReadObjectFunc: func(_ context.Context, hash string, _ []byte, _ uint64) (io.ReadCloser, error) {
-				content, ok := contents[hash]
-				if !ok {
-					return nil, snapshot.NewNotFoundError(hash)
+			VerifyObjectFunc: func(_ context.Context, hash string, _ repository.Codec) error {
+				if _, ok := contents[hash]; !ok {
+					return snapshot.NewNotFoundError(hash)
 				}
-				return io.NopCloser(strings.NewReader(content)), nil
+				return nil
 			},
 		}
 
-		result, err := verifySnapshot(t.Context(), newVerifier(objectRepo, manifest), verifyQuery)
+		result, err := verifySnapshot(t.Context(), newVerifier(t, objectRepo, manifest), verifyQuery)
 
 		require.NoError(t, err)
 		require.Equal(t, concurrentFiles, result.TotalFiles())
@@ -234,15 +240,15 @@ func TestVerifySnapshot_Handle_Concurrency(t *testing.T) {
 
 		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
-		manifest, contents := verifiableManifest(concurrentFiles)
+		manifest, _ := verifiableManifest(concurrentFiles)
 		objectRepo := &app.ObjectRepositoryMock{
-			ReadObjectFunc: func(_ context.Context, hash string, _ []byte, _ uint64) (io.ReadCloser, error) {
+			VerifyObjectFunc: func(context.Context, string, repository.Codec) error {
 				cancel()
-				return io.NopCloser(strings.NewReader(contents[hash])), nil
+				return nil
 			},
 		}
 
-		result, err := verifySnapshot(ctx, newVerifier(objectRepo, manifest), verifyQuery)
+		result, err := verifySnapshot(ctx, newVerifier(t, objectRepo, manifest), verifyQuery)
 
 		require.ErrorIs(t, err, context.Canceled)
 		require.Nil(t, result)

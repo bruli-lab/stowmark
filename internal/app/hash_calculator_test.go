@@ -89,16 +89,16 @@ func TestCreateSnapshot_Handle_HashCalculation(t *testing.T) {
 				ExploreFunc: func(context.Context, string, *snapshot.ExcludeRules) (*snapshot.Source, error) {
 					return &source, nil
 				},
-				CalculateHashFunc: func(context.Context, string, *repository.Compression) (string, error) {
+				CalculateHashFunc: func(context.Context, string, repository.Codec) (string, error) {
 					return "hash", tt.calculateErr
 				},
-				CalculateChunksFunc: func(context.Context, string, int64, *repository.Compression) ([]snapshot.Chunk, error) {
+				CalculateChunksFunc: func(context.Context, string, int64, repository.Codec) ([]snapshot.Chunk, error) {
 					return chunks, tt.calculateChunksErr
 				},
 			}
-			manifestRepo := &app.ManifestRepositoryMock{SaveFunc: func(context.Context, *snapshot.Manifest) error { return nil }}
+			manifestRepo := &app.ManifestRepositoryMock{SaveFunc: func(context.Context, *snapshot.Manifest, repository.Codec) error { return nil }}
 			objectRepo := &app.ObjectRepositoryMock{
-				AlreadyExistsFunc: func(context.Context, string, []byte, uint64) (bool, error) { return true, nil },
+				AlreadyExistsFunc: func(context.Context, string, repository.Codec) (bool, error) { return true, nil },
 			}
 			folderRepo := &app.FolderRepositoryMock{
 				GetConfigFunc: func(context.Context, string) (*repository.Config, error) { return &config, nil },

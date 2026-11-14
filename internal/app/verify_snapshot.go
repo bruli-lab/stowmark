@@ -50,12 +50,12 @@ func (v *VerifySnapshot) Handle(ctx context.Context, query cqs.Query) (any, erro
 }
 
 func (v *VerifySnapshot) verify(ctx context.Context, q VerifySnapshotQuery) (*snapshot.Result, error) {
-	key, err := v.keys.forRepository(ctx, q.RepositoryPath, q.PrivateKeyPath)
+	codec, err := v.keys.forRepository(ctx, q.RepositoryPath, q.PrivateKeyPath)
 	if err != nil {
 		return nil, err
 	}
 
-	manifest, err := v.manifestRepo.Get(ctx, q.SnapshotID)
+	manifest, err := v.manifestRepo.Get(ctx, q.SnapshotID, codec)
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +72,7 @@ func (v *VerifySnapshot) verify(ctx context.Context, q VerifySnapshotQuery) (*sn
 		}
 
 		group.Go(func() error {
-			reason, err := v.verifyFile(groupCtx, &file, key)
+			reason, err := v.verifyFile(groupCtx, &file, codec)
 			if err != nil {
 				return err
 			}
@@ -102,13 +102,16 @@ func (v *VerifySnapshot) verify(ctx context.Context, q VerifySnapshotQuery) (*sn
 	return result, nil
 }
 
-func (v *VerifySnapshot) verifyFile(ctx context.Context, file *snapshot.File, key objectKey) (string, error) {
+func (v *VerifySnapshot) verifyFile(ctx context.Context, file *snapshot.File, codec repository.Codec) (string, error) {
+	if !file.HasContent() {
+		return "", nil
+	}
 	chunks := file.Chunks()
 	if len(chunks) == 0 {
-		return v.verifier.verify(ctx, file.Hash(), file.Size(), key)
+		return v.verifier.verify(ctx, file.Hash(), file.Size(), codec)
 	}
 	for index, chunk := range chunks {
-		reason, err := v.verifier.verify(ctx, chunk.Hash(), chunk.Size(), key)
+		reason, err := v.verifier.verify(ctx, chunk.Hash(), chunk.Size(), codec)
 		if err != nil {
 			return "", err
 		}

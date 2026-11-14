@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 
+	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"golang.org/x/sync/semaphore"
 )
 
@@ -20,8 +21,8 @@ func newMemoryBudget(limit int64) *memoryBudget {
 	return &memoryBudget{limit: limit, semaphore: semaphore.NewWeighted(limit)}
 }
 
-func (m *memoryBudget) reserve(ctx context.Context, key objectKey, size int64) (release func(), err error) {
-	if m == nil || key.symmetricKey == nil {
+func (m *memoryBudget) reserve(ctx context.Context, codec repository.Codec, size int64) (release func(), err error) {
+	if m == nil || !codec.BuffersEncryptedObjects() {
 		return func() {}, nil
 	}
 	weight := min(max(size, 1), m.limit)

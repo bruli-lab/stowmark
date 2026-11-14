@@ -171,7 +171,7 @@ func TestInit_Handle(t *testing.T) {
 			events, err := handler.Handle(t.Context(), app.InitCommand{
 				RepositoryPath: "repo",
 				Compression:    fixtures.CompressionBuilder{}.Build(t),
-				FormatVersion:  repository.CurrentFormatVersion,
+				FormatVersion:  repository.DefaultFormatVersion,
 				PublicKeyPath:  tt.publicKeyPath,
 				Force:          tt.force,
 			})

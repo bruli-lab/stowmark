@@ -71,3 +71,24 @@ func TestManifest_Resume(t *testing.T) {
 		require.Equal(t, snapshot.NewManifestResume("snapshot-id", createdAt, 2, 42, "source"), manifest.Resume())
 	})
 }
+
+func TestManifest_DirectoriesAndSymlinks(t *testing.T) {
+	t.Parallel()
+
+	t.Run(`Given a manifest with a file, a directory and a symlink,
+	when the referenced objects, sizes and resume are read,
+	then only the regular file counts`, func(t *testing.T) {
+		t.Parallel()
+
+		manifest := fixtures.ManifestBuilder{Files: []snapshot.File{
+			*snapshot.NewDirectory("/source/docs"),
+			fixtures.FileBuilder{Hash: new("aa01"), Size: new(int64(5))}.Build(),
+			*snapshot.NewSymlink("/source/link", "docs"),
+		}}.Build()
+
+		require.Equal(t, []string{"aa01"}, manifest.ReferencedHashes())
+		require.Equal(t, map[string]int64{"aa01": 5}, manifest.ObjectSizes())
+		require.Equal(t, 1, manifest.Resume().Files())
+		require.Equal(t, int64(5), manifest.Resume().Size())
+	})
+}

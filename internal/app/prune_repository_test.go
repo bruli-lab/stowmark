@@ -54,7 +54,9 @@ func newPruneDependencies(t *testing.T, setup *pruneSetup) *pruneDependencies {
 		GetConfigFunc: func(context.Context, string) (*repository.Config, error) { return &config, nil },
 	}
 	deps.manifestRepo = &app.ManifestRepositoryMock{
-		ListFunc: func(context.Context) ([]snapshot.Manifest, error) { return setup.manifests, setup.manifestErr },
+		ListFunc: func(context.Context, repository.Codec) ([]snapshot.Manifest, error) {
+			return setup.manifests, setup.manifestErr
+		},
 	}
 	deps.objectRepo = &app.ObjectRepositoryMock{
 		ListObjectsFunc: func(context.Context, bool, uint64) ([]string, error) { return setup.stored, setup.listErr },
@@ -109,7 +111,7 @@ func TestPruneRepository_Handle(t *testing.T) {
 			t.Parallel()
 
 			deps := newPruneDependencies(t, &pruneSetup{config: tt.config, manifests: manifests, stored: stored})
-			handler := app.NewPruneRepositoryWithWorkers(deps.folderRepo, deps.manifestRepo, deps.objectRepo, deps.encryptedRepo, newUnlockedLocker(), 2)
+			handler := app.NewPruneRepositoryWithWorkers(deps.folderRepo, deps.manifestRepo, deps.objectRepo, deps.encryptedRepo, nil, nil, newUnlockedLocker(), 2)
 
 			events, err := handler.Handle(t.Context(), app.PruneRepositoryCommand{RepositoryPath: "repo"})
 
@@ -142,7 +144,7 @@ func TestPruneRepository_Handle(t *testing.T) {
 
 		deps := newPruneDependencies(t, &pruneSetup{manifests: manifests, stored: []string{"aa01", "bb02", "cc03"}})
 
-		events, err := app.NewPruneRepository(deps.folderRepo, deps.manifestRepo, deps.objectRepo, deps.encryptedRepo, newUnlockedLocker()).
+		events, err := app.NewPruneRepository(deps.folderRepo, deps.manifestRepo, deps.objectRepo, deps.encryptedRepo, nil, nil, newUnlockedLocker()).
 			Handle(t.Context(), app.PruneRepositoryCommand{RepositoryPath: "repo"})
 
 		require.NoError(t, err)
@@ -167,7 +169,7 @@ func TestPruneRepository_Handle_Leftovers(t *testing.T) {
 			temporaries: 4,
 		})
 
-		events, err := app.NewPruneRepository(deps.folderRepo, deps.manifestRepo, deps.objectRepo, deps.encryptedRepo, newUnlockedLocker()).
+		events, err := app.NewPruneRepository(deps.folderRepo, deps.manifestRepo, deps.objectRepo, deps.encryptedRepo, nil, nil, newUnlockedLocker()).
 			Handle(t.Context(), app.PruneRepositoryCommand{RepositoryPath: "repo"})
 
 		require.NoError(t, err)
@@ -194,7 +196,7 @@ func TestPruneRepository_Handle_Leftovers(t *testing.T) {
 
 		deps := newPruneDependencies(t, &pruneSetup{generations: []uint64{1}})
 
-		events, err := app.NewPruneRepository(deps.folderRepo, deps.manifestRepo, deps.objectRepo, deps.encryptedRepo, newUnlockedLocker()).
+		events, err := app.NewPruneRepository(deps.folderRepo, deps.manifestRepo, deps.objectRepo, deps.encryptedRepo, nil, nil, newUnlockedLocker()).
 			Handle(t.Context(), app.PruneRepositoryCommand{RepositoryPath: "repo"})
 
 		require.NoError(t, err)
@@ -210,7 +212,7 @@ func TestPruneRepository_Handle_Leftovers(t *testing.T) {
 
 		deps := newPruneDependencies(t, &pruneSetup{config: encryption.NewEncryptionConfig("key", "fingerprint", 2), generations: []uint64{1, 2}})
 
-		result, err := app.NewPrunePlan(deps.folderRepo, deps.manifestRepo, deps.objectRepo, deps.encryptedRepo, newUnlockedLocker()).
+		result, err := app.NewPrunePlan(deps.folderRepo, deps.manifestRepo, deps.objectRepo, deps.encryptedRepo, nil, nil, newUnlockedLocker()).
 			Handle(t.Context(), app.PrunePlanQuery{RepositoryPath: "repo"})
 
 		require.NoError(t, err)
@@ -235,7 +237,7 @@ func TestPrunePlan_Handle(t *testing.T) {
 			stored:    []string{"aa01", "bb02", "dd04", "ee05"},
 		})
 
-		result, err := app.NewPrunePlan(deps.folderRepo, deps.manifestRepo, deps.objectRepo, deps.encryptedRepo, newUnlockedLocker()).
+		result, err := app.NewPrunePlan(deps.folderRepo, deps.manifestRepo, deps.objectRepo, deps.encryptedRepo, nil, nil, newUnlockedLocker()).
 			Handle(t.Context(), app.PrunePlanQuery{RepositoryPath: "repo"})
 
 		require.NoError(t, err)
@@ -256,7 +258,7 @@ func TestPrunePlan_Handle(t *testing.T) {
 		errRepo := errors.New("repository failed")
 		deps := newPruneDependencies(t, &pruneSetup{listErr: errRepo})
 
-		_, err := app.NewPrunePlan(deps.folderRepo, deps.manifestRepo, deps.objectRepo, deps.encryptedRepo, newUnlockedLocker()).
+		_, err := app.NewPrunePlan(deps.folderRepo, deps.manifestRepo, deps.objectRepo, deps.encryptedRepo, nil, nil, newUnlockedLocker()).
 			Handle(t.Context(), app.PrunePlanQuery{RepositoryPath: "repo"})
 
 		require.ErrorIs(t, err, errRepo)
@@ -305,7 +307,7 @@ func TestPruneRepository_Handle_Errors(t *testing.T) {
 
 			deps := newPruneDependencies(t, &tt.setup)
 
-			events, err := app.NewPruneRepository(deps.folderRepo, deps.manifestRepo, deps.objectRepo, deps.encryptedRepo, newUnlockedLocker()).
+			events, err := app.NewPruneRepository(deps.folderRepo, deps.manifestRepo, deps.objectRepo, deps.encryptedRepo, nil, nil, newUnlockedLocker()).
 				Handle(t.Context(), app.PruneRepositoryCommand{RepositoryPath: "repo"})
 
 			require.ErrorIs(t, err, errRepo)
@@ -327,13 +329,13 @@ func TestPruneRepository_Handle_Locked(t *testing.T) {
 
 		deps := newPruneDependencies(t, &pruneSetup{manifests: []snapshot.Manifest{manifestWithHashes("aa01")}, stored: []string{"aa01", "bb02"}})
 		locker := app.NewRepositoryLocker(newMemoryLocks(otherLock(t, repository.SharedLock, time.Now())).mock)
-		handler := app.NewPruneRepository(deps.folderRepo, deps.manifestRepo, deps.objectRepo, deps.encryptedRepo, locker)
+		handler := app.NewPruneRepository(deps.folderRepo, deps.manifestRepo, deps.objectRepo, deps.encryptedRepo, nil, nil, locker)
 
 		_, err := handler.Handle(t.Context(), app.PruneRepositoryCommand{RepositoryPath: "repo"})
 		require.ErrorIs(t, err, repository.ErrRepositoryLocked)
 		require.Empty(t, deps.objectRepo.ListObjectsCalls())
 
-		_, err = app.NewPrunePlan(deps.folderRepo, deps.manifestRepo, deps.objectRepo, deps.encryptedRepo, locker).
+		_, err = app.NewPrunePlan(deps.folderRepo, deps.manifestRepo, deps.objectRepo, deps.encryptedRepo, nil, nil, locker).
 			Handle(t.Context(), app.PrunePlanQuery{RepositoryPath: "repo"})
 		require.NoError(t, err)
 		require.Empty(t, deps.deletedObjects())

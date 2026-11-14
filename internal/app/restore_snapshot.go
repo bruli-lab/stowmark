@@ -25,7 +25,7 @@ func (r RestoreSnapshotCommand) Name() string {
 
 type RestoreSnapshot struct {
 	manifestRepo ManifestRepository
-	objectRepo   ObjectRepository
+	restorer     restorer
 	keys         keyring
 	locker       *RepositoryLocker
 }
@@ -41,39 +41,21 @@ func (r *RestoreSnapshot) Handle(ctx context.Context, cmd cqs.Command) ([]event.
 }
 
 func (r *RestoreSnapshot) restore(ctx context.Context, co RestoreSnapshotCommand) (*snapshot.SnapshotRestored, error) {
-	key, err := r.keys.forRepository(ctx, co.RepositoryPath, co.PrivateKeyPath)
+	codec, err := r.keys.forRepository(ctx, co.RepositoryPath, co.PrivateKeyPath)
 	if err != nil {
 		return nil, err
 	}
-	man, err := r.manifestRepo.Get(ctx, co.SnapshotID)
+	man, err := r.manifestRepo.Get(ctx, co.SnapshotID, codec)
 	if err != nil {
 		return nil, err
 	}
-	result := snapshot.NewResult(co.SnapshotID)
-	for _, f := range man.Files() {
-		if err := restoreFile(ctx, r.objectRepo, man, f, co.DestinationPath, key); err != nil {
-			result.AddFailed(*snapshot.NewFailedResult(f.Path(), err.Error()))
-			continue
-		}
-		result.AddSuccess()
-	}
-	return result.Restored(), nil
-}
-
-func restoreFile(ctx context.Context, objectRepo ObjectRepository, man *snapshot.Manifest, file snapshot.File, destinationPath *string, key objectKey) error {
-	if destinationPath != nil {
-		relocated, err := file.RelocatedTo(man.Source(), *destinationPath)
-		if err != nil {
-			return err
-		}
-		file = relocated
-	}
-	return objectRepo.RestoreObject(ctx, man.Compression(), &file, key.symmetricKey, key.generation)
+	return r.restorer.restoreSnapshot(ctx, man, codec, co.DestinationPath).Restored(), nil
 }
 
 func NewRestoreSnapshot(
 	manifestRepo ManifestRepository,
 	objectRepo ObjectRepository,
+	destination RestoreDestination,
 	folderRepo FolderRepository,
 	asymmetricRepo AsymmetricKeyPairRepository,
 	symmetricRepo SymmetricKeyRepository,
@@ -81,7 +63,7 @@ func NewRestoreSnapshot(
 ) *RestoreSnapshot {
 	return &RestoreSnapshot{
 		manifestRepo: manifestRepo,
-		objectRepo:   objectRepo,
+		restorer:     restorer{objectRepo: objectRepo, destination: destination},
 		keys:         newKeyring(folderRepo, asymmetricRepo, symmetricRepo),
 		locker:       locker,
 	}

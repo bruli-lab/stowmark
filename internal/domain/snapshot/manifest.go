@@ -54,14 +54,7 @@ func (m *Manifest) FindFile(filePath string) (*File, error) {
 func (m *Manifest) ReferencedHashes() []string {
 	hashes := make([]string, 0, len(m.files))
 	for i := range m.files {
-		chunks := m.files[i].Chunks()
-		if len(chunks) == 0 {
-			hashes = append(hashes, m.files[i].Hash())
-			continue
-		}
-		for _, chunk := range chunks {
-			hashes = append(hashes, chunk.Hash())
-		}
+		hashes = append(hashes, m.files[i].ObjectHashes()...)
 	}
 	return hashes
 }
@@ -69,12 +62,15 @@ func (m *Manifest) ReferencedHashes() []string {
 func (m *Manifest) ObjectSizes() map[string]int64 {
 	sizes := make(map[string]int64, len(m.files))
 	for i := range m.files {
-		chunks := m.files[i].Chunks()
-		if len(chunks) == 0 {
-			sizes[m.files[i].Hash()] = m.files[i].Size()
+		file := m.files[i]
+		if !file.HasContent() {
 			continue
 		}
-		for _, chunk := range chunks {
+		if len(file.Chunks()) == 0 {
+			sizes[file.Hash()] = file.Size()
+			continue
+		}
+		for _, chunk := range file.Chunks() {
 			sizes[chunk.Hash()] = chunk.Size()
 		}
 	}
@@ -82,9 +78,16 @@ func (m *Manifest) ObjectSizes() map[string]int64 {
 }
 
 func (m *Manifest) Resume() *ManifestResume {
-	var size int64
+	var (
+		size  int64
+		files int
+	)
 	for _, f := range m.files {
+		if !f.HasContent() {
+			continue
+		}
+		files++
 		size += f.Size()
 	}
-	return NewManifestResume(m.id, m.createdAt, len(m.files), size, m.source)
+	return NewManifestResume(m.id, m.createdAt, files, size, m.source)
 }

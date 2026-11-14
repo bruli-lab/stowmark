@@ -11,7 +11,9 @@ import (
 const ForgetPlanQueryName = "forget-plan"
 
 type ForgetPlanQuery struct {
-	Policy *snapshot.RetentionPolicy
+	RepositoryPath string
+	PrivateKeyPath *string
+	Policy         *snapshot.RetentionPolicy
 }
 
 func (f ForgetPlanQuery) Name() string {
@@ -20,6 +22,7 @@ func (f ForgetPlanQuery) Name() string {
 
 type ForgetPlan struct {
 	manifestRepo ManifestRepository
+	keys         keyring
 	locker       *RepositoryLocker
 }
 
@@ -34,7 +37,11 @@ func (f *ForgetPlan) Handle(ctx context.Context, query cqs.Query) (any, error) {
 
 	var decisions []snapshot.RetentionDecision
 	err := f.locker.WithLock(ctx, repository.SharedLock, func(ctx context.Context) error {
-		applied, err := applyRetention(ctx, f.manifestRepo, q.Policy)
+		codec, err := f.keys.forRepository(ctx, q.RepositoryPath, q.PrivateKeyPath)
+		if err != nil {
+			return err
+		}
+		applied, err := applyRetention(ctx, f.manifestRepo, codec, q.Policy)
 		decisions = applied
 		return err
 	})
@@ -45,6 +52,12 @@ func (f *ForgetPlan) Handle(ctx context.Context, query cqs.Query) (any, error) {
 	return decisions, nil
 }
 
-func NewForgetPlan(manifestRepo ManifestRepository, locker *RepositoryLocker) *ForgetPlan {
-	return &ForgetPlan{manifestRepo: manifestRepo, locker: locker}
+func NewForgetPlan(
+	folderRepo FolderRepository,
+	manifestRepo ManifestRepository,
+	asymmetricRepo AsymmetricKeyPairRepository,
+	symmetricRepo SymmetricKeyRepository,
+	locker *RepositoryLocker,
+) *ForgetPlan {
+	return &ForgetPlan{manifestRepo: manifestRepo, keys: newKeyring(folderRepo, asymmetricRepo, symmetricRepo), locker: locker}
 }

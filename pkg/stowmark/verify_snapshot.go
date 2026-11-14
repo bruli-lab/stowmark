@@ -22,7 +22,7 @@ func (h *Handler) VerifySnapshot(ctx context.Context, id string, privateKey *str
 	result, err := app.QueryResult[*snapshot.Result](h.repository.VerifySnapshot().Handle(ctx, app.VerifySnapshotQuery{
 		SnapshotID:     id,
 		RepositoryPath: h.repository.Path(),
-		PrivateKeyPath: privateKey,
+		PrivateKeyPath: h.key(privateKey),
 	}))
 	if err != nil {
 		return nil, err

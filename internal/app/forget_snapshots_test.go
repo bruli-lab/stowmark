@@ -38,7 +38,7 @@ func forgetManifestRepo(manifests []snapshot.Manifest, listErr, deleteErr error)
 		ids []string
 	)
 	repo = &app.ManifestRepositoryMock{
-		ListFunc: func(context.Context) ([]snapshot.Manifest, error) { return manifests, listErr },
+		ListFunc: func(context.Context, repository.Codec) ([]snapshot.Manifest, error) { return manifests, listErr },
 		DeleteFunc: func(_ context.Context, snapshotID string) error {
 			mu.Lock()
 			defer mu.Unlock()
@@ -65,7 +65,7 @@ func TestForgetSnapshots_Handle(t *testing.T) {
 		manifests := manifestsCreated(time.Hour, 2*time.Hour, 3*time.Hour)
 		repo, deleted := forgetManifestRepo(manifests, nil, nil)
 
-		events, err := app.NewForgetSnapshots(repo, newUnlockedLocker()).Handle(t.Context(), app.ForgetSnapshotsCommand{
+		events, err := app.NewForgetSnapshots(plainFolderRepository(t), repo, nil, nil, newUnlockedLocker()).Handle(t.Context(), app.ForgetSnapshotsCommand{
 			RepositoryPath: "repo",
 			Policy:         retentionPolicy(t, snapshot.RetentionRules{Last: 1}),
 		})
@@ -91,7 +91,7 @@ func TestForgetSnapshots_Handle(t *testing.T) {
 
 		repo, deleted := forgetManifestRepo(manifestsCreated(time.Hour, 2*time.Hour), nil, nil)
 
-		events, err := app.NewForgetSnapshots(repo, newUnlockedLocker()).Handle(t.Context(), app.ForgetSnapshotsCommand{
+		events, err := app.NewForgetSnapshots(plainFolderRepository(t), repo, nil, nil, newUnlockedLocker()).Handle(t.Context(), app.ForgetSnapshotsCommand{
 			RepositoryPath: "repo",
 			Policy:         retentionPolicy(t, snapshot.RetentionRules{Last: 5}),
 		})
@@ -113,7 +113,7 @@ func TestForgetPlan_Handle(t *testing.T) {
 		manifests := manifestsCreated(time.Hour, 2*time.Hour, 3*time.Hour)
 		repo, deleted := forgetManifestRepo(manifests, nil, nil)
 
-		result, err := app.NewForgetPlan(repo, newUnlockedLocker()).Handle(t.Context(), app.ForgetPlanQuery{
+		result, err := app.NewForgetPlan(plainFolderRepository(t), repo, nil, nil, newUnlockedLocker()).Handle(t.Context(), app.ForgetPlanQuery{
 			Policy: retentionPolicy(t, snapshot.RetentionRules{Last: 1}),
 		})
 
@@ -134,7 +134,7 @@ func TestForgetPlan_Handle(t *testing.T) {
 		t.Parallel()
 
 		repo, _ := forgetManifestRepo(nil, nil, nil)
-		handler := app.NewForgetPlan(repo, newUnlockedLocker())
+		handler := app.NewForgetPlan(plainFolderRepository(t), repo, nil, nil, newUnlockedLocker())
 
 		_, err := handler.Handle(t.Context(), app.ForgetPlanQuery{})
 		require.ErrorIs(t, err, app.ErrMissingRetentionPolicy)
@@ -184,7 +184,7 @@ func TestForgetSnapshots_Handle_Errors(t *testing.T) {
 				command.Policy = retentionPolicy(t, snapshot.RetentionRules{Last: 1})
 			}
 
-			events, err := app.NewForgetSnapshots(repo, newUnlockedLocker()).Handle(t.Context(), command)
+			events, err := app.NewForgetSnapshots(plainFolderRepository(t), repo, nil, nil, newUnlockedLocker()).Handle(t.Context(), command)
 
 			require.ErrorIs(t, err, tt.expectedErr)
 			require.Empty(t, events)
@@ -202,14 +202,14 @@ func TestForgetSnapshots_Handle_Locked(t *testing.T) {
 
 		repo, deleted := forgetManifestRepo(manifestsCreated(time.Hour, 2*time.Hour), nil, nil)
 		locker := app.NewRepositoryLocker(newMemoryLocks(otherLock(t, repository.SharedLock, time.Now())).mock)
-		handler := app.NewForgetSnapshots(repo, locker)
+		handler := app.NewForgetSnapshots(plainFolderRepository(t), repo, nil, nil, locker)
 		policy := retentionPolicy(t, snapshot.RetentionRules{Last: 1})
 
 		_, err := handler.Handle(t.Context(), app.ForgetSnapshotsCommand{RepositoryPath: "repo", Policy: policy})
 		require.ErrorIs(t, err, repository.ErrRepositoryLocked)
 		require.Empty(t, repo.ListCalls())
 
-		_, err = app.NewForgetPlan(repo, locker).Handle(t.Context(), app.ForgetPlanQuery{Policy: policy})
+		_, err = app.NewForgetPlan(plainFolderRepository(t), repo, nil, nil, locker).Handle(t.Context(), app.ForgetPlanQuery{Policy: policy})
 		require.NoError(t, err)
 		require.Empty(t, deleted())
 	})

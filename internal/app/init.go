@@ -48,7 +48,7 @@ func (i *Init) Handle(ctx context.Context, cmd cqs.Command) ([]event.Event, erro
 	}
 	var initialized *repository.RepositoryInitialized
 	err = i.locker.WithLock(ctx, repository.ExclusiveLock, func(ctx context.Context) error {
-		conf, warnings, err := i.writeRepository(ctx, repo, exists, co.Force)
+		conf, warnings, err := i.writeRepository(ctx, repo, exists, co)
 		if err != nil {
 			return err
 		}
@@ -61,14 +61,17 @@ func (i *Init) Handle(ctx context.Context, cmd cqs.Command) ([]event.Event, erro
 	return []event.Event{initialized}, nil
 }
 
-func (i *Init) writeRepository(ctx context.Context, repo *repository.Repository, exists, force bool) (conf *repository.Config, warnings []string, err error) {
+func (i *Init) writeRepository(ctx context.Context, repo *repository.Repository, exists bool, co InitCommand) (conf *repository.Config, warnings []string, err error) {
 	conf = repo.Config()
 	if exists {
 		previous, err := i.folderRepo.GetConfig(ctx, repo.Path())
 		if err != nil {
 			return nil, nil, err
 		}
-		conf, warnings = previous.Reinitialize(conf, force)
+		conf, warnings = previous.Reinitialize(conf, co.Force)
+	}
+	if err := i.ensureMetadataKey(ctx, conf, co.PublicKeyPath); err != nil {
+		return nil, nil, err
 	}
 	if err := i.folderRepo.CreateConfig(ctx, repo.Path(), conf); err != nil {
 		return nil, nil, err
@@ -85,7 +88,7 @@ func (i *Init) writeRepository(ctx context.Context, repo *repository.Repository,
 func (i *Init) newRepository(ctx context.Context, co InitCommand) (*repository.Repository, error) {
 	var encryptionConfig *encryption.EncryptionConfig
 	if co.PublicKeyPath != nil {
-		created, err := i.keys.newEncryptionConfig(ctx, *co.PublicKeyPath)
+		created, err := i.keys.newEncryptionConfig(ctx, *co.PublicKeyPath, co.FormatVersion)
 		if err != nil {
 			return nil, err
 		}
@@ -93,6 +96,17 @@ func (i *Init) newRepository(ctx context.Context, co InitCommand) (*repository.R
 	}
 	conf := repository.NewConfig(uuid.New(), co.FormatVersion, co.Compression, encryptionConfig)
 	return repository.NewRepository(co.RepositoryPath, conf)
+}
+
+func (i *Init) ensureMetadataKey(ctx context.Context, conf *repository.Config, publicKeyPath *string) error {
+	encryptionConf := conf.Encryption()
+	if encryptionConf == nil || encryptionConf.HasMetadataKey() || !conf.FormatVersion().ContentAddressed() {
+		return nil
+	}
+	if publicKeyPath == nil {
+		return ErrMissingMetadataKey
+	}
+	return i.keys.addMetadataKey(ctx, *publicKeyPath, encryptionConf)
 }
 
 func NewInit(

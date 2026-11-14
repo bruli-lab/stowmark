@@ -4,6 +4,7 @@ package stowmark_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -36,17 +37,17 @@ func mainFlow(t *testing.T, ctx context.Context, folders Folders, formatVersion 
 
 	fileExample := fmt.Sprintf("%s/README.txt", folders.Source)
 
-	handler, err := stowmark.NewHandler(ctx, folders.Repository)
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		require.NoError(t, handler.Close())
-	})
+	if repository.FormatVersion(formatVersion).ContentAddressed() {
+		createMetadataFixture(t, folders.Source)
+	}
 
-	keys, err := handler.KeyGenerate(ctx, folders.keyPairsFolder)
+	setup := openHandler(t, ctx, folders.Repository)
+
+	keys, err := setup.KeyGenerate(ctx, folders.keyPairsFolder)
 	require.NoError(t, err)
 
 	compressionLevel := 3
-	err = handler.Init(
+	err = setup.Init(
 		ctx,
 		&stowmark.Compression{
 			Type:  "zstd",
@@ -57,6 +58,8 @@ func mainFlow(t *testing.T, ctx context.Context, folders Folders, formatVersion 
 		false,
 	)
 	require.NoError(t, err)
+
+	handler := openHandler(t, ctx, folders.Repository, stowmark.WithPrivateKey(keys.PrivateKey()))
 
 	store := blobStore(t, ctx, folders.Repository)
 	lockRepo := blob.NewLockRepository(store)
@@ -84,7 +87,13 @@ func mainFlow(t *testing.T, ctx context.Context, folders Folders, formatVersion 
 	snapshot, err := handler.GetManifest(ctx, created.ID)
 	require.NoError(t, err)
 	require.Equal(t, created.ID, snapshot.ID)
-	require.Len(t, snapshot.Files, created.FileCount)
+	require.Len(t, snapshot.Files, expectedEntries(formatVersion))
+	requireManifestEncoding(t, ctx, store, created.ID, formatVersion)
+
+	if repository.FormatVersion(formatVersion).ContentAddressed() {
+		_, err = setup.ListSnapshots(ctx)
+		require.ErrorIs(t, err, stowmark.ErrPrivateKeyRequired, "an encrypted format version 3 repository must not be listed without the private key")
+	}
 
 	verification, err := handler.VerifySnapshot(
 		ctx,
@@ -106,6 +115,9 @@ func mainFlow(t *testing.T, ctx context.Context, folders Folders, formatVersion 
 	require.Empty(t, restored.Failed)
 
 	requireDirectoriesEqual(t, folders.Source, *folders.Restore)
+	if repository.FormatVersion(formatVersion).ContentAddressed() {
+		requireMetadataRestored(t, folders.Source, *folders.Restore)
+	}
 
 	err = handler.RestoreFile(ctx, created.ID, fileExample, folders.AlternativeRestore, new(keys.PrivateKey()))
 	require.NoError(t, err)
@@ -117,6 +129,7 @@ func mainFlow(t *testing.T, ctx context.Context, folders Folders, formatVersion 
 
 	err = handler.Rewrap(ctx, keys.PrivateKey(), newKeys.PublicKey())
 	require.NoError(t, err)
+	handler = openHandler(t, ctx, folders.Repository, stowmark.WithPrivateKey(newKeys.PrivateKey()))
 
 	err = handler.ReKey(ctx, newKeys.PrivateKey(), newKeys.PublicKey())
 	require.NoError(t, err)
@@ -286,6 +299,39 @@ func mainFlow(t *testing.T, ctx context.Context, folders Folders, formatVersion 
 			return blobStore(t, ctx, fmt.Sprintf("%s-contract-%d", folders.Repository, contractRepositories.Add(1)))
 		})
 	})
+}
+
+func openHandler(t *testing.T, ctx context.Context, repositoryPath string, options ...stowmark.Option) *stowmark.Handler {
+	t.Helper()
+
+	handler, err := stowmark.NewHandler(ctx, repositoryPath, options...)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, handler.Close())
+	})
+	return handler
+}
+
+func expectedEntries(formatVersion int) int {
+	if repository.FormatVersion(formatVersion).ContentAddressed() {
+		return 3 + len([]string{"documents", "large"}) + len(metadataFixtureEntries)
+	}
+	return 3
+}
+
+func requireManifestEncoding(t *testing.T, ctx context.Context, store blob.Store, snapshotID string, formatVersion int) {
+	t.Helper()
+
+	reader, err := store.Get(ctx, repository.SnapshotsFolder+"/"+snapshotID+".json")
+	require.NoError(t, err)
+	defer func() { require.NoError(t, reader.Close()) }()
+	data, err := io.ReadAll(reader)
+	require.NoError(t, err)
+	if repository.FormatVersion(formatVersion).ContentAddressed() {
+		require.False(t, json.Valid(data), "an encrypted format version 3 manifest must not be stored in clear")
+		return
+	}
+	require.True(t, json.Valid(data))
 }
 
 func blobStore(t *testing.T, ctx context.Context, repositoryURL string) blob.Store {

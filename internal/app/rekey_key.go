@@ -61,18 +61,24 @@ func (r *RekeyKey) rekey(ctx context.Context, co RekeyKeyCommand) (rotated *encr
 	currentGeneration := encryptionConf.Generation()
 	newGeneration := currentGeneration + 1
 
-	oldSymmetricKey, err := r.keys.unwrap(ctx, co.PrivateKeyPath, encryptionConf)
+	oldKeys, err := r.keys.unwrap(ctx, co.PrivateKeyPath, encryptionConf)
 	if err != nil {
 		return nil, err
 	}
+	defer oldKeys.clear()
 
 	newSymmetricKey, err := r.keys.symmetricRepo.GenerateSymmetricKey(ctx)
 	if err != nil {
 		return nil, err
 	}
+	defer clear(newSymmetricKey)
 
 	wrapped, err := r.keys.wrap(ctx, co.PublicKeyPath, newSymmetricKey)
 	if err != nil {
+		return nil, err
+	}
+
+	if err := r.keys.rewrapMetadataKey(ctx, co.PublicKeyPath, oldKeys.metadata, encryptionConf); err != nil {
 		return nil, err
 	}
 
@@ -96,7 +102,9 @@ func (r *RekeyKey) rekey(ctx context.Context, co RekeyKeyCommand) (rotated *encr
 		}
 	}()
 
-	if err := r.rekeyObjects(ctx, hashes, currentGeneration, newGeneration, oldSymmetricKey, newSymmetricKey); err != nil {
+	oldCodec := conf.Codec().WithDataKey(oldKeys.data, currentGeneration)
+	newCodec := conf.Codec().WithDataKey(newSymmetricKey, newGeneration)
+	if err := r.rekeyObjects(ctx, hashes, oldCodec, newCodec); err != nil {
 		return nil, err
 	}
 
@@ -117,7 +125,7 @@ func (r *RekeyKey) rekey(ctx context.Context, co RekeyKeyCommand) (rotated *encr
 	return encryptionConf.SymmetricKeyRotated(conf.ID().String(), len(hashes)), nil
 }
 
-func (r *RekeyKey) rekeyObjects(ctx context.Context, hashes []string, currentGeneration, newGeneration uint64, oldSymmetricKey, newSymmetricKey []byte) error {
+func (r *RekeyKey) rekeyObjects(ctx context.Context, hashes []string, oldCodec, newCodec repository.Codec) error {
 	if len(hashes) == 0 {
 		return nil
 	}
@@ -131,7 +139,7 @@ func (r *RekeyKey) rekeyObjects(ctx context.Context, hashes []string, currentGen
 		}
 
 		group.Go(func() error {
-			if err := r.rekeyObject(groupCtx, hash, currentGeneration, newGeneration, oldSymmetricKey, newSymmetricKey); err != nil {
+			if err := r.rekeyObject(groupCtx, hash, oldCodec, newCodec); err != nil {
 				return fmt.Errorf("rekey object %q: %w", hash, err)
 			}
 			return nil
@@ -145,18 +153,13 @@ func (r *RekeyKey) rekeyObjects(ctx context.Context, hashes []string, currentGen
 	return ctx.Err()
 }
 
-func (r *RekeyKey) rekeyObject(
-	ctx context.Context,
-	hash string,
-	currentGeneration, newGeneration uint64,
-	oldSymmetricKey, newSymmetricKey []byte,
-) error {
-	reader, err := r.encryptedRepo.ReadEncryptedObject(ctx, hash, currentGeneration, oldSymmetricKey)
+func (r *RekeyKey) rekeyObject(ctx context.Context, hash string, oldCodec, newCodec repository.Codec) error {
+	reader, err := r.encryptedRepo.ReadEncryptedObject(ctx, hash, oldCodec)
 	if err != nil {
 		return err
 	}
 
-	saveErr := r.encryptedRepo.SaveRekeyedObject(ctx, hash, reader, newGeneration, newSymmetricKey)
+	saveErr := r.encryptedRepo.SaveRekeyedObject(ctx, hash, reader, newCodec)
 	closeErr := reader.Close()
 
 	return errors.Join(saveErr, closeErr)

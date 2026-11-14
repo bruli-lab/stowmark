@@ -12,7 +12,7 @@ func (h *Handler) RestoreFile(ctx context.Context, snapshotID, filePath string, 
 		FilePath:        filePath,
 		RepositoryPath:  h.repository.Path(),
 		DestinationPath: destinationPath,
-		PrivateKeyPath:  privateKey,
+		PrivateKeyPath:  h.key(privateKey),
 	})
 	return err
 }

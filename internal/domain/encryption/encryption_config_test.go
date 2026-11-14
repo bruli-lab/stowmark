@@ -44,7 +44,7 @@ func TestHydrateEncryptionConfig(t *testing.T) {
 		when it is called `+tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got, err := encryption.HydrateEncryptionConfig(tt.encryptionType, tt.keyEncryption, "key", "fingerprint", 3)
+			got, err := encryption.HydrateEncryptionConfig(tt.encryptionType, tt.keyEncryption, "key", "fingerprint", 3, "metadata")
 
 			if tt.expectedErr != nil {
 				require.ErrorIs(t, err, tt.expectedErr)
@@ -56,6 +56,8 @@ func TestHydrateEncryptionConfig(t *testing.T) {
 			require.Equal(t, "key", got.EncryptedKey())
 			require.Equal(t, "fingerprint", got.PublicKeyFingerprint())
 			require.Equal(t, uint64(3), got.Generation())
+			require.Equal(t, "metadata", got.EncryptedMetadataKey())
+			require.True(t, got.HasMetadataKey())
 		})
 	}
 }

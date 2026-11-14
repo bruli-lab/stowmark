@@ -15,6 +15,7 @@ func newSnapshotGetCommand() *cobra.Command {
 	var (
 		repositoryPath string
 		snapshotID     string
+		privateKeyPath string
 	)
 	cmd := &cobra.Command{
 		Use:   "get",
@@ -23,7 +24,9 @@ func newSnapshotGetCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return withRepository(cmd, repositoryPath, func(repo *bootstrap.Repository) error {
 				manifest, err := app.QueryResult[*snapshot.Manifest](repo.ManifestGet().Handle(cmd.Context(), app.ManifestGetQuery{
-					SnapshotID: snapshotID,
+					RepositoryPath: repo.Path(),
+					PrivateKeyPath: optionalPath(privateKeyPath),
+					SnapshotID:     snapshotID,
 				}))
 				if err != nil {
 					return err
@@ -45,6 +48,7 @@ func newSnapshotGetCommand() *cobra.Command {
 		"",
 		"snapshot ID",
 	)
+	cmd.Flags().StringVar(&privateKeyPath, "private-key", "", metadataPrivateKeyUsage)
 
 	_ = cmd.MarkFlagRequired("id")
 	_ = cmd.MarkFlagRequired("repo")
@@ -91,7 +95,7 @@ func printManifest(
 		if _, err := fmt.Fprintf(
 			writer,
 			"%s\t%s\t%s\n",
-			file.Path(),
+			entryName(file),
 			file.Hash(),
 			formatBytes(file.Size()),
 		); err != nil {
@@ -100,4 +104,15 @@ func printManifest(
 	}
 
 	return writer.Flush()
+}
+
+func entryName(file snapshot.File) string {
+	switch file.Kind() {
+	case snapshot.DirectoryEntry:
+		return file.Path() + "/"
+	case snapshot.SymlinkEntry:
+		return file.Path() + " -> " + file.Target()
+	default:
+		return file.Path()
+	}
 }

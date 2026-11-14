@@ -63,7 +63,7 @@ func TestBuildConfigDomain(t *testing.T) {
 		},
 		{
 			name:        "with an unsupported format version, then it returns an unsupported format version error",
-			mutate:      func(conf *model.Config) { conf.FormatVersion = 3 },
+			mutate:      func(conf *model.Config) { conf.FormatVersion = 4 },
 			expectedErr: repository.ErrUnsupportedFormatVersion,
 		},
 		{

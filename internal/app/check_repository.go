@@ -75,8 +75,12 @@ func (c *CheckRepository) check(ctx context.Context, q CheckRepositoryQuery) (*s
 	if q.readsData() && encrypted && q.PrivateKeyPath == nil {
 		return nil, ErrPrivateKeyRequiredToReadData
 	}
+	codec, err := c.keys.forConfig(ctx, conf, q.PrivateKeyPath)
+	if err != nil {
+		return nil, err
+	}
 
-	manifests, corrupt, err := c.readManifests(ctx)
+	manifests, corrupt, err := c.readManifests(ctx, codec)
 	if err != nil {
 		return nil, err
 	}
@@ -96,18 +100,11 @@ func (c *CheckRepository) check(ctx context.Context, q CheckRepositoryQuery) (*s
 		return report, nil
 	}
 
-	key := objectKey{}
-	if encrypted {
-		key, err = c.keys.forConfig(ctx, encryptionConf, q.PrivateKeyPath)
-		if err != nil {
-			return nil, err
-		}
-	}
 	hashes := report.ReadableObjects()
 	if q.Subset != nil {
 		hashes = q.Subset.Select(hashes, rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64())))
 	}
-	problems, err := c.readData(ctx, report, hashes, key)
+	problems, err := c.readData(ctx, report, hashes, codec)
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +113,7 @@ func (c *CheckRepository) check(ctx context.Context, q CheckRepositoryQuery) (*s
 	return report, nil
 }
 
-func (c *CheckRepository) readManifests(ctx context.Context) ([]snapshot.Manifest, []snapshot.ManifestProblem, error) {
+func (c *CheckRepository) readManifests(ctx context.Context, codec repository.Codec) ([]snapshot.Manifest, []snapshot.ManifestProblem, error) {
 	ids, err := c.manifestRepo.ListIDs(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -124,7 +121,7 @@ func (c *CheckRepository) readManifests(ctx context.Context) ([]snapshot.Manifes
 	manifests := make([]snapshot.Manifest, 0, len(ids))
 	corrupt := make([]snapshot.ManifestProblem, 0)
 	for _, id := range ids {
-		manifest, err := c.manifestRepo.Get(ctx, id)
+		manifest, err := c.manifestRepo.Get(ctx, id, codec)
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return nil, nil, ctxErr
 		}
@@ -162,7 +159,7 @@ func (c *CheckRepository) checkGenerations(ctx context.Context, report *snapshot
 	return nil
 }
 
-func (c *CheckRepository) readData(ctx context.Context, report *snapshot.CheckReport, hashes []string, key objectKey) ([]snapshot.ObjectProblem, error) {
+func (c *CheckRepository) readData(ctx context.Context, report *snapshot.CheckReport, hashes []string, codec repository.Codec) ([]snapshot.ObjectProblem, error) {
 	var (
 		mu       sync.Mutex
 		problems = make([]snapshot.ObjectProblem, 0)
@@ -180,7 +177,7 @@ func (c *CheckRepository) readData(ctx context.Context, report *snapshot.CheckRe
 		}
 
 		group.Go(func() error {
-			reason, err := c.verifier.verify(groupCtx, hash, report.ObjectSize(hash), key)
+			reason, err := c.verifier.verify(groupCtx, hash, report.ObjectSize(hash), codec)
 			if err != nil {
 				return err
 			}

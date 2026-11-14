@@ -33,9 +33,9 @@ func TestManifestRepository_SaveAndList(t *testing.T) {
 
 		repo, err := newManifestRepository(repositoryPath)
 		require.NoError(t, err)
-		require.NoError(t, repo.Save(ctx, manifest))
+		require.NoError(t, repo.Save(ctx, manifest, repository.NewCodec(repository.FormatVersionTwo, nil)))
 
-		manifests, err := repo.List(ctx)
+		manifests, err := repo.List(ctx, repository.NewCodec(repository.FormatVersionTwo, nil))
 
 		require.NoError(t, err)
 		require.Len(t, manifests, 1)

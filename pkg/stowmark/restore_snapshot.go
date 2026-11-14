@@ -11,7 +11,7 @@ func (h *Handler) RestoreSnapshot(ctx context.Context, snapshotID string, destin
 	events, err := h.repository.RestoreSnapshot().Handle(ctx, app.RestoreSnapshotCommand{
 		SnapshotID:      snapshotID,
 		RepositoryPath:  h.repository.Path(),
-		PrivateKeyPath:  privateKey,
+		PrivateKeyPath:  h.key(privateKey),
 		DestinationPath: destinationPath,
 	})
 	if err != nil {

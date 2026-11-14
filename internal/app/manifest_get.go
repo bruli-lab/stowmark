@@ -9,7 +9,9 @@ import (
 const SnapshotGetQueryName = "manifest-get"
 
 type ManifestGetQuery struct {
-	SnapshotID string
+	RepositoryPath string
+	PrivateKeyPath *string
+	SnapshotID     string
 }
 
 func (s ManifestGetQuery) Name() string {
@@ -18,6 +20,7 @@ func (s ManifestGetQuery) Name() string {
 
 type ManifestGet struct {
 	manifestRepo ManifestRepository
+	keys         keyring
 }
 
 func (m *ManifestGet) Handle(ctx context.Context, query cqs.Query) (any, error) {
@@ -25,9 +28,18 @@ func (m *ManifestGet) Handle(ctx context.Context, query cqs.Query) (any, error) 
 	if !ok {
 		return nil, cqs.NewInvalidQueryError(SnapshotGetQueryName, query.Name())
 	}
-	return m.manifestRepo.Get(ctx, q.SnapshotID)
+	codec, err := m.keys.forRepository(ctx, q.RepositoryPath, q.PrivateKeyPath)
+	if err != nil {
+		return nil, err
+	}
+	return m.manifestRepo.Get(ctx, q.SnapshotID, codec)
 }
 
-func NewManifestGet(manifestRepo ManifestRepository) *ManifestGet {
-	return &ManifestGet{manifestRepo: manifestRepo}
+func NewManifestGet(
+	folderRepo FolderRepository,
+	manifestRepo ManifestRepository,
+	asymmetricRepo AsymmetricKeyPairRepository,
+	symmetricRepo SymmetricKeyRepository,
+) *ManifestGet {
+	return &ManifestGet{manifestRepo: manifestRepo, keys: newKeyring(folderRepo, asymmetricRepo, symmetricRepo)}
 }

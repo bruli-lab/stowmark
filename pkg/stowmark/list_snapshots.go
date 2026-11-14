@@ -17,7 +17,10 @@ type SnapshotSummary struct {
 }
 
 func (h *Handler) ListSnapshots(ctx context.Context) ([]SnapshotSummary, error) {
-	items, err := app.QueryResult[[]snapshot.ManifestResume](h.repository.SnapshotList().Handle(ctx, app.SnapshotListQuery{}))
+	items, err := app.QueryResult[[]snapshot.ManifestResume](h.repository.SnapshotList().Handle(ctx, app.SnapshotListQuery{
+		RepositoryPath: h.repository.Path(),
+		PrivateKeyPath: h.privateKey,
+	}))
 	if err != nil {
 		return nil, err
 	}

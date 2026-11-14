@@ -2,8 +2,6 @@ package disk
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -15,29 +13,21 @@ import (
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/compression"
-	"github.com/bruli-lab/stowmark/internal/infra/model"
+	"github.com/bruli-lab/stowmark/internal/infra/object"
 )
 
 type SourceExplorer struct {
 	handlersFactory *compression.HandlersFactory
 }
 
-func (s SourceExplorer) CalculateChunks(ctx context.Context, filePath string, chunkSize int64, comp *repository.Compression) ([]snapshot.Chunk, error) {
+func (s SourceExplorer) CalculateChunks(ctx context.Context, filePath string, chunkSize int64, codec repository.Codec) ([]snapshot.Chunk, error) {
 	if chunkSize <= 0 {
 		return nil, fmt.Errorf("chunk size must be greater than zero: %d", chunkSize)
 	}
 
-	if comp == nil {
-		return nil, errors.New("compression configuration is required")
-	}
-
 	file, err := os.Open(filePath)
 	if err != nil {
-		return nil, fmt.Errorf(
-			"open file %q: %w",
-			filePath,
-			err,
-		)
+		return nil, fmt.Errorf("open file %q: %w", filePath, err)
 	}
 	defer func() {
 		_ = file.Close()
@@ -49,104 +39,26 @@ func (s SourceExplorer) CalculateChunks(ctx context.Context, filePath string, ch
 	}
 
 	fileSize := info.Size()
-
-	chunksCount := int(
-		(fileSize + chunkSize - 1) / chunkSize,
-	)
-
-	chunks := make(
-		[]snapshot.Chunk,
-		0,
-		chunksCount,
-	)
+	chunks := make([]snapshot.Chunk, 0, int((fileSize+chunkSize-1)/chunkSize))
 
 	for offset := int64(0); offset < fileSize; offset += chunkSize {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
 
-		currentSize := chunkSize
-
-		remaining := fileSize - offset
-		if remaining < currentSize {
-			currentSize = remaining
-		}
-
-		reader := io.NewSectionReader(
-			file,
-			offset,
-			currentSize,
-		)
-
-		hash, err := s.calculateReaderHash(
-			ctx,
-			reader,
-			comp,
-		)
+		currentSize := min(chunkSize, fileSize-offset)
+		hash, err := object.Digest(ctx, io.NewSectionReader(file, offset, currentSize), codec, s.handlersFactory)
 		if err != nil {
 			return nil, fmt.Errorf("calculate chunk hash for %q at offset %d: %w", filePath, offset, err)
 		}
 
-		chunks = append(
-			chunks,
-			*snapshot.NewChunk(hash, offset, currentSize),
-		)
+		chunks = append(chunks, *snapshot.NewChunk(hash, offset, currentSize))
 	}
 
 	return chunks, nil
 }
 
-func (s SourceExplorer) calculateReaderHash(ctx context.Context, reader io.Reader, comp *repository.Compression) (string, error) {
-	hasher := sha256.New()
-
-	handler, err := s.handlersFactory.GetHandler(
-		comp.CompType(),
-	)
-	if err != nil {
-		return "", err
-	}
-
-	encoder, err := handler.Encode(
-		hasher,
-		comp.Level(),
-	)
-	if err != nil {
-		return "", err
-	}
-
-	_, copyErr := io.Copy(
-		encoder.Writer,
-		model.ContextReader{
-			Ctx:    ctx,
-			Reader: reader,
-		},
-	)
-	if copyErr != nil {
-		if encoder.Closer != nil {
-			_ = encoder.Closer()
-		}
-
-		return "", fmt.Errorf(
-			"compress data for hashing: %w",
-			copyErr,
-		)
-	}
-
-	if encoder.Closer != nil {
-		if err := encoder.Closer(); err != nil {
-			return "", fmt.Errorf(
-				"finish compression for hashing: %w",
-				err,
-			)
-		}
-	}
-
-	return hex.EncodeToString(
-		hasher.Sum(nil),
-	), nil
-}
-
-func (s SourceExplorer) CalculateHash(ctx context.Context, filePath string, comp *repository.Compression) (string, error) {
+func (s SourceExplorer) CalculateHash(ctx context.Context, filePath string, codec repository.Codec) (string, error) {
 	fi, err := os.Open(filePath)
 	if err != nil {
 		return "", fmt.Errorf("open file %q: %w", filePath, err)
@@ -155,7 +67,7 @@ func (s SourceExplorer) CalculateHash(ctx context.Context, filePath string, comp
 		_ = fi.Close()
 	}()
 
-	return s.calculateReaderHash(ctx, fi, comp)
+	return object.Digest(ctx, fi, codec, s.handlersFactory)
 }
 
 func (s SourceExplorer) IgnorePatterns(ctx context.Context, sourcePath string) ([]string, error) {
@@ -202,7 +114,7 @@ func (s SourceExplorer) readFiles(ctx context.Context, root string, rules *snaps
 
 	err = filepath.WalkDir(root, func(
 		path string,
-		entry fs.DirEntry,
+		dirEntry fs.DirEntry,
 		walkErr error,
 	) error {
 		if walkErr != nil {
@@ -219,26 +131,22 @@ func (s SourceExplorer) readFiles(ctx context.Context, root string, rules *snaps
 		if err != nil {
 			return err
 		}
-		if rules != nil && rules.Excludes(filepath.ToSlash(relative), entry.IsDir()) {
-			if entry.IsDir() {
+		if rules != nil && rules.Excludes(filepath.ToSlash(relative), dirEntry.IsDir()) {
+			if dirEntry.IsDir() {
 				return filepath.SkipDir
 			}
 			return nil
 		}
 
-		if entry.IsDir() {
-			return nil
-		}
-		if !entry.Type().IsRegular() {
-			skipped = append(skipped, snapshot.NewSkippedFile(filepath.ToSlash(relative), skippedKind(entry.Type())))
-			return nil
-		}
-		info, err := entry.Info()
+		entry, skip, err := readEntry(path, relative, dirEntry.Type())
 		if err != nil {
 			return err
 		}
-
-		files = append(files, *snapshot.NewFile(path, info.Size()))
+		if skip != nil {
+			skipped = append(skipped, *skip)
+			return nil
+		}
+		files = append(files, entry)
 
 		return nil
 	})
@@ -246,6 +154,30 @@ func (s SourceExplorer) readFiles(ctx context.Context, root string, rules *snaps
 		return nil, nil, fmt.Errorf("walk directory %q: %w", root, err)
 	}
 	return files, skipped, nil
+}
+
+func readEntry(path, relative string, mode fs.FileMode) (snapshot.File, *snapshot.SkippedFile, error) {
+	if !mode.IsDir() && !mode.IsRegular() && mode&fs.ModeSymlink == 0 {
+		skipped := snapshot.NewSkippedFile(filepath.ToSlash(relative), skippedKind(mode))
+		return snapshot.File{}, &skipped, nil
+	}
+	info, err := os.Lstat(path)
+	if err != nil {
+		return snapshot.File{}, nil, err
+	}
+	metadata := snapshot.NewMetadata(info.Mode(), info.ModTime())
+	switch {
+	case info.IsDir():
+		return snapshot.NewDirectory(path).WithMetadata(metadata), nil, nil
+	case info.Mode()&fs.ModeSymlink != 0:
+		target, err := os.Readlink(path)
+		if err != nil {
+			return snapshot.File{}, nil, fmt.Errorf("read symlink %q: %w", path, err)
+		}
+		return snapshot.NewSymlink(path, target).WithMetadata(metadata), nil, nil
+	default:
+		return snapshot.NewFile(path, info.Size()).WithMetadata(metadata), nil, nil
+	}
 }
 
 func skippedKind(mode fs.FileMode) string {

@@ -22,6 +22,7 @@ type Encryption struct {
 	EncryptedKey         string `json:"encrypted_key"`
 	PublicKeyFingerprint string `json:"public_key_fingerprint"`
 	Generation           uint64 `json:"generation"`
+	EncryptedMetadataKey string `json:"encrypted_metadata_key,omitempty"`
 }
 type Config struct {
 	ID            string      `json:"id"`
@@ -52,6 +53,7 @@ func BuildConfigDomain(conf Config) (*repository.Config, error) {
 			conf.Encryption.EncryptedKey,
 			conf.Encryption.PublicKeyFingerprint,
 			conf.Encryption.Generation,
+			conf.Encryption.EncryptedMetadataKey,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse config encryption %q/%q: %w", conf.Encryption.Type, conf.Encryption.KeyEncryption, err)
