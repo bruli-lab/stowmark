@@ -703,6 +703,17 @@ The syntax is a subset of `.gitignore`:
 - Paths are matched with `/` on every platform and are case-sensitive.
 - An invalid pattern stops the snapshot before anything is written.
 
+## Performance
+
+`snapshot create`, `snapshot verify`, `snapshot restore` and `check --read-data` process files concurrently with a bounded
+number of workers, and `snapshot list` reads the manifests concurrently, which matters most on remote backends. In
+format versions 1 and 2 an encrypted object is held in memory while it is encrypted or decrypted, so those commands
+limit the objects in flight to about 512 MiB; format version 3 streams encrypted objects and has no such limit.
+
+In format versions 1 and 2 a new file is compressed twice, once to calculate its object name and once to store it,
+because the name is the hash of the compressed data. Format version 3 names objects by their original content and
+compresses each new object only once.
+
 ## Chunking
 
 Files larger than 8 MiB are split into ordered chunks before being stored. Smaller files are stored as a single object.

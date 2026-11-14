@@ -15,7 +15,10 @@ import (
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
 	"github.com/bruli-lab/stowmark/internal/infra/model"
+	"golang.org/x/sync/errgroup"
 )
+
+const manifestReadWorkers = 8
 
 type ManifestRepository struct {
 	store Store
@@ -114,17 +117,28 @@ func (m ManifestRepository) List(ctx context.Context, codec repository.Codec) ([
 		return nil, fmt.Errorf("list manifests: %w", err)
 	}
 
-	manifests := make([]snapshot.Manifest, 0, len(keys))
-	for _, key := range keys {
-		if !isManifestKey(key) {
-			continue
+	keys = slices.DeleteFunc(keys, func(key string) bool { return !isManifestKey(key) })
+	manifests := make([]snapshot.Manifest, len(keys))
+	group, groupCtx := errgroup.WithContext(ctx)
+	group.SetLimit(manifestReadWorkers)
+	for i, key := range keys {
+		if groupCtx.Err() != nil {
+			break
 		}
-
-		manifest, err := m.read(ctx, key, codec)
-		if err != nil {
-			return nil, err
-		}
-		manifests = append(manifests, *manifest)
+		group.Go(func() error {
+			manifest, err := m.read(groupCtx, key, codec)
+			if err != nil {
+				return err
+			}
+			manifests[i] = *manifest
+			return nil
+		})
+	}
+	if err := group.Wait(); err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 
 	slices.SortFunc(manifests, func(a, b snapshot.Manifest) int {

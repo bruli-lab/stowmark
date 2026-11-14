@@ -2,21 +2,43 @@ package app
 
 import (
 	"context"
+	"runtime"
+	"sync"
 
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
+	"golang.org/x/sync/errgroup"
 )
+
+var defaultRestoreWorkers = runtime.GOMAXPROCS(0) * 2
 
 type restorer struct {
 	objectRepo  ObjectRepository
 	destination RestoreDestination
+	budget      *memoryBudget
+	workers     int
 }
 
-func (r restorer) restoreSnapshot(ctx context.Context, man *snapshot.Manifest, codec repository.Codec, destinationPath *string) *snapshot.Result {
+func newRestorer(objectRepo ObjectRepository, destination RestoreDestination, workers int) restorer {
+	if workers <= 0 {
+		workers = defaultRestoreWorkers
+	}
+	return restorer{
+		objectRepo:  objectRepo,
+		destination: destination,
+		budget:      newMemoryBudget(defaultMemoryBudget),
+		workers:     workers,
+	}
+}
+
+func (r restorer) restoreSnapshot(ctx context.Context, man *snapshot.Manifest, codec repository.Codec, destinationPath *string) (*snapshot.Result, error) {
 	codec = codec.WithCompression(man.Compression())
 	plan := snapshot.NewRestorePlan(man.Files())
 	result := snapshot.NewResult(man.ID())
+	var mu sync.Mutex
 	record := func(entry snapshot.File, err error) {
+		mu.Lock()
+		defer mu.Unlock()
 		if err != nil {
 			result.AddFailed(*snapshot.NewFailedResult(entry.Path(), err.Error()))
 			return
@@ -34,10 +56,8 @@ func (r restorer) restoreSnapshot(ctx context.Context, man *snapshot.Manifest, c
 			record(entry, err)
 		}
 	}
-	for _, entry := range plan.Files() {
-		record(entry, r.withEntry(man, entry, destinationPath, func(target snapshot.File) error {
-			return r.restoreContent(ctx, target, codec)
-		}))
+	if err := r.restoreFiles(ctx, man, plan.Files(), codec, destinationPath, record); err != nil {
+		return nil, err
 	}
 	for _, entry := range plan.Symlinks() {
 		record(entry, r.withEntry(man, entry, destinationPath, func(target snapshot.File) error {
@@ -52,7 +72,53 @@ func (r restorer) restoreSnapshot(ctx context.Context, man *snapshot.Manifest, c
 			return r.applyMetadata(ctx, target)
 		}))
 	}
-	return result
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (r restorer) restoreFiles(
+	ctx context.Context,
+	man *snapshot.Manifest,
+	files []snapshot.File,
+	codec repository.Codec,
+	destinationPath *string,
+	record func(snapshot.File, error),
+) error {
+	group, groupCtx := errgroup.WithContext(ctx)
+	group.SetLimit(r.workers)
+	for _, entry := range files {
+		if groupCtx.Err() != nil {
+			break
+		}
+		group.Go(func() error {
+			release, err := r.budget.reserve(groupCtx, codec, largestObject(entry))
+			if err != nil {
+				return err
+			}
+			defer release()
+			record(entry, r.withEntry(man, entry, destinationPath, func(target snapshot.File) error {
+				return r.restoreContent(groupCtx, target, codec)
+			}))
+			return nil
+		})
+	}
+	if err := group.Wait(); err != nil {
+		return err
+	}
+	return ctx.Err()
+}
+
+func largestObject(file snapshot.File) int64 {
+	if len(file.Chunks()) == 0 {
+		return file.Size()
+	}
+	var largest int64
+	for _, chunk := range file.Chunks() {
+		largest = max(largest, chunk.Size())
+	}
+	return largest
 }
 
 func (r restorer) restoreEntry(ctx context.Context, man *snapshot.Manifest, entry snapshot.File, codec repository.Codec, destinationPath *string) error {

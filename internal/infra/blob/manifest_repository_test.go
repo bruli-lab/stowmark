@@ -3,6 +3,7 @@ package blob_test
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"testing"
 	"time"
@@ -64,6 +65,42 @@ func TestManifestRepository(t *testing.T) {
 		require.Len(t, listed, 2)
 		require.Equal(t, newer.ID(), listed[0].ID())
 		require.Equal(t, older.ID(), listed[1].ID())
+	})
+
+	t.Run(`Given a blob ManifestRepository with more manifests than read workers,
+	when List is called,
+	then it reads every manifest and returns them newest first`, func(t *testing.T) {
+		t.Parallel()
+
+		ctx := context.Background()
+		repo := blob.NewManifestRepository(blobtest.NewMemoryStore())
+		const count = 40
+		start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+		for i := range count {
+			createdAt := start.Add(time.Duration(i) * time.Hour)
+			require.NoError(t, repo.Save(ctx, manifestAt(t, fmt.Sprintf("20260101T%06dZ-%08d", i, i), createdAt), plainCodec))
+		}
+
+		listed, err := repo.List(ctx, plainCodec)
+
+		require.NoError(t, err)
+		require.Len(t, listed, count)
+		for i := range listed {
+			require.True(t, start.Add(time.Duration(count-1-i)*time.Hour).Equal(listed[i].CreatedAt()))
+		}
+	})
+
+	t.Run(`Given a blob ManifestRepository and a cancelled context,
+	when List is called,
+	then it returns the cancellation error`, func(t *testing.T) {
+		t.Parallel()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		_, err := blob.NewManifestRepository(blobtest.NewMemoryStore()).List(ctx, plainCodec)
+
+		require.ErrorIs(t, err, context.Canceled)
 	})
 
 	t.Run(`Given an empty blob ManifestRepository,

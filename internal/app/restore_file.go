@@ -69,7 +69,7 @@ func NewRestoreFile(
 ) *RestoreFile {
 	return &RestoreFile{
 		manifestRepo: manifestRepo,
-		restorer:     restorer{objectRepo: objectRepo, destination: destination},
+		restorer:     newRestorer(objectRepo, destination, 1),
 		keys:         newKeyring(folderRepo, asymmetricRepo, symmetricRepo),
 		locker:       locker,
 	}

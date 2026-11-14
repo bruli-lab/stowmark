@@ -49,7 +49,11 @@ func (r *RestoreSnapshot) restore(ctx context.Context, co RestoreSnapshotCommand
 	if err != nil {
 		return nil, err
 	}
-	return r.restorer.restoreSnapshot(ctx, man, codec, co.DestinationPath).Restored(), nil
+	result, err := r.restorer.restoreSnapshot(ctx, man, codec, co.DestinationPath)
+	if err != nil {
+		return nil, err
+	}
+	return result.Restored(), nil
 }
 
 func NewRestoreSnapshot(
@@ -61,9 +65,22 @@ func NewRestoreSnapshot(
 	symmetricRepo SymmetricKeyRepository,
 	locker *RepositoryLocker,
 ) *RestoreSnapshot {
+	return NewRestoreSnapshotWithWorkers(manifestRepo, objectRepo, destination, folderRepo, asymmetricRepo, symmetricRepo, locker, defaultRestoreWorkers)
+}
+
+func NewRestoreSnapshotWithWorkers(
+	manifestRepo ManifestRepository,
+	objectRepo ObjectRepository,
+	destination RestoreDestination,
+	folderRepo FolderRepository,
+	asymmetricRepo AsymmetricKeyPairRepository,
+	symmetricRepo SymmetricKeyRepository,
+	locker *RepositoryLocker,
+	workers int,
+) *RestoreSnapshot {
 	return &RestoreSnapshot{
 		manifestRepo: manifestRepo,
-		restorer:     restorer{objectRepo: objectRepo, destination: destination},
+		restorer:     newRestorer(objectRepo, destination, workers),
 		keys:         newKeyring(folderRepo, asymmetricRepo, symmetricRepo),
 		locker:       locker,
 	}

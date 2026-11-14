@@ -7,9 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/bruli-lab/stowmark/internal/app"
 
+	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/fixtures"
@@ -252,5 +254,103 @@ func TestVerifySnapshot_Handle_Concurrency(t *testing.T) {
 
 		require.ErrorIs(t, err, context.Canceled)
 		require.Nil(t, result)
+	})
+}
+
+func newConcurrentRestorer(t *testing.T, objectRepo *app.ObjectRepositoryMock, manifest *snapshot.Manifest, folderRepo *app.FolderRepositoryMock, workers int) *app.RestoreSnapshot {
+	t.Helper()
+	asymmetric, symmetric := keyRepositories()
+	return app.NewRestoreSnapshotWithWorkers(
+		&app.ManifestRepositoryMock{
+			GetFunc: func(context.Context, string, repository.Codec) (*snapshot.Manifest, error) { return manifest, nil },
+		},
+		objectRepo,
+		&app.RestoreDestinationMock{},
+		folderRepo,
+		asymmetric, symmetric, newUnlockedLocker(), workers,
+	)
+}
+
+func (c *concurrentReads) restore(failing string) func(context.Context, *snapshot.File, repository.Codec) error {
+	return func(_ context.Context, file *snapshot.File, _ repository.Codec) error {
+		active := c.active.Add(1)
+		defer c.active.Add(-1)
+		for {
+			current := c.maximum.Load()
+			if active <= current || c.maximum.CompareAndSwap(current, active) {
+				break
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+		if file.Path() == failing {
+			return errors.New("restore failed")
+		}
+		return nil
+	}
+}
+
+func TestRestoreSnapshot_Handle_Concurrency(t *testing.T) {
+	t.Parallel()
+
+	t.Run(`Given a RestoreSnapshot command handler with several workers and many files where one fails,
+	when Handle method is called,
+	then it restores the files in parallel and reports only the failed one`, func(t *testing.T) {
+		t.Parallel()
+
+		manifest, _ := verifiableManifest(concurrentFiles)
+		reads := &concurrentReads{}
+		objectRepo := &app.ObjectRepositoryMock{RestoreObjectFunc: reads.restore("/source/file-007")}
+
+		events, err := newConcurrentRestorer(t, objectRepo, manifest, plainFolderRepository(t), 8).
+			Handle(t.Context(), app.RestoreSnapshotCommand{RepositoryPath: "repo", SnapshotID: manifest.ID()})
+
+		require.NoError(t, err)
+		restored, err := app.SingleEvent[*snapshot.SnapshotRestored](events)
+		require.NoError(t, err)
+		require.Equal(t, concurrentFiles, restored.TotalFiles())
+		require.Len(t, restored.Failed(), 1)
+		require.Equal(t, "/source/file-007", restored.Failed()[0].Path())
+		require.Len(t, objectRepo.RestoreObjectCalls(), concurrentFiles)
+		require.Greater(t, reads.maximum.Load(), int32(1))
+	})
+
+	t.Run(`Given a RestoreSnapshot command handler with several workers,
+	when the context is cancelled while files are being restored,
+	then it returns the cancellation error instead of a partial result`, func(t *testing.T) {
+		t.Parallel()
+
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		manifest, _ := verifiableManifest(concurrentFiles)
+		objectRepo := &app.ObjectRepositoryMock{
+			RestoreObjectFunc: func(context.Context, *snapshot.File, repository.Codec) error {
+				cancel()
+				return nil
+			},
+		}
+
+		events, err := newConcurrentRestorer(t, objectRepo, manifest, plainFolderRepository(t), 4).
+			Handle(ctx, app.RestoreSnapshotCommand{RepositoryPath: "repo", SnapshotID: manifest.ID()})
+
+		require.ErrorIs(t, err, context.Canceled)
+		require.Empty(t, events)
+	})
+
+	t.Run(`Given a RestoreSnapshot command handler with several workers on an encrypted format version 2 repository,
+	when Handle method is called with objects larger than the memory budget,
+	then the large objects are restored one at a time`, func(t *testing.T) {
+		t.Parallel()
+
+		manifest, _ := largeManifest(t)
+		config := fixtures.ConfigBuilder{EncryptionConfig: encryption.NewEncryptionConfig("key", "fingerprint", 1)}.Build(t)
+		folderRepo := &app.FolderRepositoryMock{GetConfigFunc: func(context.Context, string) (*repository.Config, error) { return &config, nil }}
+		reads := &concurrentReads{}
+		objectRepo := &app.ObjectRepositoryMock{RestoreObjectFunc: reads.restore("")}
+
+		_, err := newConcurrentRestorer(t, objectRepo, manifest, folderRepo, 4).
+			Handle(t.Context(), app.RestoreSnapshotCommand{RepositoryPath: "repo", SnapshotID: manifest.ID(), PrivateKeyPath: new("private.pem")})
+
+		require.NoError(t, err)
+		require.Equal(t, int32(1), reads.maximum.Load())
 	})
 }
