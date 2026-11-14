@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rsa"
 	"errors"
-	"fmt"
 	"testing"
 
 	"github.com/bruli-lab/stowmark/internal/app"
@@ -232,25 +231,18 @@ func TestCreateSnapshot_Handle(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			require.Equal(t, app.CreateSnapshotCommandName, result.EventName())
-			require.NotEmpty(t, result.SnapshotID)
-			require.Equal(t, tt.expectedFileCount, result.FileCount)
-			require.Equal(t, tt.expectedTotalSize, result.TotalSize)
+			require.Equal(t, snapshot.SnapshotCreatedEventName, result.EventName())
+			require.NotEmpty(t, result.SnapshotID())
+			require.Equal(t, tt.expectedFileCount, result.FileCount())
+			require.Equal(t, tt.expectedTotalSize, result.TotalSize())
 		})
 	}
 }
 
-func createSnapshot(ctx context.Context, handler *app.CreateSnapshot, cmd app.CreateSnapshotCommand) (*app.CreateSnapshotEvent, error) {
+func createSnapshot(ctx context.Context, handler *app.CreateSnapshot, cmd app.CreateSnapshotCommand) (*snapshot.SnapshotCreated, error) {
 	events, err := handler.Handle(ctx, cmd)
 	if err != nil {
 		return nil, err
 	}
-	if len(events) != 1 {
-		return nil, fmt.Errorf("unexpected number of events: %d", len(events))
-	}
-	result, ok := events[0].(*app.CreateSnapshotEvent)
-	if !ok {
-		return nil, fmt.Errorf("unexpected event type: %T", events[0])
-	}
-	return result, nil
+	return app.SingleEvent[*snapshot.SnapshotCreated](events)
 }

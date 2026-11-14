@@ -6,8 +6,8 @@ import (
 
 	"github.com/bruli-lab/go-core/cqs"
 	"github.com/bruli-lab/go-core/event"
+	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
-	"github.com/google/uuid"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -18,7 +18,6 @@ const (
 
 type PruneRepositoryCommand struct {
 	RepositoryPath string
-	DryRun         bool
 }
 
 func (p PruneRepositoryCommand) Name() string {
@@ -26,11 +25,10 @@ func (p PruneRepositoryCommand) Name() string {
 }
 
 type PruneRepository struct {
-	folderRepo   FolderRepository
-	manifestRepo ManifestRepository
-	objectRepo   ObjectRepository
-	locker       *RepositoryLocker
-	workers      int
+	planner    prunePlanner
+	objectRepo ObjectRepository
+	locker     *RepositoryLocker
+	workers    int
 }
 
 func (p *PruneRepository) Handle(ctx context.Context, cmd cqs.Command) ([]event.Event, error) {
@@ -39,62 +37,33 @@ func (p *PruneRepository) Handle(ctx context.Context, cmd cqs.Command) ([]event.
 		return nil, cqs.NewInvalidCommandError(PruneRepositoryCommandName, cmd.Name())
 	}
 
-	var result *PruneRepositoryEvent
-	err := p.locker.WithLock(ctx, lockKindFor(co.DryRun), func(ctx context.Context) error {
-		pruned, err := p.prune(ctx, co)
-		result = pruned
-		return err
+	events := make([]event.Event, 0)
+	err := p.locker.WithLock(ctx, repository.ExclusiveLock, func(ctx context.Context) error {
+		target, err := p.planner.plan(ctx, co.RepositoryPath)
+		if err != nil {
+			return err
+		}
+		repositoryID := target.config.ID().String()
+		if len(target.plan.Missing()) > 0 {
+			events = append(events, target.plan.MissingDetected(repositoryID))
+		}
+		if err := p.deleteObjects(ctx, target); err != nil {
+			return err
+		}
+		if len(target.plan.Unreferenced()) > 0 {
+			events = append(events, target.plan.Pruned(repositoryID))
+		}
+		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	return []event.Event{result}, nil
+	return events, nil
 }
 
-func (p *PruneRepository) prune(ctx context.Context, co PruneRepositoryCommand) (*PruneRepositoryEvent, error) {
-	conf, err := p.folderRepo.GetConfig(ctx, co.RepositoryPath)
-	if err != nil {
-		return nil, err
-	}
-
-	encrypted := conf.Encryption() != nil
-	var generation uint64
-	if encrypted {
-		generation = conf.Encryption().Generation()
-	}
-
-	manifests, err := p.manifestRepo.List(ctx)
-	if err != nil {
-		return nil, err
-	}
-	references := snapshot.NewReferences(manifests)
-
-	stored, err := p.objectRepo.ListObjects(ctx, encrypted, generation)
-	if err != nil {
-		return nil, err
-	}
-	unreferenced := references.Unreferenced(stored)
-
-	result := NewPruneRepositoryEvent(co.RepositoryPath, PruneStats{
-		StoredObjects:       len(stored),
-		ReferencedObjects:   references.Len(),
-		UnreferencedObjects: len(unreferenced),
-		MissingObjects:      len(references.Missing(stored)),
-	}, co.DryRun)
-
-	if co.DryRun {
-		return result, nil
-	}
-
-	if err := p.deleteObjects(ctx, unreferenced, encrypted, generation); err != nil {
-		return nil, err
-	}
-
-	return result, nil
-}
-
-func (p *PruneRepository) deleteObjects(ctx context.Context, hashes []string, encrypted bool, generation uint64) error {
+func (p *PruneRepository) deleteObjects(ctx context.Context, target *pruneTarget) error {
+	hashes := target.plan.Unreferenced()
 	if len(hashes) == 0 {
 		return nil
 	}
@@ -108,7 +77,7 @@ func (p *PruneRepository) deleteObjects(ctx context.Context, hashes []string, en
 		}
 
 		group.Go(func() error {
-			if err := p.objectRepo.DeleteObject(groupCtx, hash, encrypted, generation); err != nil {
+			if err := p.objectRepo.DeleteObject(groupCtx, hash, target.encrypted, target.generation); err != nil {
 				return fmt.Errorf("prune object %q: %w", hash, err)
 			}
 			return nil
@@ -142,31 +111,47 @@ func NewPruneRepositoryWithWorkers(
 		workers = defaultPruneWorkers
 	}
 	return &PruneRepository{
-		folderRepo:   folderRepo,
-		manifestRepo: manifestRepo,
-		objectRepo:   objectRepo,
-		locker:       locker,
-		workers:      workers,
+		planner:    prunePlanner{folderRepo: folderRepo, manifestRepo: manifestRepo, objectRepo: objectRepo},
+		objectRepo: objectRepo,
+		locker:     locker,
+		workers:    workers,
 	}
 }
 
-type PruneStats struct {
-	StoredObjects       int
-	ReferencedObjects   int
-	UnreferencedObjects int
-	MissingObjects      int
+type pruneTarget struct {
+	config     *repository.Config
+	encrypted  bool
+	generation uint64
+	plan       *snapshot.PrunePlan
 }
 
-type PruneRepositoryEvent struct {
-	event.BasicEvent
-	PruneStats
-	DryRun bool
+type prunePlanner struct {
+	folderRepo   FolderRepository
+	manifestRepo ManifestRepository
+	objectRepo   ObjectRepository
 }
 
-func NewPruneRepositoryEvent(repositoryPath string, stats PruneStats, dryRun bool) *PruneRepositoryEvent {
-	return &PruneRepositoryEvent{
-		BasicEvent: event.NewBasicEvent(PruneRepositoryCommandName, uuid.New(), repositoryPath),
-		PruneStats: stats,
-		DryRun:     dryRun,
+func (p prunePlanner) plan(ctx context.Context, repositoryPath string) (*pruneTarget, error) {
+	conf, err := p.folderRepo.GetConfig(ctx, repositoryPath)
+	if err != nil {
+		return nil, err
 	}
+
+	target := &pruneTarget{config: conf, encrypted: conf.Encryption() != nil}
+	if target.encrypted {
+		target.generation = conf.Encryption().Generation()
+	}
+
+	manifests, err := p.manifestRepo.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	stored, err := p.objectRepo.ListObjects(ctx, target.encrypted, target.generation)
+	if err != nil {
+		return nil, err
+	}
+
+	target.plan = snapshot.NewPrunePlan(manifests, stored)
+	return target, nil
 }

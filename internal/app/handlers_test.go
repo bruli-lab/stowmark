@@ -163,6 +163,12 @@ func TestManifestGet_Handle(t *testing.T) {
 	})
 }
 
+type expectedRestore struct {
+	totalFiles int
+	failed     []snapshot.FailedResult
+	isSuccess  bool
+}
+
 func TestRestoreSnapshot_Handle(t *testing.T) {
 	t.Parallel()
 
@@ -170,7 +176,7 @@ func TestRestoreSnapshot_Handle(t *testing.T) {
 		name          string
 		getManifest   func(ctx context.Context, snapshotID string) (*snapshot.Manifest, error)
 		restoreObject func(ctx context.Context, comp *repository.Compression, obj *snapshot.File, key []byte, generation uint64) error
-		expectedEvent *app.RestoreSnapshotEvent
+		expectedEvent *expectedRestore
 		expectedErr   error
 	}{
 		{
@@ -192,10 +198,9 @@ func TestRestoreSnapshot_Handle(t *testing.T) {
 				}
 				return nil
 			},
-			expectedEvent: &app.RestoreSnapshotEvent{
-				SnapshotID:  "20261113T222314Z-abcdef01",
-				TotalFiles:  2,
-				FailedFiles: []app.Failed{{Path: "source/path", Reason: errRepository.Error()}},
+			expectedEvent: &expectedRestore{
+				totalFiles: 2,
+				failed:     []snapshot.FailedResult{*snapshot.NewFailedResult("source/path", errRepository.Error())},
 			},
 		},
 		{
@@ -207,11 +212,9 @@ func TestRestoreSnapshot_Handle(t *testing.T) {
 			restoreObject: func(context.Context, *repository.Compression, *snapshot.File, []byte, uint64) error {
 				return nil
 			},
-			expectedEvent: &app.RestoreSnapshotEvent{
-				SnapshotID:  "20261113T222314Z-abcdef01",
-				TotalFiles:  2,
-				FailedFiles: []app.Failed{},
-				IsSuccess:   true,
+			expectedEvent: &expectedRestore{
+				totalFiles: 2,
+				isSuccess:  true,
 			},
 		},
 	}
@@ -233,13 +236,13 @@ func TestRestoreSnapshot_Handle(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.Len(t, events, 1)
-			got, ok := events[0].(*app.RestoreSnapshotEvent)
+			got, ok := events[0].(*snapshot.SnapshotRestored)
 			require.True(t, ok)
-			require.Equal(t, app.RestoreSnapshotCommandName, got.EventName())
-			require.Equal(t, tt.expectedEvent.SnapshotID, got.SnapshotID)
-			require.Equal(t, tt.expectedEvent.TotalFiles, got.TotalFiles)
-			require.Equal(t, tt.expectedEvent.FailedFiles, got.FailedFiles)
-			require.Equal(t, tt.expectedEvent.IsSuccess, got.IsSuccess)
+			require.Equal(t, snapshot.SnapshotRestoredEventName, got.EventName())
+			require.Equal(t, "20261113T222314Z-abcdef01", got.SnapshotID())
+			require.Equal(t, tt.expectedEvent.totalFiles, got.TotalFiles())
+			require.Equal(t, tt.expectedEvent.failed, got.Failed())
+			require.Equal(t, tt.expectedEvent.isSuccess, got.IsSuccess())
 		})
 	}
 }

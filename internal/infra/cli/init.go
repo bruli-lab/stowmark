@@ -85,13 +85,9 @@ func newInitCommand() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("initialize repository: %w", err)
 			}
-			if len(events) != 1 {
-				return fmt.Errorf("unexpected number of init events: %d", len(events))
-			}
-			ev := events[0]
-			result, ok := ev.(*app.InitEvent)
-			if !ok {
-				return fmt.Errorf("unexpected event type: %T", ev)
+			result, err := app.SingleEvent[*repository.RepositoryInitialized](events)
+			if err != nil {
+				return err
 			}
 
 			_, _ = fmt.Fprintf(
@@ -102,9 +98,9 @@ func newInitCommand() *cobra.Command {
 			_, _ = fmt.Fprintf(
 				cmd.OutOrStdout(),
 				"Repository ID: %s\n",
-				result.RepositoryID,
+				result.RepositoryID(),
 			)
-			for _, warning := range result.Warnings {
+			for _, warning := range result.Warnings() {
 				_, _ = fmt.Fprintf(
 					cmd.OutOrStdout(),
 					"WARNING: %s\n",

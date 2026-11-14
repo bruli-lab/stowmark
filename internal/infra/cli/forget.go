@@ -1,7 +1,7 @@
 package cli
 
 import (
-	"errors"
+	"context"
 	"fmt"
 	"io"
 	"strings"
@@ -11,6 +11,7 @@ import (
 	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
+	observabilityinfra "github.com/bruli-lab/stowmark/internal/infra/observability"
 	"github.com/bruli-lab/stowmark/internal/infra/repositories"
 	"github.com/spf13/cobra"
 )
@@ -61,6 +62,9 @@ func newForgetCommand() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to create repository locker: %w", err)
 			}
+			if dryRun {
+				return runForgetPlan(cmd.Context(), cmd.OutOrStdout(), obsv, manifestRepo, locker, policy)
+			}
 			multiMdw, err := middlewares.BuildCommandMiddlewares(obsv, app.NewEventsTracing())
 			if err != nil {
 				return err
@@ -68,19 +72,11 @@ func newForgetCommand() *cobra.Command {
 			events, err := multiMdw(app.NewForgetSnapshots(manifestRepo, locker)).Handle(cmd.Context(), app.ForgetSnapshotsCommand{
 				RepositoryPath: repoHandler.RepositoryPath(),
 				Policy:         policy,
-				DryRun:         dryRun,
 			})
 			if err != nil {
 				return fmt.Errorf("failed to forget snapshots: %w", err)
 			}
-			if len(events) != 1 {
-				return errors.New("unexpected number of events")
-			}
-			result, ok := events[0].(*app.ForgetSnapshotsEvent)
-			if !ok {
-				return fmt.Errorf("unexpected event type: %T", events[0])
-			}
-			if err := printForgetResult(cmd.OutOrStdout(), result); err != nil {
+			if err := printForgotten(cmd.OutOrStdout(), app.EventsOf[*snapshot.SnapshotForgotten](events)); err != nil {
 				return err
 			}
 			if !prune {
@@ -89,7 +85,7 @@ func newForgetCommand() *cobra.Command {
 			if _, err := fmt.Fprintln(cmd.OutOrStdout()); err != nil {
 				return err
 			}
-			return runPrune(cmd.Context(), cmd.OutOrStdout(), obsv, repoHandler, false)
+			return runPrune(cmd.Context(), cmd.OutOrStdout(), obsv, repoHandler)
 		},
 	}
 
@@ -100,7 +96,7 @@ func newForgetCommand() *cobra.Command {
 	cmd.Flags().IntVar(&rules.Monthly, "keep-monthly", 0, "keep the most recent snapshot of the last N months that have snapshots")
 	cmd.Flags().IntVar(&rules.Yearly, "keep-yearly", 0, "keep the most recent snapshot of the last N years that have snapshots")
 	cmd.Flags().StringVar(&within, "keep-within", "", "keep every snapshot newer than this duration (for example 30d, 2w or 36h)")
-	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "only show which snapshots would be forgotten")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "only show which snapshots would be kept or forgotten, and why")
 	cmd.Flags().BoolVar(&prune, "prune", false, "run prune after forgetting the snapshots")
 	cmd.MarkFlagsMutuallyExclusive("dry-run", "prune")
 	_ = cmd.MarkFlagRequired("repo")
@@ -108,37 +104,49 @@ func newForgetCommand() *cobra.Command {
 	return cmd
 }
 
-func printForgetResult(output io.Writer, result *app.ForgetSnapshotsEvent) error {
-	if len(result.Decisions) == 0 {
-		_, err := fmt.Fprintln(output, "No snapshots found.")
+func runForgetPlan(
+	ctx context.Context,
+	output io.Writer,
+	obsv *observabilityinfra.OTLPObservability,
+	manifestRepo app.ManifestRepository,
+	locker *app.RepositoryLocker,
+	policy *snapshot.RetentionPolicy,
+) error {
+	queryMdw, err := middlewares.BuildQueryMiddlewares(obsv)
+	if err != nil {
 		return err
 	}
-
-	forgetAction := "forget"
-	if result.DryRun {
-		forgetAction = "would forget"
+	result, err := queryMdw(app.NewForgetPlan(manifestRepo, locker)).Handle(ctx, app.ForgetPlanQuery{Policy: policy})
+	if err != nil {
+		return fmt.Errorf("failed to plan forget: %w", err)
+	}
+	decisions, ok := result.([]snapshot.RetentionDecision)
+	if !ok {
+		return fmt.Errorf("unexpected result type: %T", result)
+	}
+	if len(decisions) == 0 {
+		_, err := fmt.Fprintln(output, "No snapshots found.")
+		return err
 	}
 
 	writer := tabwriter.NewWriter(output, 0, 4, 2, ' ', 0)
 	if _, err := fmt.Fprintln(writer, "ID\tCREATED AT\tSOURCE\tACTION\tREASONS"); err != nil {
 		return err
 	}
-	for _, decision := range result.Decisions {
-		item := decision.Snapshot()
-		action := forgetAction
-		if decision.Keep() {
-			action = "keep"
+	forgotten := 0
+	for i := range decisions {
+		item := decisions[i].Snapshot()
+		action := "keep"
+		if !decisions[i].Keep() {
+			action = "would forget"
+			forgotten++
 		}
-		reasons := make([]string, len(decision.Reasons()))
-		for i, reason := range decision.Reasons() {
-			reasons[i] = string(reason)
+		reasons := make([]string, len(decisions[i].Reasons()))
+		for j, reason := range decisions[i].Reasons() {
+			reasons[j] = string(reason)
 		}
 		if _, err := fmt.Fprintf(writer, "%s\t%s\t%s\t%s\t%s\n",
-			item.ID(),
-			item.CreatedAt().In(time.Local).Format(time.DateTime),
-			item.Source(),
-			action,
-			strings.Join(reasons, ", "),
+			item.ID(), formatLocal(item.CreatedAt()), item.Source(), action, strings.Join(reasons, ", "),
 		); err != nil {
 			return err
 		}
@@ -146,15 +154,29 @@ func printForgetResult(output io.Writer, result *app.ForgetSnapshotsEvent) error
 	if err := writer.Flush(); err != nil {
 		return err
 	}
-
-	forgotten := result.Forgotten()
-	_, err := fmt.Fprintf(output, "\nKept %d snapshot(s), %s %d snapshot(s)\n", len(result.Decisions)-forgotten, pastForgetAction(result.DryRun), forgotten)
+	_, err = fmt.Fprintf(output, "\nWould keep %d snapshot(s) and forget %d snapshot(s)\n", len(decisions)-forgotten, forgotten)
 	return err
 }
 
-func pastForgetAction(dryRun bool) string {
-	if dryRun {
-		return "would forget"
+func printForgotten(output io.Writer, forgotten []*snapshot.SnapshotForgotten) error {
+	if len(forgotten) > 0 {
+		writer := tabwriter.NewWriter(output, 0, 4, 2, ' ', 0)
+		if _, err := fmt.Fprintln(writer, "FORGOTTEN\tCREATED AT\tSOURCE"); err != nil {
+			return err
+		}
+		for _, ev := range forgotten {
+			if _, err := fmt.Fprintf(writer, "%s\t%s\t%s\n", ev.SnapshotID(), formatLocal(ev.CreatedAt()), ev.Source()); err != nil {
+				return err
+			}
+		}
+		if err := writer.Flush(); err != nil {
+			return err
+		}
 	}
-	return "forgot"
+	_, err := fmt.Fprintf(output, "Forgot %d snapshot(s)\n", len(forgotten))
+	return err
+}
+
+func formatLocal(at time.Time) string {
+	return at.In(time.Local).Format(time.DateTime)
 }

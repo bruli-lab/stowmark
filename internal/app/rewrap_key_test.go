@@ -194,12 +194,16 @@ func TestRewrapKey_Handle(t *testing.T) {
 				OldPrivateKey:  tt.args.oldPrivateKeyPath,
 				NewPublicKey:   tt.args.newPublicKeyPath,
 			})
-			require.Empty(t, events)
 			if tt.expectedErr != nil {
 				require.ErrorIs(t, err, tt.expectedErr)
+				require.Empty(t, events)
 				return
 			}
 			require.NoError(t, err)
+			rewrapped, err := app.SingleEvent[*encryption.KeyRewrapped](events)
+			require.NoError(t, err)
+			require.Equal(t, encryption.KeyRewrappedEventName, rewrapped.EventName())
+			require.Equal(t, "fingerprint", rewrapped.PublicKeyFingerprint())
 		})
 	}
 }

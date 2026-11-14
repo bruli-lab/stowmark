@@ -2,9 +2,9 @@ package stowmark
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/bruli-lab/stowmark/internal/app"
+	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 )
 
@@ -18,7 +18,7 @@ func (h *Handler) RestoreSnapshot(ctx context.Context, snapshotID string, destin
 	}()
 	restoreSnapshotTracer := app.NewRestoreSnapshotTracer(obsv.Logger)
 	evtr := app.NewEventsTracing()
-	evtr.Add(app.RestoreSnapshotCommandName, restoreSnapshotTracer)
+	evtr.Add(snapshot.SnapshotRestoredEventName, restoreSnapshotTracer)
 	mdw, err := middlewares.BuildCommandMiddlewares(obsv, evtr)
 	if err != nil {
 		return nil, err
@@ -33,24 +33,21 @@ func (h *Handler) RestoreSnapshot(ctx context.Context, snapshotID string, destin
 	if err != nil {
 		return nil, err
 	}
-	if len(events) != 1 {
-		return nil, fmt.Errorf("unexpected number of events")
+	result, err := app.SingleEvent[*snapshot.SnapshotRestored](events)
+	if err != nil {
+		return nil, err
 	}
-	result, ok := events[0].(*app.RestoreSnapshotEvent)
-	if !ok {
-		return nil, fmt.Errorf("unexpected event type")
-	}
-	failed := make([]FailedResult, len(result.FailedFiles))
-	for i, f := range result.FailedFiles {
+	failed := make([]FailedResult, len(result.Failed()))
+	for i, f := range result.Failed() {
 		failed[i] = FailedResult{
-			Path:   f.Path,
-			Reason: f.Reason,
+			Path:   f.Path(),
+			Reason: f.Reason(),
 		}
 	}
 	return &Result{
-		SnapshotID: result.SnapshotID,
-		TotalFiles: result.TotalFiles,
+		SnapshotID: result.SnapshotID(),
+		TotalFiles: result.TotalFiles(),
 		Failed:     failed,
-		IsSuccess:  result.IsSuccess,
+		IsSuccess:  result.IsSuccess(),
 	}, nil
 }

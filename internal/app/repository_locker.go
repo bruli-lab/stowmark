@@ -8,6 +8,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/bruli-lab/go-core/event"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 )
 
@@ -174,4 +175,17 @@ func currentHostname() string {
 		return unknownLockHostname
 	}
 	return hostname
+}
+
+func withLockedEvent[T event.Event](ctx context.Context, locker *RepositoryLocker, kind repository.LockKind, operation func(context.Context) (T, error)) ([]event.Event, error) {
+	var produced T
+	err := locker.WithLock(ctx, kind, func(ctx context.Context) error {
+		result, err := operation(ctx)
+		produced = result
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return []event.Event{produced}, nil
 }

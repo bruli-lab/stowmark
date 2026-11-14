@@ -5,6 +5,7 @@ import (
 	"log/slog"
 
 	"github.com/bruli-lab/go-core/event"
+	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -14,7 +15,7 @@ type CreateSnapshotTracer struct {
 }
 
 func (c CreateSnapshotTracer) Trace(span trace.Span, ev event.Event) {
-	createEv, ok := ev.(*CreateSnapshotEvent)
+	createEv, ok := ev.(*snapshot.SnapshotCreated)
 	if !ok {
 		c.logger.Error(
 			"invalid create snapshot event",
@@ -24,9 +25,9 @@ func (c CreateSnapshotTracer) Trace(span trace.Span, ev event.Event) {
 		return
 	}
 	span.SetAttributes(
-		attribute.String("snapshot.id", createEv.SnapshotID),
-		attribute.Int("snapshot.file_count", createEv.FileCount),
-		attribute.Int64("snapshot.total_size", createEv.TotalSize),
+		attribute.String("snapshot.id", createEv.SnapshotID()),
+		attribute.Int("snapshot.file_count", createEv.FileCount()),
+		attribute.Int64("snapshot.total_size", createEv.TotalSize()),
 	)
 }
 

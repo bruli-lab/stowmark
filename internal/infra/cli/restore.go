@@ -5,6 +5,7 @@ import (
 
 	"github.com/bruli-lab/go-core/cqs"
 	"github.com/bruli-lab/stowmark/internal/app"
+	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/disk"
 	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
 	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
@@ -59,7 +60,7 @@ func newSnapshotRestoreCommand() *cobra.Command {
 			}
 			restSnapshotTracer := app.NewRestoreSnapshotTracer(obsv.Logger)
 			evtr := app.NewEventsTracing()
-			evtr.Add(app.RestoreSnapshotCommandName, restSnapshotTracer)
+			evtr.Add(snapshot.SnapshotRestoredEventName, restSnapshotTracer)
 			multiMdw, err := middlewares.BuildCommandMiddlewares(obsv, evtr)
 			if err != nil {
 				return err
@@ -172,25 +173,22 @@ func executeRestore(cmd *cobra.Command, mdw cqs.CommandHandlerMiddleware, manife
 		return err
 	}
 
-	if len(events) != 1 {
-		return fmt.Errorf("unexpected number of events")
+	result, err := app.SingleEvent[*snapshot.SnapshotRestored](events)
+	if err != nil {
+		return err
 	}
-	result, ok := events[0].(*app.RestoreSnapshotEvent)
-	if !ok {
-		return fmt.Errorf("unexpected event type")
-	}
-	failed := make([]Failed, len(result.FailedFiles))
-	for i, f := range result.FailedFiles {
+	failed := make([]Failed, len(result.Failed()))
+	for i, f := range result.Failed() {
 		failed[i] = Failed{
-			Path:   f.Path,
-			Reason: f.Reason,
+			Path:   f.Path(),
+			Reason: f.Reason(),
 		}
 	}
-	if err := printResult(cmd.OutOrStdout(), result.SnapshotID, result.TotalFiles, failed, result.IsSuccess); err != nil {
+	if err := printResult(cmd.OutOrStdout(), result.SnapshotID(), result.TotalFiles(), failed, result.IsSuccess()); err != nil {
 		return err
 	}
 
-	if !result.IsSuccess {
+	if !result.IsSuccess() {
 		return fmt.Errorf(
 			"snapshot %q failed restoration",
 			snapshotID,

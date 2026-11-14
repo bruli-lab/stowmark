@@ -292,13 +292,18 @@ func TestRekeyKey_Handle(t *testing.T) {
 				PrivateKeyPath: tt.args.privateKeyPath,
 				PublicKeyPath:  tt.args.publicKeyPath,
 			})
-			require.Empty(t, events)
 			require.Len(t, objectRepo.AbortRekeyCalls(), tt.abortCalls)
 			if tt.expectedErr != nil {
 				require.ErrorIs(t, err, tt.expectedErr)
+				require.Empty(t, events)
 				return
 			}
 			require.NoError(t, err)
+			rotated, err := app.SingleEvent[*encryption.SymmetricKeyRotated](events)
+			require.NoError(t, err)
+			require.Equal(t, encryption.SymmetricKeyRotatedEventName, rotated.EventName())
+			require.Equal(t, tt.config.Encryption().Generation(), rotated.Generation())
+			require.Equal(t, len(tt.list), rotated.RekeyedObjects())
 		})
 	}
 }

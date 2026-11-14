@@ -6,6 +6,7 @@ import (
 
 	"github.com/bruli-lab/go-core/cqs"
 	"github.com/bruli-lab/go-core/event"
+	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 )
 
@@ -32,32 +33,35 @@ func (r *RewrapKey) Handle(ctx context.Context, cmd cqs.Command) ([]event.Event,
 	if !ok {
 		return nil, cqs.NewInvalidCommandError(RewrapKeyCommandName, cmd.Name())
 	}
-	return nil, r.locker.WithLock(ctx, repository.ExclusiveLock, func(ctx context.Context) error {
+	return withLockedEvent(ctx, r.locker, repository.ExclusiveLock, func(ctx context.Context) (*encryption.KeyRewrapped, error) {
 		return r.rewrap(ctx, co)
 	})
 }
 
-func (r *RewrapKey) rewrap(ctx context.Context, co RewrapKeyCommand) error {
+func (r *RewrapKey) rewrap(ctx context.Context, co RewrapKeyCommand) (*encryption.KeyRewrapped, error) {
 	conf, err := r.folderRepo.GetConfig(ctx, co.RepositoryPath)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	encryptionConf := conf.Encryption()
 	if encryptionConf == nil {
-		return ErrRepositoryNotEncrypted
+		return nil, ErrRepositoryNotEncrypted
 	}
 	symmetricKey, err := r.keys.unwrap(ctx, co.OldPrivateKey, encryptionConf)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer clear(symmetricKey)
 	wrapped, err := r.keys.wrap(ctx, co.NewPublicKey, symmetricKey)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	encryptionConf.ChangeEncryptedKey(wrapped.encodedKey)
 	encryptionConf.ChangePublicKeyFingerPrint(wrapped.fingerprint)
-	return r.folderRepo.CreateConfig(ctx, co.RepositoryPath, conf)
+	if err := r.folderRepo.CreateConfig(ctx, co.RepositoryPath, conf); err != nil {
+		return nil, err
+	}
+	return encryptionConf.KeyRewrapped(conf.ID().String()), nil
 }
 
 func NewRewrapKey(

@@ -2,10 +2,10 @@ package stowmark
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/bruli-lab/stowmark/internal/app"
+	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 )
 
@@ -33,12 +33,20 @@ func (h *Handler) Unlock(ctx context.Context, all bool) (*UnlockResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(events) != 1 {
-		return nil, errors.New("unexpected number of events")
+	queryMdw, err := middlewares.BuildQueryMiddlewares(obsv)
+	if err != nil {
+		return nil, err
 	}
-	result, ok := events[0].(*app.UnlockEvent)
+	result, err := queryMdw(app.NewLockList(h.lockRepository)).Handle(ctx, app.LockListQuery{})
+	if err != nil {
+		return nil, err
+	}
+	active, ok := result.([]repository.Lock)
 	if !ok {
-		return nil, fmt.Errorf("unexpected event type: %T", events[0])
+		return nil, fmt.Errorf("unexpected result type: %T", result)
 	}
-	return &UnlockResult{RemovedLocks: result.RemovedLocks, ActiveLocks: result.ActiveLocks}, nil
+	return &UnlockResult{
+		RemovedLocks: len(app.EventsOf[*repository.LockRemoved](events)),
+		ActiveLocks:  len(active),
+	}, nil
 }

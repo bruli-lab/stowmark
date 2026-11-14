@@ -1,3 +1,4 @@
+//nolint:dupl // CQS command handlers intentionally share the same adapter structure.
 package app
 
 import (
@@ -10,7 +11,6 @@ import (
 	"github.com/bruli-lab/go-core/event"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
-	"github.com/google/uuid"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -43,21 +43,12 @@ func (c *CreateSnapshot) Handle(ctx context.Context, cmd cqs.Command) ([]event.E
 	if !ok {
 		return nil, cqs.NewInvalidCommandError(CreateSnapshotCommandName, cmd.Name())
 	}
-	var result *snapshot.CreateResult
-	err := c.locker.WithLock(ctx, repository.SharedLock, func(ctx context.Context) error {
-		created, err := c.create(ctx, co)
-		result = created
-		return err
+	return withLockedEvent(ctx, c.locker, repository.SharedLock, func(ctx context.Context) (*snapshot.SnapshotCreated, error) {
+		return c.create(ctx, co)
 	})
-	if err != nil {
-		return nil, err
-	}
-	return []event.Event{
-		NewCreateSnapshotEvent(result.ID(), result.FileCount(), result.TotalSize()),
-	}, nil
 }
 
-func (c *CreateSnapshot) create(ctx context.Context, co CreateSnapshotCommand) (*snapshot.CreateResult, error) {
+func (c *CreateSnapshot) create(ctx context.Context, co CreateSnapshotCommand) (*snapshot.SnapshotCreated, error) {
 	conf, err := c.folderRepo.GetConfig(ctx, co.RepositoryPath)
 	if err != nil {
 		return nil, err
@@ -125,7 +116,7 @@ func (c *CreateSnapshot) create(ctx context.Context, co CreateSnapshotCommand) (
 	if err := c.manifestRepo.Save(ctx, manifest); err != nil {
 		return nil, err
 	}
-	return snapshot.NewCreateResult(manifest.ID(), int(savedFiles.Load()), totalSize.Load()), nil
+	return snapshot.NewSnapshotCreated(manifest, int(savedFiles.Load()), totalSize.Load()), nil
 }
 
 func (c *CreateSnapshot) saveFileObjects(ctx context.Context, file *snapshot.File, comp *repository.Compression, key objectKey) (int64, error) {
@@ -202,25 +193,5 @@ func NewCreateSnapshotWithWorkers(
 		keys:         newKeyring(folderRepo, asymmetricRepo, symmetricRepo),
 		locker:       locker,
 		workers:      workers,
-	}
-}
-
-type CreateSnapshotEvent struct {
-	event.BasicEvent
-	SnapshotID string
-	FileCount  int
-	TotalSize  int64
-}
-
-func NewCreateSnapshotEvent(
-	snapshotID string,
-	fileCount int,
-	totalSize int64,
-) *CreateSnapshotEvent {
-	return &CreateSnapshotEvent{
-		BasicEvent: event.NewBasicEvent(CreateSnapshotCommandName, uuid.New(), snapshotID),
-		SnapshotID: snapshotID,
-		FileCount:  fileCount,
-		TotalSize:  totalSize,
 	}
 }

@@ -107,8 +107,8 @@ func TestCreateSnapshot_Handle_Concurrency(t *testing.T) {
 		result, err := createSnapshot(t.Context(), deps.handler(8), createCommand)
 
 		require.NoError(t, err)
-		require.Equal(t, concurrentFiles, result.FileCount)
-		require.Equal(t, int64(concurrentFiles*(concurrentFiles+1)/2), result.TotalSize)
+		require.Equal(t, concurrentFiles, result.FileCount())
+		require.Equal(t, int64(concurrentFiles*(concurrentFiles+1)/2), result.TotalSize())
 		require.Len(t, deps.objectRepo.SaveChunkCalls(), concurrentFiles)
 		require.Len(t, deps.manifestRepo.SaveCalls(), 1)
 		for _, file := range deps.manifestRepo.SaveCalls()[0].M.Files() {

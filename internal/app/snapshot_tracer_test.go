@@ -8,6 +8,8 @@ import (
 
 	"github.com/bruli-lab/go-core/event"
 	"github.com/bruli-lab/stowmark/internal/app"
+	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
+	"github.com/bruli-lab/stowmark/internal/fixtures"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/attribute"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -29,6 +31,20 @@ func traceEvent(t *testing.T, tracer app.EventTracer, ev event.Event) []attribut
 	return ended[0].Attributes()
 }
 
+func createdEvent() *snapshot.SnapshotCreated {
+	manifest := fixtures.ManifestBuilder{ID: new("snapshot-id")}.Build()
+	return snapshot.NewSnapshotCreated(&manifest, 3, 42)
+}
+
+func restoredEvent() *snapshot.SnapshotRestored {
+	result := snapshot.NewResult("snapshot-id")
+	for range 4 {
+		result.AddSuccess()
+	}
+	result.AddFailed(*snapshot.NewFailedResult("a", "b"))
+	return result.Restored()
+}
+
 func TestSnapshotTracers_Trace(t *testing.T) {
 	t.Parallel()
 
@@ -44,7 +60,7 @@ func TestSnapshotTracers_Trace(t *testing.T) {
 			tracer: func(logger *slog.Logger) app.EventTracer {
 				return app.NewCreateSnapshotTracer(logger)
 			},
-			event: app.NewCreateSnapshotEvent("snapshot-id", 3, 42),
+			event: createdEvent(),
 			expectedAttrs: []attribute.KeyValue{
 				attribute.String("snapshot.id", "snapshot-id"),
 				attribute.Int("snapshot.file_count", 3),
@@ -56,7 +72,7 @@ func TestSnapshotTracers_Trace(t *testing.T) {
 			tracer: func(logger *slog.Logger) app.EventTracer {
 				return app.NewCreateSnapshotTracer(logger)
 			},
-			event:       app.NewInitEvent("repository-id", nil),
+			event:       snapshot.NewFileRestored("snapshot-id", "a"),
 			expectedLog: "invalid create snapshot event",
 		},
 		{
@@ -64,7 +80,7 @@ func TestSnapshotTracers_Trace(t *testing.T) {
 			tracer: func(logger *slog.Logger) app.EventTracer {
 				return app.NewRestoreSnapshotTracer(logger)
 			},
-			event: app.NewRestoreSnapshotEvent("snapshot-id", 5, []app.Failed{{Path: "a", Reason: "b"}}, false),
+			event: restoredEvent(),
 			expectedAttrs: []attribute.KeyValue{
 				attribute.String("snapshot.id", "snapshot-id"),
 				attribute.Int("snapshot.total_files_restored", 5),
@@ -77,7 +93,7 @@ func TestSnapshotTracers_Trace(t *testing.T) {
 			tracer: func(logger *slog.Logger) app.EventTracer {
 				return app.NewRestoreSnapshotTracer(logger)
 			},
-			event:       app.NewCreateSnapshotEvent("snapshot-id", 3, 42),
+			event:       createdEvent(),
 			expectedLog: "invalid restore snapshot event",
 		},
 	}

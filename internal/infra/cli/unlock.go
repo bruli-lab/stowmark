@@ -1,10 +1,10 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/bruli-lab/stowmark/internal/app"
+	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 	"github.com/bruli-lab/stowmark/internal/infra/repositories"
 	"github.com/spf13/cobra"
@@ -51,14 +51,20 @@ func newUnlockCommand() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to unlock repository: %w", err)
 			}
-			if len(events) != 1 {
-				return errors.New("unexpected number of events")
+			removed := len(app.EventsOf[*repository.LockRemoved](events))
+			queryMdw, err := middlewares.BuildQueryMiddlewares(obsv)
+			if err != nil {
+				return err
 			}
-			result, ok := events[0].(*app.UnlockEvent)
+			result, err := queryMdw(app.NewLockList(lockRepo)).Handle(cmd.Context(), app.LockListQuery{})
+			if err != nil {
+				return err
+			}
+			active, ok := result.([]repository.Lock)
 			if !ok {
-				return fmt.Errorf("unexpected event type: %T", events[0])
+				return fmt.Errorf("unexpected result type: %T", result)
 			}
-			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Removed %d lock(s), %d active lock(s) left\n", result.RemovedLocks, result.ActiveLocks)
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Removed %d lock(s), %d active lock(s) left\n", removed, len(active))
 			return err
 		},
 	}

@@ -9,6 +9,7 @@ import (
 
 	"github.com/bruli-lab/go-core/cqs"
 	"github.com/bruli-lab/go-core/event"
+	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"golang.org/x/sync/errgroup"
 )
@@ -41,20 +42,20 @@ func (r *RekeyKey) Handle(ctx context.Context, cmd cqs.Command) ([]event.Event, 
 	if !ok {
 		return nil, cqs.NewInvalidCommandError(RekeyKeyCommandName, cmd.Name())
 	}
-	return nil, r.locker.WithLock(ctx, repository.ExclusiveLock, func(ctx context.Context) error {
+	return withLockedEvent(ctx, r.locker, repository.ExclusiveLock, func(ctx context.Context) (*encryption.SymmetricKeyRotated, error) {
 		return r.rekey(ctx, co)
 	})
 }
 
-func (r *RekeyKey) rekey(ctx context.Context, co RekeyKeyCommand) (resultErr error) {
+func (r *RekeyKey) rekey(ctx context.Context, co RekeyKeyCommand) (rotated *encryption.SymmetricKeyRotated, resultErr error) {
 	conf, err := r.folderRepo.GetConfig(ctx, co.RepositoryPath)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	encryptionConf := conf.Encryption()
 	if encryptionConf == nil {
-		return ErrMissingEncryptionConfigToEncrypt
+		return nil, ErrMissingEncryptionConfigToEncrypt
 	}
 
 	currentGeneration := encryptionConf.Generation()
@@ -62,22 +63,22 @@ func (r *RekeyKey) rekey(ctx context.Context, co RekeyKeyCommand) (resultErr err
 
 	oldSymmetricKey, err := r.keys.unwrap(ctx, co.PrivateKeyPath, encryptionConf)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	newSymmetricKey, err := r.keys.symmetricRepo.GenerateSymmetricKey(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	wrapped, err := r.keys.wrap(ctx, co.PublicKeyPath, newSymmetricKey)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	hashes, err := r.objectRepo.ListEncryptedObjects(ctx, currentGeneration)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	committed := false
@@ -96,7 +97,7 @@ func (r *RekeyKey) rekey(ctx context.Context, co RekeyKeyCommand) (resultErr err
 	}()
 
 	if err := r.rekeyObjects(ctx, hashes, currentGeneration, newGeneration, oldSymmetricKey, newSymmetricKey); err != nil {
-		return err
+		return nil, err
 	}
 
 	encryptionConf.ChangeGeneration(newGeneration)
@@ -104,12 +105,16 @@ func (r *RekeyKey) rekey(ctx context.Context, co RekeyKeyCommand) (resultErr err
 	encryptionConf.ChangePublicKeyFingerPrint(wrapped.fingerprint)
 
 	if err := r.folderRepo.CreateConfig(ctx, co.RepositoryPath, conf); err != nil {
-		return err
+		return nil, err
 	}
 
 	committed = true
 
-	return r.objectRepo.DeleteEncryptedGeneration(ctx, currentGeneration)
+	if err := r.objectRepo.DeleteEncryptedGeneration(ctx, currentGeneration); err != nil {
+		return nil, err
+	}
+
+	return encryptionConf.SymmetricKeyRotated(conf.ID().String(), len(hashes)), nil
 }
 
 func (r *RekeyKey) rekeyObjects(ctx context.Context, hashes []string, currentGeneration, newGeneration uint64, oldSymmetricKey, newSymmetricKey []byte) error {

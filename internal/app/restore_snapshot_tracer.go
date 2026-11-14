@@ -5,6 +5,7 @@ import (
 	"log/slog"
 
 	"github.com/bruli-lab/go-core/event"
+	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -14,7 +15,7 @@ type RestoreSnapshotTracer struct {
 }
 
 func (r RestoreSnapshotTracer) Trace(span trace.Span, ev event.Event) {
-	restoreEv, ok := ev.(*RestoreSnapshotEvent)
+	restoreEv, ok := ev.(*snapshot.SnapshotRestored)
 	if !ok {
 		r.logger.Error(
 			"invalid restore snapshot event",
@@ -24,10 +25,10 @@ func (r RestoreSnapshotTracer) Trace(span trace.Span, ev event.Event) {
 		return
 	}
 	span.SetAttributes(
-		attribute.String("snapshot.id", restoreEv.SnapshotID),
-		attribute.Int("snapshot.total_files_restored", restoreEv.TotalFiles),
-		attribute.Int("snapshot.total_files_failed", len(restoreEv.FailedFiles)),
-		attribute.Bool("snapshot.is_success", restoreEv.IsSuccess))
+		attribute.String("snapshot.id", restoreEv.SnapshotID()),
+		attribute.Int("snapshot.total_files_restored", restoreEv.TotalFiles()),
+		attribute.Int("snapshot.total_files_failed", len(restoreEv.Failed())),
+		attribute.Bool("snapshot.is_success", restoreEv.IsSuccess()))
 }
 
 func NewRestoreSnapshotTracer(logger *slog.Logger) *RestoreSnapshotTracer {

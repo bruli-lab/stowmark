@@ -108,10 +108,11 @@ func TestRestoreFile_Restore(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.Len(t, events, 1)
-			got, ok := events[0].(*app.RestoreSnapshotEvent)
+			got, ok := events[0].(*snapshot.FileRestored)
 			require.True(t, ok)
-			require.Equal(t, snapshotID, got.SnapshotID)
-			require.True(t, got.IsSuccess)
+			require.Equal(t, snapshot.FileRestoredEventName, got.EventName())
+			require.Equal(t, snapshotID, got.SnapshotID())
+			require.Equal(t, tt.args.filePath, got.FilePath())
 		})
 	}
 }

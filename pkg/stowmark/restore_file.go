@@ -15,9 +15,7 @@ func (h *Handler) RestoreFile(ctx context.Context, snapshotID, filePath string, 
 	defer func() {
 		_ = obsv.Shutdown(ctx)
 	}()
-	restoreSnapshotTracer := app.NewRestoreSnapshotTracer(obsv.Logger)
 	evtr := app.NewEventsTracing()
-	evtr.Add(app.RestoreSnapshotCommandName, restoreSnapshotTracer)
 	mdw, err := middlewares.BuildCommandMiddlewares(obsv, evtr)
 	if err != nil {
 		return err

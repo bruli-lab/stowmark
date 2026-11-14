@@ -57,52 +57,90 @@ func forgetManifestRepo(manifests []snapshot.Manifest, listErr, deleteErr error)
 func TestForgetSnapshots_Handle(t *testing.T) {
 	t.Parallel()
 
-	manifests := manifestsCreated(time.Hour, 2*time.Hour, 3*time.Hour)
+	t.Run(`Given a ForgetSnapshots command handler with three snapshots,
+	when Handle method is called with keep last one,
+	then it deletes the older manifests and returns one snapshot forgotten event for each`, func(t *testing.T) {
+		t.Parallel()
 
-	tests := []struct {
-		name              string
-		dryRun            bool
-		expectedDeleted   []string
-		expectedForgotten int
-	}{
-		{
-			name:              "with keep last one, then it deletes the older manifests",
-			expectedDeleted:   []string{manifests[1].ID(), manifests[2].ID()},
-			expectedForgotten: 2,
-		},
-		{
-			name:              "with keep last one in dry run, then it reports the older manifests without deleting them",
-			dryRun:            true,
-			expectedForgotten: 2,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(`Given a ForgetSnapshots command handler with three snapshots,
-		when Handle method is called `+tt.name, func(t *testing.T) {
-			t.Parallel()
+		manifests := manifestsCreated(time.Hour, 2*time.Hour, 3*time.Hour)
+		repo, deleted := forgetManifestRepo(manifests, nil, nil)
 
-			repo, deleted := forgetManifestRepo(manifests, nil, nil)
-			handler := app.NewForgetSnapshots(repo, newUnlockedLocker())
-
-			events, err := handler.Handle(t.Context(), app.ForgetSnapshotsCommand{
-				RepositoryPath: "repo",
-				Policy:         retentionPolicy(t, snapshot.RetentionRules{Last: 1}),
-				DryRun:         tt.dryRun,
-			})
-
-			require.NoError(t, err)
-			require.Len(t, events, 1)
-			got, ok := events[0].(*app.ForgetSnapshotsEvent)
-			require.True(t, ok)
-			require.Equal(t, app.ForgetSnapshotsCommandName, got.EventName())
-			require.Equal(t, tt.dryRun, got.DryRun)
-			require.Len(t, got.Decisions, 3)
-			require.Equal(t, manifests[0].ID(), got.Decisions[0].Snapshot().ID())
-			require.True(t, got.Decisions[0].Keep())
-			require.Equal(t, tt.expectedForgotten, got.Forgotten())
-			require.ElementsMatch(t, tt.expectedDeleted, deleted())
+		events, err := app.NewForgetSnapshots(repo, newUnlockedLocker()).Handle(t.Context(), app.ForgetSnapshotsCommand{
+			RepositoryPath: "repo",
+			Policy:         retentionPolicy(t, snapshot.RetentionRules{Last: 1}),
 		})
-	}
+
+		require.NoError(t, err)
+		forgotten := app.EventsOf[*snapshot.SnapshotForgotten](events)
+		require.Len(t, events, 2)
+		require.Len(t, forgotten, 2)
+		ids := make([]string, len(forgotten))
+		for i, ev := range forgotten {
+			require.Equal(t, snapshot.SnapshotForgottenEventName, ev.EventName())
+			require.Equal(t, "source", ev.Source())
+			ids[i] = ev.SnapshotID()
+		}
+		require.Equal(t, []string{manifests[1].ID(), manifests[2].ID()}, ids)
+		require.Equal(t, ids, deleted())
+	})
+
+	t.Run(`Given a ForgetSnapshots command handler whose policy keeps every snapshot,
+	when Handle method is called,
+	then it deletes nothing and returns no events`, func(t *testing.T) {
+		t.Parallel()
+
+		repo, deleted := forgetManifestRepo(manifestsCreated(time.Hour, 2*time.Hour), nil, nil)
+
+		events, err := app.NewForgetSnapshots(repo, newUnlockedLocker()).Handle(t.Context(), app.ForgetSnapshotsCommand{
+			RepositoryPath: "repo",
+			Policy:         retentionPolicy(t, snapshot.RetentionRules{Last: 5}),
+		})
+
+		require.NoError(t, err)
+		require.Empty(t, events)
+		require.Empty(t, deleted())
+	})
+}
+
+func TestForgetPlan_Handle(t *testing.T) {
+	t.Parallel()
+
+	t.Run(`Given a ForgetPlan query handler with three snapshots,
+	when Handle method is called with keep last one,
+	then it returns every decision newest first without deleting any manifest`, func(t *testing.T) {
+		t.Parallel()
+
+		manifests := manifestsCreated(time.Hour, 2*time.Hour, 3*time.Hour)
+		repo, deleted := forgetManifestRepo(manifests, nil, nil)
+
+		result, err := app.NewForgetPlan(repo, newUnlockedLocker()).Handle(t.Context(), app.ForgetPlanQuery{
+			Policy: retentionPolicy(t, snapshot.RetentionRules{Last: 1}),
+		})
+
+		require.NoError(t, err)
+		decisions, ok := result.([]snapshot.RetentionDecision)
+		require.True(t, ok)
+		require.Len(t, decisions, 3)
+		require.Equal(t, manifests[0].ID(), decisions[0].Snapshot().ID())
+		require.True(t, decisions[0].Keep())
+		require.False(t, decisions[1].Keep())
+		require.False(t, decisions[2].Keep())
+		require.Empty(t, deleted())
+	})
+
+	t.Run(`Given a ForgetPlan query handler,
+	when Handle method is called without a retention policy or with another query,
+	then it returns an error`, func(t *testing.T) {
+		t.Parallel()
+
+		repo, _ := forgetManifestRepo(nil, nil, nil)
+		handler := app.NewForgetPlan(repo, newUnlockedLocker())
+
+		_, err := handler.Handle(t.Context(), app.ForgetPlanQuery{})
+		require.ErrorIs(t, err, app.ErrMissingRetentionPolicy)
+		_, err = handler.Handle(t.Context(), app.SnapshotListQuery{})
+		require.Error(t, err)
+	})
 }
 
 func TestForgetSnapshots_Handle_Errors(t *testing.T) {
@@ -159,20 +197,19 @@ func TestForgetSnapshots_Handle_Locked(t *testing.T) {
 
 	t.Run(`Given a repository where a snapshot is being created,
 	when the ForgetSnapshots command handler is called,
-	then it is blocked unless it is a dry run`, func(t *testing.T) {
+	then the command is blocked and the plan query is not`, func(t *testing.T) {
 		t.Parallel()
 
 		repo, deleted := forgetManifestRepo(manifestsCreated(time.Hour, 2*time.Hour), nil, nil)
 		locker := app.NewRepositoryLocker(newMemoryLocks(otherLock(t, repository.SharedLock, time.Now())).mock)
 		handler := app.NewForgetSnapshots(repo, locker)
-		command := app.ForgetSnapshotsCommand{RepositoryPath: "repo", Policy: retentionPolicy(t, snapshot.RetentionRules{Last: 1})}
+		policy := retentionPolicy(t, snapshot.RetentionRules{Last: 1})
 
-		_, err := handler.Handle(t.Context(), command)
+		_, err := handler.Handle(t.Context(), app.ForgetSnapshotsCommand{RepositoryPath: "repo", Policy: policy})
 		require.ErrorIs(t, err, repository.ErrRepositoryLocked)
 		require.Empty(t, repo.ListCalls())
 
-		command.DryRun = true
-		_, err = handler.Handle(t.Context(), command)
+		_, err = app.NewForgetPlan(repo, locker).Handle(t.Context(), app.ForgetPlanQuery{Policy: policy})
 		require.NoError(t, err)
 		require.Empty(t, deleted())
 	})

@@ -2,12 +2,12 @@ package cli
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"text/tabwriter"
 
 	"github.com/bruli-lab/stowmark/internal/app"
+	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 	observabilityinfra "github.com/bruli-lab/stowmark/internal/infra/observability"
 	"github.com/bruli-lab/stowmark/internal/infra/repositories"
@@ -39,7 +39,10 @@ func newPruneCommand() *cobra.Command {
 				_ = obsv.Shutdown(cmd.Context())
 				_ = repoHandler.Close()
 			}()
-			return runPrune(cmd.Context(), cmd.OutOrStdout(), obsv, repoHandler, dryRun)
+			if dryRun {
+				return runPrunePlan(cmd.Context(), cmd.OutOrStdout(), obsv, repoHandler)
+			}
+			return runPrune(cmd.Context(), cmd.OutOrStdout(), obsv, repoHandler)
 		},
 	}
 
@@ -50,62 +53,102 @@ func newPruneCommand() *cobra.Command {
 	return cmd
 }
 
-func runPrune(ctx context.Context, output io.Writer, obsv *observabilityinfra.OTLPObservability, repoHandler repositories.Repositories, dryRun bool) error {
+type pruneDependencies struct {
+	folderRepo   app.FolderRepository
+	manifestRepo app.ManifestRepository
+	objectRepo   app.ObjectRepository
+	locker       *app.RepositoryLocker
+}
+
+func newPruneDependencies(repoHandler repositories.Repositories) (*pruneDependencies, error) {
 	manifestRepo, err := repoHandler.ManifestRepository()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	objectRepo, err := repoHandler.ObjectRepository()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	locker, err := newRepositoryLocker(repoHandler)
 	if err != nil {
-		return fmt.Errorf("failed to create repository locker: %w", err)
+		return nil, fmt.Errorf("failed to create repository locker: %w", err)
 	}
-	multiMdw, err := middlewares.BuildCommandMiddlewares(obsv, app.NewEventsTracing())
+	return &pruneDependencies{
+		folderRepo:   repoHandler.FolderRepository(),
+		manifestRepo: manifestRepo,
+		objectRepo:   objectRepo,
+		locker:       locker,
+	}, nil
+}
+
+func runPrunePlan(ctx context.Context, output io.Writer, obsv *observabilityinfra.OTLPObservability, repoHandler repositories.Repositories) error {
+	deps, err := newPruneDependencies(repoHandler)
 	if err != nil {
 		return err
 	}
-	handler := multiMdw(app.NewPruneRepository(repoHandler.FolderRepository(), manifestRepo, objectRepo, locker))
-	events, err := handler.Handle(ctx, app.PruneRepositoryCommand{
-		RepositoryPath: repoHandler.RepositoryPath(),
-		DryRun:         dryRun,
-	})
+	queryMdw, err := middlewares.BuildQueryMiddlewares(obsv)
 	if err != nil {
-		return fmt.Errorf("failed to prune repository: %w", err)
+		return err
 	}
-	if len(events) != 1 {
-		return errors.New("unexpected number of events")
+	handler := queryMdw(app.NewPrunePlan(deps.folderRepo, deps.manifestRepo, deps.objectRepo, deps.locker))
+	result, err := handler.Handle(ctx, app.PrunePlanQuery{RepositoryPath: repoHandler.RepositoryPath()})
+	if err != nil {
+		return fmt.Errorf("failed to plan prune: %w", err)
 	}
-	result, ok := events[0].(*app.PruneRepositoryEvent)
+	plan, ok := result.(*snapshot.PrunePlan)
 	if !ok {
-		return fmt.Errorf("unexpected event type: %T", events[0])
+		return fmt.Errorf("unexpected result type: %T", result)
 	}
-	return printPruneResult(output, result)
-}
 
-func printPruneResult(output io.Writer, result *app.PruneRepositoryEvent) error {
 	writer := tabwriter.NewWriter(output, 0, 4, 2, ' ', 0)
-	removedLabel := "REMOVED:"
-	if result.DryRun {
-		removedLabel = "WOULD REMOVE:"
-	}
 	if _, err := fmt.Fprintf(writer,
-		"STORED OBJECTS:\t%d\nREFERENCED OBJECTS:\t%d\n%s\t%d\n",
-		result.StoredObjects, result.ReferencedObjects, removedLabel, result.UnreferencedObjects,
+		"STORED OBJECTS:\t%d\nREFERENCED OBJECTS:\t%d\nWOULD REMOVE:\t%d\n",
+		plan.StoredObjects(), plan.ReferencedObjects(), len(plan.Unreferenced()),
 	); err != nil {
 		return err
 	}
 	if err := writer.Flush(); err != nil {
 		return err
 	}
-	if result.MissingObjects == 0 {
+	return printMissingObjects(output, len(plan.Missing()))
+}
+
+func runPrune(ctx context.Context, output io.Writer, obsv *observabilityinfra.OTLPObservability, repoHandler repositories.Repositories) error {
+	deps, err := newPruneDependencies(repoHandler)
+	if err != nil {
+		return err
+	}
+	multiMdw, err := middlewares.BuildCommandMiddlewares(obsv, app.NewEventsTracing())
+	if err != nil {
+		return err
+	}
+	handler := multiMdw(app.NewPruneRepository(deps.folderRepo, deps.manifestRepo, deps.objectRepo, deps.locker))
+	events, err := handler.Handle(ctx, app.PruneRepositoryCommand{RepositoryPath: repoHandler.RepositoryPath()})
+	if err != nil {
+		return fmt.Errorf("failed to prune repository: %w", err)
+	}
+
+	removed := 0
+	for _, pruned := range app.EventsOf[*snapshot.ObjectsPruned](events) {
+		removed += pruned.Removed()
+	}
+	if _, err := fmt.Fprintf(output, "Removed %d unreferenced object(s)\n", removed); err != nil {
+		return err
+	}
+	missing := 0
+	for _, detected := range app.EventsOf[*snapshot.MissingObjectsDetected](events) {
+		missing += len(detected.Hashes())
+	}
+	return printMissingObjects(output, missing)
+}
+
+func printMissingObjects(output io.Writer, missing int) error {
+	if missing == 0 {
 		return nil
 	}
 	_, err := fmt.Fprintf(output,
 		"WARNING: %d referenced object(s) are missing from the repository; run snapshot verify to find the affected snapshots\n",
-		result.MissingObjects,
+		missing,
 	)
 	return err
 }

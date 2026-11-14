@@ -56,12 +56,17 @@ func TestUnlock_Handle(t *testing.T) {
 			events, err := app.NewUnlock(locks.mock).Handle(t.Context(), app.UnlockCommand{RepositoryPath: "repo", All: tt.all})
 
 			require.NoError(t, err)
-			require.Len(t, events, 1)
-			got, ok := events[0].(*app.UnlockEvent)
-			require.True(t, ok)
-			require.Equal(t, app.UnlockCommandName, got.EventName())
-			require.Equal(t, tt.expectedRemoved, got.RemovedLocks)
-			require.Equal(t, tt.expectedActive, got.ActiveLocks)
+			removed := app.EventsOf[*repository.LockRemoved](events)
+			require.Len(t, events, tt.expectedRemoved)
+			require.Len(t, removed, tt.expectedRemoved)
+			for _, ev := range removed {
+				require.Equal(t, repository.LockRemovedEventName, ev.EventName())
+				require.Equal(t, ev.Lock().ID().String(), ev.AggregateRootID())
+				require.Equal(t, otherOwner, ev.Lock().Owner())
+			}
+			active, err := app.NewLockList(locks.mock).Handle(t.Context(), app.LockListQuery{})
+			require.NoError(t, err)
+			require.Len(t, active, tt.expectedActive)
 			left := make([]uuid.UUID, 0)
 			for _, lock := range locks.snapshot() {
 				left = append(left, lock.ID())

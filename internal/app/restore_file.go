@@ -6,6 +6,7 @@ import (
 	"github.com/bruli-lab/go-core/cqs"
 	"github.com/bruli-lab/go-core/event"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
+	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 )
 
 const RestoreFileCommandName = "restore-file"
@@ -37,7 +38,7 @@ func (r *RestoreFile) Handle(ctx context.Context, cmd cqs.Command) ([]event.Even
 		return nil, err
 	}
 	return []event.Event{
-		NewRestoreSnapshotEvent(co.SnapshotID, 1, nil, true),
+		snapshot.NewFileRestored(co.SnapshotID, co.FilePath),
 	}, nil
 }
 

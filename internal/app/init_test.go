@@ -181,16 +181,16 @@ func TestInit_Handle(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.Len(t, events, 1)
-			got, ok := events[0].(*app.InitEvent)
+			got, ok := events[0].(*repository.RepositoryInitialized)
 			require.True(t, ok)
-			require.Equal(t, app.InitCommandName, got.EventName())
-			require.Equal(t, tt.expectedWarnings, got.Warnings)
+			require.Equal(t, repository.RepositoryInitializedEventName, got.EventName())
+			require.Equal(t, tt.expectedWarnings, got.Warnings())
 
 			require.Len(t, folderRepo.CreateConfigCalls(), 1)
 			stored := folderRepo.CreateConfigCalls()[0].C
-			require.Equal(t, stored.ID().String(), got.RepositoryID)
+			require.Equal(t, stored.ID().String(), got.RepositoryID())
 			if tt.expectedRepositoryID != "" {
-				require.Equal(t, tt.expectedRepositoryID, got.RepositoryID)
+				require.Equal(t, tt.expectedRepositoryID, got.RepositoryID())
 			}
 			require.Equal(t, tt.expectedEncryption, stored.Encryption())
 			require.Equal(t, []string{"repo", "repo/objects", "repo/snapshots"}, []string{

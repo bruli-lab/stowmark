@@ -2,7 +2,6 @@ package stowmark
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 
 	"github.com/bruli-lab/stowmark/internal/app"
@@ -52,14 +51,11 @@ func (h *Handler) Init(ctx context.Context, comp *Compression, formatVersion int
 	if err != nil {
 		return err
 	}
-	if len(events) != 1 {
-		return fmt.Errorf("unexpected number of init events: %d", len(events))
+	result, err := app.SingleEvent[*repository.RepositoryInitialized](events)
+	if err != nil {
+		return err
 	}
-	result, ok := events[0].(*app.InitEvent)
-	if !ok {
-		return fmt.Errorf("unexpected event type: %T", events[0])
-	}
-	for _, warning := range result.Warnings {
+	for _, warning := range result.Warnings() {
 		slog.Warn(warning)
 	}
 	return nil

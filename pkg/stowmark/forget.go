@@ -2,7 +2,6 @@ package stowmark
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -20,6 +19,17 @@ type RetentionPolicy struct {
 	KeepWithin  time.Duration
 }
 
+func (r RetentionPolicy) build() (*snapshot.RetentionPolicy, error) {
+	return snapshot.NewRetentionPolicy(snapshot.RetentionRules{
+		Last:    r.KeepLast,
+		Daily:   r.KeepDaily,
+		Weekly:  r.KeepWeekly,
+		Monthly: r.KeepMonthly,
+		Yearly:  r.KeepYearly,
+		Within:  r.KeepWithin,
+	})
+}
+
 type SnapshotRetention struct {
 	ID        string
 	CreatedAt time.Time
@@ -28,20 +38,58 @@ type SnapshotRetention struct {
 	Reasons   []string
 }
 
-type ForgetResult struct {
-	Snapshots []SnapshotRetention
-	DryRun    bool
+type ForgottenSnapshot struct {
+	ID        string
+	CreatedAt time.Time
+	Source    string
 }
 
-func (h *Handler) Forget(ctx context.Context, policy RetentionPolicy, dryRun bool) (*ForgetResult, error) {
-	retention, err := snapshot.NewRetentionPolicy(snapshot.RetentionRules{
-		Last:    policy.KeepLast,
-		Daily:   policy.KeepDaily,
-		Weekly:  policy.KeepWeekly,
-		Monthly: policy.KeepMonthly,
-		Yearly:  policy.KeepYearly,
-		Within:  policy.KeepWithin,
-	})
+func (h *Handler) PlanForget(ctx context.Context, policy RetentionPolicy) ([]SnapshotRetention, error) {
+	retention, err := policy.build()
+	if err != nil {
+		return nil, err
+	}
+	obsv, err := buildObservability(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = obsv.Shutdown(ctx)
+	}()
+	mdw, err := middlewares.BuildQueryMiddlewares(obsv)
+	if err != nil {
+		return nil, err
+	}
+	result, err := mdw(app.NewForgetPlan(h.manifestRepository, h.locker)).Handle(ctx, app.ForgetPlanQuery{Policy: retention})
+	if err != nil {
+		return nil, err
+	}
+	decisions, ok := result.([]snapshot.RetentionDecision)
+	if !ok {
+		return nil, fmt.Errorf("unexpected result type: %T", result)
+	}
+
+	snapshots := make([]SnapshotRetention, len(decisions))
+	for i := range decisions {
+		item := decisions[i].Snapshot()
+		reasons := make([]string, len(decisions[i].Reasons()))
+		for j, reason := range decisions[i].Reasons() {
+			reasons[j] = string(reason)
+		}
+		snapshots[i] = SnapshotRetention{
+			ID:        item.ID(),
+			CreatedAt: item.CreatedAt(),
+			Source:    item.Source(),
+			Keep:      decisions[i].Keep(),
+			Reasons:   reasons,
+		}
+	}
+
+	return snapshots, nil
+}
+
+func (h *Handler) Forget(ctx context.Context, policy RetentionPolicy) ([]ForgottenSnapshot, error) {
+	retention, err := policy.build()
 	if err != nil {
 		return nil, err
 	}
@@ -59,34 +107,16 @@ func (h *Handler) Forget(ctx context.Context, policy RetentionPolicy, dryRun boo
 	events, err := mdw(app.NewForgetSnapshots(h.manifestRepository, h.locker)).Handle(ctx, app.ForgetSnapshotsCommand{
 		RepositoryPath: h.repositoryPath,
 		Policy:         retention,
-		DryRun:         dryRun,
 	})
 	if err != nil {
 		return nil, err
 	}
-	if len(events) != 1 {
-		return nil, errors.New("unexpected number of events")
-	}
-	result, ok := events[0].(*app.ForgetSnapshotsEvent)
-	if !ok {
-		return nil, fmt.Errorf("unexpected event type: %T", events[0])
+
+	forgotten := app.EventsOf[*snapshot.SnapshotForgotten](events)
+	result := make([]ForgottenSnapshot, len(forgotten))
+	for i, ev := range forgotten {
+		result[i] = ForgottenSnapshot{ID: ev.SnapshotID(), CreatedAt: ev.CreatedAt(), Source: ev.Source()}
 	}
 
-	snapshots := make([]SnapshotRetention, len(result.Decisions))
-	for i, decision := range result.Decisions {
-		item := decision.Snapshot()
-		reasons := make([]string, len(decision.Reasons()))
-		for j, reason := range decision.Reasons() {
-			reasons[j] = string(reason)
-		}
-		snapshots[i] = SnapshotRetention{
-			ID:        item.ID(),
-			CreatedAt: item.CreatedAt(),
-			Source:    item.Source(),
-			Keep:      decision.Keep(),
-			Reasons:   reasons,
-		}
-	}
-
-	return &ForgetResult{Snapshots: snapshots, DryRun: result.DryRun}, nil
+	return result, nil
 }

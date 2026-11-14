@@ -46,25 +46,19 @@ func (i *Init) Handle(ctx context.Context, cmd cqs.Command) ([]event.Event, erro
 	if err := i.folderRepo.CreateFolder(ctx, repo.Path()); err != nil {
 		return nil, err
 	}
-	var (
-		repositoryID string
-		warnings     []string
-	)
+	var initialized *repository.RepositoryInitialized
 	err = i.locker.WithLock(ctx, repository.ExclusiveLock, func(ctx context.Context) error {
-		conf, initWarnings, err := i.writeRepository(ctx, repo, exists, co.Force)
+		conf, warnings, err := i.writeRepository(ctx, repo, exists, co.Force)
 		if err != nil {
 			return err
 		}
-		repositoryID = conf.ID().String()
-		warnings = initWarnings
+		initialized = conf.Initialized(warnings)
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	return []event.Event{
-		NewInitEvent(repositoryID, warnings),
-	}, nil
+	return []event.Event{initialized}, nil
 }
 
 func (i *Init) writeRepository(ctx context.Context, repo *repository.Repository, exists, force bool) (conf *repository.Config, warnings []string, err error) {
@@ -108,18 +102,4 @@ func NewInit(
 	locker *RepositoryLocker,
 ) *Init {
 	return &Init{folderRepo: folderRepo, keys: newKeyring(folderRepo, asymmetricRepo, symmetricRepo), locker: locker}
-}
-
-type InitEvent struct {
-	event.BasicEvent
-	RepositoryID string
-	Warnings     []string
-}
-
-func NewInitEvent(repositoryID string, warnings []string) *InitEvent {
-	return &InitEvent{
-		BasicEvent:   event.NewBasicEvent(InitCommandName, uuid.New(), repositoryID),
-		RepositoryID: repositoryID,
-		Warnings:     warnings,
-	}
 }

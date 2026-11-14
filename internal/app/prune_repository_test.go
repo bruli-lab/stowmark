@@ -16,6 +16,7 @@ import (
 )
 
 type pruneDependencies struct {
+	config       repository.Config
 	folderRepo   *app.FolderRepositoryMock
 	manifestRepo *app.ManifestRepositoryMock
 	objectRepo   *app.ObjectRepositoryMock
@@ -42,7 +43,7 @@ func newPruneDependencies(t *testing.T, setup *pruneSetup) *pruneDependencies {
 	t.Helper()
 
 	config := fixtures.ConfigBuilder{EncryptionConfig: setup.config}.Build(t)
-	deps := &pruneDependencies{}
+	deps := &pruneDependencies{config: config}
 	deps.folderRepo = &app.FolderRepositoryMock{
 		GetConfigFunc: func(context.Context, string) (*repository.Config, error) { return &config, nil },
 	}
@@ -78,54 +79,106 @@ func TestPruneRepository_Handle(t *testing.T) {
 	tests := []struct {
 		name               string
 		config             *encryption.EncryptionConfig
-		dryRun             bool
 		expectedEncrypted  bool
 		expectedGeneration uint64
-		expectedDeleted    []string
 	}{
 		{
-			name:            "on a plain repository, then it deletes the unreferenced plain objects",
-			expectedDeleted: []string{"dd04", "ee05"},
+			name: "on a plain repository, then it deletes the unreferenced plain objects",
 		},
 		{
 			name:               "on an encrypted repository, then it deletes the unreferenced objects of the current generation",
 			config:             encryption.NewEncryptionConfig("key", "fingerprint", 3),
 			expectedEncrypted:  true,
 			expectedGeneration: 3,
-			expectedDeleted:    []string{"dd04", "ee05"},
-		},
-		{
-			name:   "in dry run, then it reports the unreferenced objects without deleting them",
-			dryRun: true,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(`Given a PruneRepository command handler with shared, orphan and missing objects,
-		when Handle method is called `+tt.name, func(t *testing.T) {
+		when Handle method is called `+tt.name+` and returns the missing and pruned objects events`, func(t *testing.T) {
 			t.Parallel()
 
 			deps := newPruneDependencies(t, &pruneSetup{config: tt.config, manifests: manifests, stored: stored})
 			handler := app.NewPruneRepositoryWithWorkers(deps.folderRepo, deps.manifestRepo, deps.objectRepo, newUnlockedLocker(), 2)
 
-			events, err := handler.Handle(t.Context(), app.PruneRepositoryCommand{RepositoryPath: "repo", DryRun: tt.dryRun})
+			events, err := handler.Handle(t.Context(), app.PruneRepositoryCommand{RepositoryPath: "repo"})
 
 			require.NoError(t, err)
-			require.Len(t, events, 1)
-			got, ok := events[0].(*app.PruneRepositoryEvent)
-			require.True(t, ok)
-			require.Equal(t, app.PruneRepositoryCommandName, got.EventName())
-			require.Equal(t, app.PruneStats{StoredObjects: 4, ReferencedObjects: 3, UnreferencedObjects: 2, MissingObjects: 1}, got.PruneStats)
-			require.Equal(t, tt.dryRun, got.DryRun)
+			require.Len(t, events, 2)
+			missing, err := app.SingleEvent[*snapshot.MissingObjectsDetected](events)
+			require.NoError(t, err)
+			require.Equal(t, snapshot.MissingObjectsDetectedEventName, missing.EventName())
+			require.Equal(t, []string{"cc03"}, missing.Hashes())
+			pruned, err := app.SingleEvent[*snapshot.ObjectsPruned](events)
+			require.NoError(t, err)
+			require.Equal(t, snapshot.ObjectsPrunedEventName, pruned.EventName())
+			require.Equal(t, 2, pruned.Removed())
+			require.Equal(t, deps.config.ID().String(), pruned.RepositoryID())
 			require.Len(t, deps.objectRepo.ListObjectsCalls(), 1)
 			require.Equal(t, tt.expectedEncrypted, deps.objectRepo.ListObjectsCalls()[0].Encrypted)
 			require.Equal(t, tt.expectedGeneration, deps.objectRepo.ListObjectsCalls()[0].Generation)
-			require.ElementsMatch(t, tt.expectedDeleted, deps.deletedObjects())
+			require.ElementsMatch(t, []string{"dd04", "ee05"}, deps.deletedObjects())
 			for _, call := range deps.objectRepo.DeleteObjectCalls() {
 				require.Equal(t, tt.expectedEncrypted, call.Encrypted)
 				require.Equal(t, tt.expectedGeneration, call.Generation)
 			}
 		})
 	}
+
+	t.Run(`Given a PruneRepository command handler where every stored object is referenced,
+	when Handle method is called,
+	then it deletes nothing and returns no events`, func(t *testing.T) {
+		t.Parallel()
+
+		deps := newPruneDependencies(t, &pruneSetup{manifests: manifests, stored: []string{"aa01", "bb02", "cc03"}})
+
+		events, err := app.NewPruneRepository(deps.folderRepo, deps.manifestRepo, deps.objectRepo, newUnlockedLocker()).
+			Handle(t.Context(), app.PruneRepositoryCommand{RepositoryPath: "repo"})
+
+		require.NoError(t, err)
+		require.Empty(t, events)
+		require.Empty(t, deps.deletedObjects())
+	})
+}
+
+func TestPrunePlan_Handle(t *testing.T) {
+	t.Parallel()
+
+	t.Run(`Given a PrunePlan query handler with shared, orphan and missing objects,
+	when Handle method is called,
+	then it returns the plan without deleting any object`, func(t *testing.T) {
+		t.Parallel()
+
+		deps := newPruneDependencies(t, &pruneSetup{
+			manifests: []snapshot.Manifest{manifestWithHashes("aa01", "bb02"), manifestWithHashes("bb02", "cc03")},
+			stored:    []string{"aa01", "bb02", "dd04", "ee05"},
+		})
+
+		result, err := app.NewPrunePlan(deps.folderRepo, deps.manifestRepo, deps.objectRepo, newUnlockedLocker()).
+			Handle(t.Context(), app.PrunePlanQuery{RepositoryPath: "repo"})
+
+		require.NoError(t, err)
+		plan, ok := result.(*snapshot.PrunePlan)
+		require.True(t, ok)
+		require.Equal(t, 4, plan.StoredObjects())
+		require.Equal(t, 3, plan.ReferencedObjects())
+		require.Equal(t, []string{"dd04", "ee05"}, plan.Unreferenced())
+		require.Equal(t, []string{"cc03"}, plan.Missing())
+		require.Empty(t, deps.deletedObjects())
+	})
+
+	t.Run(`Given a PrunePlan query handler whose objects cannot be listed,
+	when Handle method is called,
+	then it returns the error`, func(t *testing.T) {
+		t.Parallel()
+
+		errRepo := errors.New("repository failed")
+		deps := newPruneDependencies(t, &pruneSetup{listErr: errRepo})
+
+		_, err := app.NewPrunePlan(deps.folderRepo, deps.manifestRepo, deps.objectRepo, newUnlockedLocker()).
+			Handle(t.Context(), app.PrunePlanQuery{RepositoryPath: "repo"})
+
+		require.ErrorIs(t, err, errRepo)
+	})
 }
 
 func TestPruneRepository_Handle_Errors(t *testing.T) {
@@ -175,7 +228,7 @@ func TestPruneRepository_Handle_Locked(t *testing.T) {
 
 	t.Run(`Given a repository where a snapshot is being created,
 	when the PruneRepository command handler is called,
-	then it is blocked without listing objects unless it is a dry run`, func(t *testing.T) {
+	then the command is blocked without listing objects and the plan query is not`, func(t *testing.T) {
 		t.Parallel()
 
 		deps := newPruneDependencies(t, &pruneSetup{manifests: []snapshot.Manifest{manifestWithHashes("aa01")}, stored: []string{"aa01", "bb02"}})
@@ -186,7 +239,8 @@ func TestPruneRepository_Handle_Locked(t *testing.T) {
 		require.ErrorIs(t, err, repository.ErrRepositoryLocked)
 		require.Empty(t, deps.objectRepo.ListObjectsCalls())
 
-		_, err = handler.Handle(t.Context(), app.PruneRepositoryCommand{RepositoryPath: "repo", DryRun: true})
+		_, err = app.NewPrunePlan(deps.folderRepo, deps.manifestRepo, deps.objectRepo, locker).
+			Handle(t.Context(), app.PrunePlanQuery{RepositoryPath: "repo"})
 		require.NoError(t, err)
 		require.Empty(t, deps.deletedObjects())
 	})

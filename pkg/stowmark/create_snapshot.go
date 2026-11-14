@@ -2,9 +2,9 @@ package stowmark
 
 import (
 	"context"
-	"errors"
 
 	"github.com/bruli-lab/stowmark/internal/app"
+	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 )
 
@@ -23,7 +23,7 @@ func (h *Handler) CreateSnapshot(ctx context.Context, source string, privateKey 
 		_ = obsv.Shutdown(ctx)
 	}()
 	evtr := app.NewEventsTracing()
-	evtr.Add(app.CreateSnapshotCommandName, app.NewCreateSnapshotTracer(obsv.Logger))
+	evtr.Add(snapshot.SnapshotCreatedEventName, app.NewCreateSnapshotTracer(obsv.Logger))
 	mdw, err := middlewares.BuildCommandMiddlewares(obsv, evtr)
 	if err != nil {
 		return nil, err
@@ -46,16 +46,13 @@ func (h *Handler) CreateSnapshot(ctx context.Context, source string, privateKey 
 	if err != nil {
 		return nil, err
 	}
-	if len(events) != 1 {
-		return nil, errors.New("unexpected number of events")
-	}
-	result, ok := events[0].(*app.CreateSnapshotEvent)
-	if !ok {
-		return nil, errors.New("unexpected event type")
+	result, err := app.SingleEvent[*snapshot.SnapshotCreated](events)
+	if err != nil {
+		return nil, err
 	}
 	return &CreateResult{
-		ID:        result.SnapshotID,
-		FileCount: result.FileCount,
-		TotalSize: result.TotalSize,
+		ID:        result.SnapshotID(),
+		FileCount: result.FileCount(),
+		TotalSize: result.TotalSize(),
 	}, nil
 }

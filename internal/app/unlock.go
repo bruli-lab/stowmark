@@ -7,7 +7,6 @@ import (
 
 	"github.com/bruli-lab/go-core/cqs"
 	"github.com/bruli-lab/go-core/event"
-	"github.com/google/uuid"
 )
 
 const UnlockCommandName = "unlock"
@@ -35,7 +34,7 @@ func (u *Unlock) Handle(ctx context.Context, cmd cqs.Command) ([]event.Event, er
 		return nil, fmt.Errorf("list repository locks: %w", err)
 	}
 	now := time.Now()
-	removed := 0
+	events := make([]event.Event, 0)
 	for i := range locks {
 		if !co.All && !locks[i].IsStale(now) {
 			continue
@@ -43,27 +42,11 @@ func (u *Unlock) Handle(ctx context.Context, cmd cqs.Command) ([]event.Event, er
 		if err := u.lockRepo.Delete(ctx, locks[i].ID()); err != nil {
 			return nil, fmt.Errorf("delete repository lock %s: %w", locks[i].ID(), err)
 		}
-		removed++
+		events = append(events, locks[i].Removed())
 	}
-	return []event.Event{
-		NewUnlockEvent(co.RepositoryPath, removed, len(locks)-removed),
-	}, nil
+	return events, nil
 }
 
 func NewUnlock(lockRepo LockRepository) *Unlock {
 	return &Unlock{lockRepo: lockRepo}
-}
-
-type UnlockEvent struct {
-	event.BasicEvent
-	RemovedLocks int
-	ActiveLocks  int
-}
-
-func NewUnlockEvent(repositoryPath string, removed, active int) *UnlockEvent {
-	return &UnlockEvent{
-		BasicEvent:   event.NewBasicEvent(UnlockCommandName, uuid.New(), repositoryPath),
-		RemovedLocks: removed,
-		ActiveLocks:  active,
-	}
 }

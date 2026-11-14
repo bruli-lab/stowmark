@@ -82,11 +82,11 @@ func TestRestoreSnapshot_HandleResult(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.Len(t, events, 1)
-			result, ok := events[0].(*app.RestoreSnapshotEvent)
+			result, ok := events[0].(*snapshot.SnapshotRestored)
 			require.True(t, ok)
-			require.Equal(t, tt.args.snapshotID, result.SnapshotID)
-			require.Equal(t, tt.expectedSuccess, result.IsSuccess)
-			require.Len(t, result.FailedFiles, tt.expectedFailedLen)
+			require.Equal(t, tt.args.snapshotID, result.SnapshotID())
+			require.Equal(t, tt.expectedSuccess, result.IsSuccess())
+			require.Len(t, result.Failed(), tt.expectedFailedLen)
 		})
 	}
 }

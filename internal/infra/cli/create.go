@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/bruli-lab/stowmark/internal/app"
+	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/infra/disk"
 	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
 	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
@@ -54,7 +55,7 @@ func newSnapshotCreateCommand() *cobra.Command {
 				_ = obsv.Shutdown(cmd.Context())
 			}()
 			evTr := app.NewEventsTracing()
-			evTr.Add(app.CreateSnapshotCommandName, app.NewCreateSnapshotTracer(obsv.Logger))
+			evTr.Add(snapshot.SnapshotCreatedEventName, app.NewCreateSnapshotTracer(obsv.Logger))
 			multiMdw, err := middlewares.BuildCommandMiddlewares(obsv, evTr)
 			if err != nil {
 				return err
@@ -87,20 +88,17 @@ func newSnapshotCreateCommand() *cobra.Command {
 				return err
 			}
 
-			if len(events) != 1 {
-				return errors.New("unexpected number of events")
-			}
-			result, ok := events[0].(*app.CreateSnapshotEvent)
-			if !ok {
-				return errors.New("unexpected event type")
+			result, err := app.SingleEvent[*snapshot.SnapshotCreated](events)
+			if err != nil {
+				return err
 			}
 
 			_, _ = fmt.Fprintf(
 				cmd.OutOrStdout(),
 				"Snapshot created: %s\nFiles: %d\nSize: %d bytes\n",
-				result.SnapshotID,
-				result.FileCount,
-				result.TotalSize,
+				result.SnapshotID(),
+				result.FileCount(),
+				result.TotalSize(),
 			)
 
 			return nil

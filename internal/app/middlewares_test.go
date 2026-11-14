@@ -10,6 +10,7 @@ import (
 	"github.com/bruli-lab/go-core/cqs"
 	"github.com/bruli-lab/go-core/event"
 	"github.com/bruli-lab/stowmark/internal/app"
+	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -86,7 +87,7 @@ func TestLoggerCommandMiddleware(t *testing.T) {
 			t.Parallel()
 
 			var output bytes.Buffer
-			events := []event.Event{app.NewInitEvent("id", nil)}
+			events := []event.Event{snapshot.NewFileRestored("id", "file")}
 			handler := app.NewLoggerCommandMiddleware(newJSONLogger(&output))(commandHandler(events, tt.err))
 
 			got, err := handler.Handle(context.Background(), namedCommand{})
@@ -186,8 +187,8 @@ func TestTracerCommandMiddleware(t *testing.T) {
 
 			recorder, provider := newRecorder()
 			eventsTracing := app.NewEventsTracing()
-			eventsTracing.Add(app.CreateSnapshotCommandName, app.NewCreateSnapshotTracer(slog.New(slog.DiscardHandler)))
-			events := []event.Event{app.NewCreateSnapshotEvent("snapshot-id", 3, 42), app.NewInitEvent("id", nil)}
+			eventsTracing.Add(snapshot.SnapshotCreatedEventName, app.NewCreateSnapshotTracer(slog.New(slog.DiscardHandler)))
+			events := []event.Event{createdEvent(), snapshot.NewFileRestored("id", "file")}
 			handler := app.NewTracerCommandMiddleware(provider, eventsTracing)(commandHandler(events, tt.err))
 
 			_, err := handler.Handle(context.Background(), namedCommand{})
