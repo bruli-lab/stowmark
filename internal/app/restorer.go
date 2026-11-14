@@ -31,7 +31,13 @@ func newRestorer(objectRepo ObjectRepository, destination RestoreDestination, wo
 	}
 }
 
-func (r restorer) restoreSnapshot(ctx context.Context, man *snapshot.Manifest, codec repository.Codec, destinationPath *string) (*snapshot.Result, error) {
+func (r restorer) restoreSnapshot(
+	ctx context.Context,
+	man *snapshot.Manifest,
+	codec repository.Codec,
+	destinationPath *string,
+	progress Progress,
+) (*snapshot.Result, error) {
 	codec = codec.WithCompression(man.Compression())
 	plan := snapshot.NewRestorePlan(man.Files())
 	result := snapshot.NewResult(man.ID())
@@ -56,7 +62,14 @@ func (r restorer) restoreSnapshot(ctx context.Context, man *snapshot.Manifest, c
 			record(entry, err)
 		}
 	}
-	if err := r.restoreFiles(ctx, man, plan.Files(), codec, destinationPath, record); err != nil {
+	items, bytes := contentTotals(plan.Files())
+	reporter := startProgress(progress, ProgressRestoring, items, bytes)
+	err := r.restoreFiles(ctx, man, plan.Files(), codec, destinationPath, func(entry snapshot.File, err error) {
+		record(entry, err)
+		reporter.Advance(1, contentSize(entry))
+	})
+	reporter.Finish()
+	if err != nil {
 		return nil, err
 	}
 	for _, entry := range plan.Symlinks() {

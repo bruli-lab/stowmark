@@ -52,6 +52,7 @@ func (h *Handler) Check(ctx context.Context, options CheckOptions) (*CheckResult
 		ReadData:       options.ReadData,
 		Subset:         subset,
 		PrivateKeyPath: h.key(options.PrivateKey),
+		Progress:       h.progress,
 	}))
 	if err != nil {
 		return nil, err

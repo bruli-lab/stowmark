@@ -105,7 +105,7 @@ func TestCreateSnapshot_Handle_HashCalculation(t *testing.T) {
 			}
 
 			handler := app.NewCreateSnapshot(sourceRepo, manifestRepo, objectRepo, folderRepo, nil, nil, newUnlockedLocker())
-			_, err := createSnapshot(t.Context(), handler, createCommand)
+			_, err := createSnapshot(t.Context(), handler, new(createCommand))
 			if tt.expectedErr != nil {
 				require.ErrorIs(t, err, tt.expectedErr)
 				return

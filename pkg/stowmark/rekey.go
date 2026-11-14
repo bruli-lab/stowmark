@@ -11,6 +11,7 @@ func (h *Handler) ReKey(ctx context.Context, privateKeyPath, publicKeyPath strin
 		RepositoryPath: h.repository.Path(),
 		PrivateKeyPath: privateKeyPath,
 		PublicKeyPath:  publicKeyPath,
+		Progress:       h.progress,
 	})
 	return err
 }

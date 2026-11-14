@@ -5,6 +5,8 @@ import (
 	"io"
 	"text/tabwriter"
 
+	"github.com/bruli-lab/stowmark/internal/infra/progress"
+
 	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/bootstrap"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
@@ -63,28 +65,10 @@ func printSnapshots(output io.Writer, snapshots []snapshot.ManifestResume) error
 	}
 	for _, item := range snapshots {
 		if _, err := fmt.Fprintf(writer, "%s\t%s\t%d\t%s\t%s\n",
-			item.ID(), formatLocal(item.CreatedAt()), item.Files(), formatBytes(item.Size()), item.Source(),
+			item.ID(), formatLocal(item.CreatedAt()), item.Files(), progress.FormatBytes(item.Size()), item.Source(),
 		); err != nil {
 			return err
 		}
 	}
 	return writer.Flush()
-}
-
-func formatBytes(size int64) string {
-	const unit = 1024
-
-	if size < unit {
-		return fmt.Sprintf("%d B", size)
-	}
-
-	divisor := int64(unit)
-	exponent := 0
-
-	for value := size / unit; value >= unit; value /= unit {
-		divisor *= unit
-		exponent++
-	}
-
-	return fmt.Sprintf("%.1f %ciB", float64(size)/float64(divisor), "KMGTPE"[exponent])
 }

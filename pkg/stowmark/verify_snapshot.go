@@ -23,6 +23,7 @@ func (h *Handler) VerifySnapshot(ctx context.Context, id string, privateKey *str
 		SnapshotID:     id,
 		RepositoryPath: h.repository.Path(),
 		PrivateKeyPath: h.key(privateKey),
+		Progress:       h.progress,
 	}))
 	if err != nil {
 		return nil, err

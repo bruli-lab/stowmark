@@ -222,7 +222,7 @@ func TestCreateSnapshot_Handle(t *testing.T) {
 				return new(rsa.PrivateKey{}), nil
 			}
 			handler := app.NewCreateSnapshot(sourceRepo, manifestRepo, objRepo, folderRepositoryRep, asymmetricRepo, symmetricRepo, newUnlockedLocker())
-			result, err := createSnapshot(t.Context(), handler, app.CreateSnapshotCommand{
+			result, err := createSnapshot(t.Context(), handler, &app.CreateSnapshotCommand{
 				RepositoryPath: tt.args.repoPath,
 				SourcePath:     tt.args.sourcePath,
 				PrivateKey:     tt.args.privateKey,
@@ -240,7 +240,7 @@ func TestCreateSnapshot_Handle(t *testing.T) {
 	}
 }
 
-func createSnapshot(ctx context.Context, handler *app.CreateSnapshot, cmd app.CreateSnapshotCommand) (*snapshot.SnapshotCreated, error) {
+func createSnapshot(ctx context.Context, handler *app.CreateSnapshot, cmd *app.CreateSnapshotCommand) (*snapshot.SnapshotCreated, error) {
 	events, err := handler.Handle(ctx, cmd)
 	if err != nil {
 		return nil, err

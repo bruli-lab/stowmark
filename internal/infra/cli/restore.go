@@ -96,6 +96,7 @@ func executeRestore(cmd *cobra.Command, repo *bootstrap.Repository, snapshotID s
 		RepositoryPath:  repo.Path(),
 		PrivateKeyPath:  privateKey,
 		DestinationPath: destination,
+		Progress:        progressFor(cmd),
 	})
 	if err != nil {
 		return err

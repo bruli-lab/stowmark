@@ -47,6 +47,7 @@ func newCheckCommand() *cobra.Command {
 					ReadData:       readData,
 					Subset:         subset,
 					PrivateKeyPath: optionalPath(privateKeyPath),
+					Progress:       progressFor(cmd),
 				}))
 				if err != nil {
 					return fmt.Errorf("failed to check repository: %w", err)

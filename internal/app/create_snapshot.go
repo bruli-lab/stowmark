@@ -25,9 +25,10 @@ type CreateSnapshotCommand struct {
 	PrivateKey      *string
 	Exclude         []string
 	SkipIgnoreFiles bool
+	Progress        Progress
 }
 
-func (c CreateSnapshotCommand) Name() string {
+func (c *CreateSnapshotCommand) Name() string {
 	return CreateSnapshotCommandName
 }
 
@@ -43,7 +44,7 @@ type CreateSnapshot struct {
 }
 
 func (c *CreateSnapshot) Handle(ctx context.Context, cmd cqs.Command) ([]event.Event, error) {
-	co, ok := cmd.(CreateSnapshotCommand)
+	co, ok := cmd.(*CreateSnapshotCommand)
 	if !ok {
 		return nil, cqs.NewInvalidCommandError(CreateSnapshotCommandName, cmd.Name())
 	}
@@ -52,7 +53,7 @@ func (c *CreateSnapshot) Handle(ctx context.Context, cmd cqs.Command) ([]event.E
 	})
 }
 
-func (c *CreateSnapshot) create(ctx context.Context, co CreateSnapshotCommand) (*snapshot.SnapshotCreated, error) {
+func (c *CreateSnapshot) create(ctx context.Context, co *CreateSnapshotCommand) (*snapshot.SnapshotCreated, error) {
 	conf, err := c.folderRepo.GetConfig(ctx, co.RepositoryPath)
 	if err != nil {
 		return nil, err
@@ -80,6 +81,9 @@ func (c *CreateSnapshot) create(ctx context.Context, co CreateSnapshotCommand) (
 	}
 
 	files := source.Files()
+	items, bytes := contentTotals(files)
+	progress := startProgress(co.Progress, ProgressBackingUp, items, bytes)
+	defer progress.Finish()
 
 	var (
 		totalSize  atomic.Int64
@@ -101,7 +105,7 @@ func (c *CreateSnapshot) create(ctx context.Context, co CreateSnapshotCommand) (
 			}
 			files[i] = hashed
 
-			savedSize, err := c.saveFileObjects(groupCtx, &files[i], codec)
+			savedSize, err := c.saveFileObjects(groupCtx, &files[i], codec, progress)
 			if err != nil {
 				return err
 			}
@@ -110,6 +114,7 @@ func (c *CreateSnapshot) create(ctx context.Context, co CreateSnapshotCommand) (
 			if savedSize > 0 {
 				savedFiles.Add(1)
 			}
+			progress.Advance(1, 0)
 
 			return nil
 		})
@@ -131,7 +136,7 @@ func (c *CreateSnapshot) create(ctx context.Context, co CreateSnapshotCommand) (
 	return snapshot.NewSnapshotCreated(manifest, int(savedFiles.Load()), totalSize.Load(), source.Skipped()), nil
 }
 
-func (c *CreateSnapshot) excludeRules(ctx context.Context, co CreateSnapshotCommand) (*snapshot.ExcludeRules, error) {
+func (c *CreateSnapshot) excludeRules(ctx context.Context, co *CreateSnapshotCommand) (*snapshot.ExcludeRules, error) {
 	var filePatterns []string
 	if !co.SkipIgnoreFiles {
 		patterns, err := c.sourceRepo.IgnorePatterns(ctx, co.SourcePath)
@@ -154,12 +159,16 @@ func (c *CreateSnapshot) excludeRules(ctx context.Context, co CreateSnapshotComm
 	return rules, nil
 }
 
-func (c *CreateSnapshot) saveFileObjects(ctx context.Context, file *snapshot.File, codec repository.Codec) (int64, error) {
+func (c *CreateSnapshot) saveFileObjects(ctx context.Context, file *snapshot.File, codec repository.Codec, progress Progress) (int64, error) {
 	if !file.HasContent() {
 		return 0, nil
 	}
 	if len(file.Chunks()) == 0 {
-		return c.saveObject(ctx, file, codec)
+		size, err := c.saveObject(ctx, file, codec)
+		if err == nil {
+			progress.Advance(0, file.Size())
+		}
+		return size, err
 	}
 
 	var savedSize int64
@@ -169,6 +178,7 @@ func (c *CreateSnapshot) saveFileObjects(ctx context.Context, file *snapshot.Fil
 			return 0, err
 		}
 		savedSize += size
+		progress.Advance(0, chunk.Size())
 	}
 
 	return savedSize, nil

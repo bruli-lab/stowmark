@@ -21,6 +21,7 @@ type VerifySnapshotQuery struct {
 	SnapshotID     string
 	RepositoryPath string
 	PrivateKeyPath *string
+	Progress       Progress
 }
 
 func (v VerifySnapshotQuery) Name() string {
@@ -60,6 +61,9 @@ func (v *VerifySnapshot) verify(ctx context.Context, q VerifySnapshotQuery) (*sn
 		return nil, err
 	}
 	result := snapshot.NewResult(q.SnapshotID)
+	items, bytes := contentTotals(manifest.Files())
+	progress := startProgress(q.Progress, ProgressVerifying, items, bytes)
+	defer progress.Finish()
 
 	var mu sync.Mutex
 
@@ -72,10 +76,11 @@ func (v *VerifySnapshot) verify(ctx context.Context, q VerifySnapshotQuery) (*sn
 		}
 
 		group.Go(func() error {
-			reason, err := v.verifyFile(groupCtx, &file, codec)
+			reason, err := v.verifyFile(groupCtx, &file, codec, progress)
 			if err != nil {
 				return err
 			}
+			progress.Advance(1, 0)
 
 			mu.Lock()
 			defer mu.Unlock()
@@ -102,14 +107,20 @@ func (v *VerifySnapshot) verify(ctx context.Context, q VerifySnapshotQuery) (*sn
 	return result, nil
 }
 
-func (v *VerifySnapshot) verifyFile(ctx context.Context, file *snapshot.File, codec repository.Codec) (string, error) {
+func (v *VerifySnapshot) verifyFile(ctx context.Context, file *snapshot.File, codec repository.Codec, progress Progress) (string, error) {
 	if !file.HasContent() {
 		return "", nil
 	}
 	chunks := file.Chunks()
 	if len(chunks) == 0 {
-		return v.verifier.verify(ctx, file.Hash(), file.Size(), codec)
+		reason, err := v.verifier.verify(ctx, file.Hash(), file.Size(), codec)
+		if err == nil {
+			progress.Advance(0, file.Size())
+		}
+		return reason, err
 	}
+	var verified int64
+	defer func() { progress.Advance(0, file.Size()-verified) }()
 	for index, chunk := range chunks {
 		reason, err := v.verifier.verify(ctx, chunk.Hash(), chunk.Size(), codec)
 		if err != nil {
@@ -118,6 +129,8 @@ func (v *VerifySnapshot) verifyFile(ctx context.Context, file *snapshot.File, co
 		if reason != "" {
 			return fmt.Sprintf("chunk %d/%d: %s", index+1, len(chunks), reason), nil
 		}
+		verified += chunk.Size()
+		progress.Advance(0, chunk.Size())
 	}
 
 	return "", nil

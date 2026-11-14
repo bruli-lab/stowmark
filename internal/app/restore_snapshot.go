@@ -17,6 +17,7 @@ type RestoreSnapshotCommand struct {
 	RepositoryPath  string
 	PrivateKeyPath  *string
 	DestinationPath *string
+	Progress        Progress
 }
 
 func (r RestoreSnapshotCommand) Name() string {
@@ -49,7 +50,7 @@ func (r *RestoreSnapshot) restore(ctx context.Context, co RestoreSnapshotCommand
 	if err != nil {
 		return nil, err
 	}
-	result, err := r.restorer.restoreSnapshot(ctx, man, codec, co.DestinationPath)
+	result, err := r.restorer.restoreSnapshot(ctx, man, codec, co.DestinationPath, co.Progress)
 	if err != nil {
 		return nil, err
 	}

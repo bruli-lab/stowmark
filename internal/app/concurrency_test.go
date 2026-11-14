@@ -105,7 +105,7 @@ func TestCreateSnapshot_Handle_Concurrency(t *testing.T) {
 		files := sourceFiles(concurrentFiles)
 		deps := newCreateDependencies(t, files)
 
-		result, err := createSnapshot(t.Context(), deps.handler(8), createCommand)
+		result, err := createSnapshot(t.Context(), deps.handler(8), new(createCommand))
 
 		require.NoError(t, err)
 		require.Equal(t, concurrentFiles, result.FileCount())
@@ -133,7 +133,7 @@ func TestCreateSnapshot_Handle_Concurrency(t *testing.T) {
 			return nil
 		}
 
-		result, err := createSnapshot(t.Context(), deps.handler(8), createCommand)
+		result, err := createSnapshot(t.Context(), deps.handler(8), new(createCommand))
 
 		require.ErrorIs(t, err, errSave)
 		require.Nil(t, result)
@@ -154,7 +154,7 @@ func TestCreateSnapshot_Handle_Concurrency(t *testing.T) {
 			return nil
 		}
 
-		result, err := createSnapshot(ctx, deps.handler(4), createCommand)
+		result, err := createSnapshot(ctx, deps.handler(4), new(createCommand))
 
 		require.ErrorIs(t, err, context.Canceled)
 		require.Nil(t, result)

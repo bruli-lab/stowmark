@@ -24,6 +24,7 @@ type RekeyKeyCommand struct {
 	RepositoryPath string
 	PrivateKeyPath string
 	PublicKeyPath  string
+	Progress       Progress
 }
 
 func (r RekeyKeyCommand) Name() string {
@@ -104,7 +105,7 @@ func (r *RekeyKey) rekey(ctx context.Context, co RekeyKeyCommand) (rotated *encr
 
 	oldCodec := conf.Codec().WithDataKey(oldKeys.data, currentGeneration)
 	newCodec := conf.Codec().WithDataKey(newSymmetricKey, newGeneration)
-	if err := r.rekeyObjects(ctx, hashes, oldCodec, newCodec); err != nil {
+	if err := r.rekeyObjects(ctx, hashes, oldCodec, newCodec, co.Progress); err != nil {
 		return nil, err
 	}
 
@@ -125,10 +126,12 @@ func (r *RekeyKey) rekey(ctx context.Context, co RekeyKeyCommand) (rotated *encr
 	return encryptionConf.SymmetricKeyRotated(conf.ID().String(), len(hashes)), nil
 }
 
-func (r *RekeyKey) rekeyObjects(ctx context.Context, hashes []string, oldCodec, newCodec repository.Codec) error {
+func (r *RekeyKey) rekeyObjects(ctx context.Context, hashes []string, oldCodec, newCodec repository.Codec, reporter Progress) error {
 	if len(hashes) == 0 {
 		return nil
 	}
+	progress := startProgress(reporter, ProgressRekeying, len(hashes), 0)
+	defer progress.Finish()
 
 	group, groupCtx := errgroup.WithContext(ctx)
 	group.SetLimit(min(maxRekeyWorkers, len(hashes)))
@@ -142,6 +145,7 @@ func (r *RekeyKey) rekeyObjects(ctx context.Context, hashes []string, oldCodec, 
 			if err := r.rekeyObject(groupCtx, hash, oldCodec, newCodec); err != nil {
 				return fmt.Errorf("rekey object %q: %w", hash, err)
 			}
+			progress.Advance(1, 0)
 			return nil
 		})
 	}

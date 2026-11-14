@@ -32,12 +32,13 @@ func (h *Handler) CreateSnapshot(ctx context.Context, source string, privateKey 
 }
 
 func (h *Handler) CreateSnapshotWithOptions(ctx context.Context, source string, options CreateOptions) (*CreateResult, error) {
-	events, err := h.repository.CreateSnapshot().Handle(ctx, app.CreateSnapshotCommand{
+	events, err := h.repository.CreateSnapshot().Handle(ctx, &app.CreateSnapshotCommand{
 		RepositoryPath:  h.repository.Path(),
 		SourcePath:      source,
 		PrivateKey:      h.key(options.PrivateKey),
 		Exclude:         options.Exclude,
 		SkipIgnoreFiles: options.SkipIgnoreFiles,
+		Progress:        h.progress,
 	})
 	if err != nil {
 		return nil, err

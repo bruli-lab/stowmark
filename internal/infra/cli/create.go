@@ -32,12 +32,13 @@ func newSnapshotCreateCommand() *cobra.Command {
 				return errors.New("--repo is required")
 			}
 			return withRepository(cmd, repositoryPath, func(repo *bootstrap.Repository) error {
-				events, err := repo.CreateSnapshot().Handle(cmd.Context(), app.CreateSnapshotCommand{
+				events, err := repo.CreateSnapshot().Handle(cmd.Context(), &app.CreateSnapshotCommand{
 					RepositoryPath:  repo.Path(),
 					SourcePath:      args[0],
 					PrivateKey:      optionalPath(privateKeyPath),
 					Exclude:         exclude,
 					SkipIgnoreFiles: noIgnoreFile,
+					Progress:        progressFor(cmd),
 				})
 				if err != nil {
 					return err

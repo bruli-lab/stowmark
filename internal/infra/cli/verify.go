@@ -33,6 +33,7 @@ func newSnapshotVerifyCommand() *cobra.Command {
 					SnapshotID:     snapshotID,
 					RepositoryPath: repo.Path(),
 					PrivateKeyPath: optionalPath(privateKey),
+					Progress:       progressFor(cmd),
 				}))
 				if err != nil {
 					return err

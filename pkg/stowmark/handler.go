@@ -15,9 +15,29 @@ type Handler struct {
 	runtime    *bootstrap.Runtime
 	repository *bootstrap.Repository
 	privateKey *string
+	progress   app.Progress
 }
 
 type Option func(*Handler)
+
+type (
+	Progress      = app.Progress
+	ProgressStage = app.ProgressStage
+)
+
+const (
+	ProgressBackingUp   = app.ProgressBackingUp
+	ProgressRestoring   = app.ProgressRestoring
+	ProgressVerifying   = app.ProgressVerifying
+	ProgressReadingData = app.ProgressReadingData
+	ProgressRekeying    = app.ProgressRekeying
+)
+
+func WithProgress(progress Progress) Option {
+	return func(h *Handler) {
+		h.progress = progress
+	}
+}
 
 func WithPrivateKey(path string) Option {
 	return func(h *Handler) {

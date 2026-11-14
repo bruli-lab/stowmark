@@ -22,7 +22,7 @@ type keyRotation struct {
 	use, short, failure string
 	first, second       keyFlag
 	handler             func(repo *bootstrap.Repository) cqs.CommandHandler
-	command             func(repositoryPath, first, second string) cqs.Command
+	command             func(repositoryPath, first, second string, progress app.Progress) cqs.Command
 	document            func(events []event.Event) (any, error)
 }
 
@@ -34,8 +34,8 @@ func newKeyReKeyCommand() *cobra.Command {
 		first:   keyFlag{name: "private-key", usage: "private key path"},
 		second:  keyFlag{name: "public-key", usage: "public key path"},
 		handler: (*bootstrap.Repository).RekeyKey,
-		command: func(repositoryPath, privateKey, publicKey string) cqs.Command {
-			return app.RekeyKeyCommand{RepositoryPath: repositoryPath, PrivateKeyPath: privateKey, PublicKeyPath: publicKey}
+		command: func(repositoryPath, privateKey, publicKey string, progress app.Progress) cqs.Command {
+			return app.RekeyKeyCommand{RepositoryPath: repositoryPath, PrivateKeyPath: privateKey, PublicKeyPath: publicKey, Progress: progress}
 		},
 		document: func(events []event.Event) (any, error) {
 			rotated, err := app.SingleEvent[*encryption.SymmetricKeyRotated](events)
@@ -55,7 +55,7 @@ func newKeyRewrapCommand() *cobra.Command {
 		first:   keyFlag{name: "old-private-key", usage: "old private key path"},
 		second:  keyFlag{name: "new-public-key", usage: "new public key path"},
 		handler: (*bootstrap.Repository).RewrapKey,
-		command: func(repositoryPath, oldPrivateKey, newPublicKey string) cqs.Command {
+		command: func(repositoryPath, oldPrivateKey, newPublicKey string, _ app.Progress) cqs.Command {
 			return app.RewrapKeyCommand{RepositoryPath: repositoryPath, OldPrivateKey: oldPrivateKey, NewPublicKey: newPublicKey}
 		},
 		document: func(events []event.Event) (any, error) {
@@ -76,7 +76,7 @@ func newKeyRotationCommand(rotation *keyRotation) *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return withRepository(cmd, repositoryPath, func(repo *bootstrap.Repository) error {
-				events, err := rotation.handler(repo).Handle(cmd.Context(), rotation.command(repo.Path(), first, second))
+				events, err := rotation.handler(repo).Handle(cmd.Context(), rotation.command(repo.Path(), first, second, progressFor(cmd)))
 				if err != nil {
 					return fmt.Errorf("%s: %w", rotation.failure, err)
 				}

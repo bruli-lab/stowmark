@@ -30,7 +30,7 @@ func TestCreateSnapshot_Handle_Exclude(t *testing.T) {
 		command := createCommand
 		command.Exclude = []string{"!keep.log", "/tmp"}
 
-		_, err := createSnapshot(t.Context(), deps.handler(1), command)
+		_, err := createSnapshot(t.Context(), deps.handler(1), &command)
 
 		require.NoError(t, err)
 		require.Equal(t, "source", deps.sourceRepo.IgnorePatternsCalls()[0].SourcePath)
@@ -57,7 +57,7 @@ func TestCreateSnapshot_Handle_Exclude(t *testing.T) {
 		command.SkipIgnoreFiles = true
 		command.Exclude = []string{"*.tmp"}
 
-		_, err := createSnapshot(t.Context(), deps.handler(1), command)
+		_, err := createSnapshot(t.Context(), deps.handler(1), &command)
 
 		require.NoError(t, err)
 		require.Empty(t, deps.sourceRepo.IgnorePatternsCalls())
@@ -81,7 +81,7 @@ func TestCreateSnapshot_Handle_Exclude(t *testing.T) {
 			return snapshot.NewSource(source.AbsolutePath(), source.Files(), skipped), nil
 		}
 
-		created, err := createSnapshot(t.Context(), deps.handler(1), createCommand)
+		created, err := createSnapshot(t.Context(), deps.handler(1), new(createCommand))
 
 		require.NoError(t, err)
 		require.Equal(t, skipped, created.SkippedFiles())
@@ -123,7 +123,7 @@ func TestCreateSnapshot_Handle_Exclude(t *testing.T) {
 			command := createCommand
 			command.Exclude = tt.exclude
 
-			_, err := createSnapshot(t.Context(), deps.handler(1), command)
+			_, err := createSnapshot(t.Context(), deps.handler(1), &command)
 
 			require.ErrorIs(t, err, tt.expectedErr)
 			require.Empty(t, deps.sourceRepo.ExploreCalls())

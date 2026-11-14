@@ -318,7 +318,7 @@ func TestCreateSnapshot_Handle_Locked(t *testing.T) {
 		locker := app.NewRepositoryLocker(newMemoryLocks(otherLock(t, repository.ExclusiveLock, time.Now())).mock)
 		handler := app.NewCreateSnapshot(deps.sourceRepo, deps.manifestRepo, deps.objectRepo, deps.folderRepo, nil, nil, locker)
 
-		_, err := createSnapshot(t.Context(), handler, createCommand)
+		_, err := createSnapshot(t.Context(), handler, new(createCommand))
 
 		require.ErrorIs(t, err, repository.ErrRepositoryLocked)
 		require.Empty(t, deps.objectRepo.SaveChunkCalls())

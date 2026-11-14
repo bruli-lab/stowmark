@@ -24,6 +24,7 @@ type CheckRepositoryQuery struct {
 	ReadData       bool
 	Subset         *snapshot.DataSubset
 	PrivateKeyPath *string
+	Progress       Progress
 }
 
 func (c CheckRepositoryQuery) Name() string {
@@ -104,7 +105,7 @@ func (c *CheckRepository) check(ctx context.Context, q CheckRepositoryQuery) (*s
 	if q.Subset != nil {
 		hashes = q.Subset.Select(hashes, rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64())))
 	}
-	problems, err := c.readData(ctx, report, hashes, codec)
+	problems, err := c.readData(ctx, report, hashes, codec, q.Progress)
 	if err != nil {
 		return nil, err
 	}
@@ -159,7 +160,13 @@ func (c *CheckRepository) checkGenerations(ctx context.Context, report *snapshot
 	return nil
 }
 
-func (c *CheckRepository) readData(ctx context.Context, report *snapshot.CheckReport, hashes []string, codec repository.Codec) ([]snapshot.ObjectProblem, error) {
+func (c *CheckRepository) readData(
+	ctx context.Context,
+	report *snapshot.CheckReport,
+	hashes []string,
+	codec repository.Codec,
+	reporter Progress,
+) ([]snapshot.ObjectProblem, error) {
 	var (
 		mu       sync.Mutex
 		problems = make([]snapshot.ObjectProblem, 0)
@@ -167,6 +174,12 @@ func (c *CheckRepository) readData(ctx context.Context, report *snapshot.CheckRe
 	if len(hashes) == 0 {
 		return problems, nil
 	}
+	var bytes int64
+	for _, hash := range hashes {
+		bytes += report.ObjectSize(hash)
+	}
+	progress := startProgress(reporter, ProgressReadingData, len(hashes), bytes)
+	defer progress.Finish()
 
 	group, groupCtx := errgroup.WithContext(ctx)
 	group.SetLimit(min(c.workers, len(hashes)))
@@ -181,6 +194,7 @@ func (c *CheckRepository) readData(ctx context.Context, report *snapshot.CheckRe
 			if err != nil {
 				return err
 			}
+			progress.Advance(1, report.ObjectSize(hash))
 			if reason != "" {
 				mu.Lock()
 				defer mu.Unlock()

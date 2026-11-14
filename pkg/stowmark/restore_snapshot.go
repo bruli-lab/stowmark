@@ -13,6 +13,7 @@ func (h *Handler) RestoreSnapshot(ctx context.Context, snapshotID string, destin
 		RepositoryPath:  h.repository.Path(),
 		PrivateKeyPath:  h.key(privateKey),
 		DestinationPath: destinationPath,
+		Progress:        h.progress,
 	})
 	if err != nil {
 		return nil, err

@@ -5,6 +5,8 @@ import (
 	"io"
 	"text/tabwriter"
 
+	"github.com/bruli-lab/stowmark/internal/infra/progress"
+
 	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/bootstrap"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
@@ -99,7 +101,7 @@ func printManifest(
 			"%s\t%s\t%s\n",
 			entryName(file),
 			file.Hash(),
-			formatBytes(file.Size()),
+			progress.FormatBytes(file.Size()),
 		); err != nil {
 			return err
 		}

@@ -74,7 +74,7 @@ func TestRuntime_OpenRepository(t *testing.T) {
 		_, err = app.SingleEvent[*repository.RepositoryInitialized](events)
 		require.NoError(t, err)
 
-		events, err = repo.CreateSnapshot().Handle(ctx, app.CreateSnapshotCommand{RepositoryPath: repo.Path(), SourcePath: source})
+		events, err = repo.CreateSnapshot().Handle(ctx, &app.CreateSnapshotCommand{RepositoryPath: repo.Path(), SourcePath: source})
 		require.NoError(t, err)
 		created, err := app.SingleEvent[*snapshot.SnapshotCreated](events)
 		require.NoError(t, err)

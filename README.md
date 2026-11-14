@@ -498,6 +498,8 @@ and remove files and collections under the repository path.
 | `stowmark prune --repo <repository> [--private-key <key>]`              | Delete objects that no snapshot references. |
 | `stowmark check --repo <repository> [--read-data \| --read-data-subset <subset>]` | Check the integrity of the whole repository. |
 
+Every command also accepts `--json` (see [JSON output](#json-output)) and `--no-progress` (see [Progress](#progress)).
+
 `--private-key` is only needed by `snapshot list`, `snapshot get`, `forget` and `prune` on encrypted
 [format version 3](#format-versions) repositories, whose manifests are encrypted.
 
@@ -747,6 +749,23 @@ limit the objects in flight to about 512 MiB; format version 3 streams encrypted
 In format versions 1 and 2 a new file is compressed twice, once to calculate its object name and once to store it,
 because the name is the hash of the compressed data. Format version 3 names objects by their original content and
 compresses each new object only once.
+
+### Progress
+
+`snapshot create`, `snapshot restore`, `snapshot verify`, `check --read-data` and `key rekey` show a progress bar on
+stderr with the percentage, the files or objects done, the bytes, the speed and the estimated time left:
+
+```text
+Backing up  63% [===============         ]  812/1250  44.1 MiB/70.0 MiB  7.9 MiB/s  ETA 3s
+```
+
+- The bar is only shown when stderr is a terminal, so it never appears in pipes, logs or cron jobs. `--json` and
+  `--no-progress` hide it too.
+- Large files advance chunk by chunk while they are backed up or verified; a restored file counts when it is complete.
+- In format versions 1 and 2, `snapshot create` first compresses each new file to calculate its name, and the bar
+  only advances when the file is stored, so it can stay still for a while at the beginning.
+- In the Go library, `stowmark.WithProgress(progress)` receives the same updates through the `stowmark.Progress`
+  interface (`Start`, `Advance` and `Finish`, called from several goroutines).
 
 ## Chunking
 

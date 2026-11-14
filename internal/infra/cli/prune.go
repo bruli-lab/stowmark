@@ -8,6 +8,8 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"github.com/bruli-lab/stowmark/internal/infra/progress"
+
 	"github.com/bruli-lab/go-core/event"
 	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/bootstrap"
@@ -69,7 +71,7 @@ func printPrunePlan(output io.Writer, plan *snapshot.PrunePlan) error {
 	writer := tabwriter.NewWriter(output, 0, 4, 2, ' ', 0)
 	if _, err := fmt.Fprintf(writer,
 		"STORED OBJECTS:\t%d\nREFERENCED OBJECTS:\t%d\nWOULD REMOVE:\t%d (%s)\nOLD KEY GENERATIONS:\t%s\n",
-		plan.StoredObjects(), plan.ReferencedObjects(), len(plan.Unreferenced()), formatBytes(plan.UnreferencedBytes()),
+		plan.StoredObjects(), plan.ReferencedObjects(), len(plan.Unreferenced()), progress.FormatBytes(plan.UnreferencedBytes()),
 		formatGenerations(plan.OrphanGenerations()),
 	); err != nil {
 		return err
@@ -110,7 +112,7 @@ func newPruneDocument(events []event.Event) *pruneDocument {
 }
 
 func (p *pruneDocument) print(output io.Writer) error {
-	if _, err := fmt.Fprintf(output, "Removed %d unreferenced object(s), freed %s\n", p.RemovedObjects, formatBytes(p.FreedBytes)); err != nil {
+	if _, err := fmt.Fprintf(output, "Removed %d unreferenced object(s), freed %s\n", p.RemovedObjects, progress.FormatBytes(p.FreedBytes)); err != nil {
 		return err
 	}
 	if len(p.RemovedKeyGenerations) > 0 {
