@@ -6,7 +6,6 @@ import (
 
 	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
-	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 )
 
 type Compression struct {
@@ -28,21 +27,8 @@ func (h *Handler) Init(ctx context.Context, comp *Compression, formatVersion int
 		return err
 	}
 
-	obsv, err := buildObservability(ctx)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		_ = obsv.Shutdown(ctx)
-	}()
-	evtr := app.NewEventsTracing()
-	mdw, err := middlewares.BuildCommandMiddlewares(obsv, evtr)
-	if err != nil {
-		return err
-	}
-	handler := mdw(app.NewInit(h.folderRepository, h.asymmetricKeyPairRepository, h.symmetricKeyRepository, h.locker))
-	events, err := handler.Handle(ctx, app.InitCommand{
-		RepositoryPath: h.repositoryPath,
+	events, err := h.repository.Init().Handle(ctx, app.InitCommand{
+		RepositoryPath: h.repository.Path(),
 		Compression:    compre,
 		FormatVersion:  version,
 		PublicKeyPath:  publicKey,

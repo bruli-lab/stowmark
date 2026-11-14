@@ -63,15 +63,15 @@ func (b blobRepositories) LockRepository() (app.LockRepository, error) {
 	return blob.NewLockRepository(store), nil
 }
 
-func NewHandler(ctx context.Context, value string) (Repositories, error) {
-	selected, err := newBackend(ctx, value)
+func NewHandler(ctx context.Context, value string, environment map[string]string) (Repositories, error) {
+	selected, err := newBackend(ctx, value, environment)
 	if err != nil {
 		return nil, err
 	}
 	return blobRepositories{backend: selected}, nil
 }
 
-func newBackend(ctx context.Context, value string) (backend, error) {
+func newBackend(ctx context.Context, value string, environment map[string]string) (backend, error) {
 	repoType, err := repository.ParseRepositoryType(value)
 	if err != nil {
 		return nil, err
@@ -80,15 +80,15 @@ func newBackend(ctx context.Context, value string) (backend, error) {
 	case repository.Local:
 		return NewLocalRepositories(value), nil
 	case repository.Ssh:
-		return NewSSHRepositories(value)
+		return NewSSHRepositories(value, environment)
 	case repository.Smb:
-		return NewSmbRepositories(ctx, value)
+		return NewSmbRepositories(ctx, value, environment)
 	case repository.S3:
-		return NewS3Repositories(ctx, value)
+		return NewS3Repositories(ctx, value, environment)
 	case repository.WebDAV:
-		return NewWebDavRepositories(value)
+		return NewWebDavRepositories(value, environment)
 	case repository.Gcs:
-		return NewGCSRepositories(ctx, value)
+		return NewGCSRepositories(ctx, value, environment)
 	}
 	return nil, repository.ErrInvalidRepositoryPath
 }

@@ -18,10 +18,8 @@ func newDomainManifest(t *testing.T) *snapshot.Manifest {
 	comp, err := repository.NewCompression(repository.ZstdCompressionType, &level)
 	require.NoError(t, err)
 
-	single := snapshot.File{}
-	single.Hydrate("/source/small.txt", "aabbcc", 12, []snapshot.Chunk{})
-	chunked := snapshot.File{}
-	chunked.Hydrate("/source/big.bin", "", 8, []snapshot.Chunk{
+	single := *snapshot.HydrateFile("/source/small.txt", "aabbcc", 12, []snapshot.Chunk{})
+	chunked := *snapshot.HydrateFile("/source/big.bin", "", 8, []snapshot.Chunk{
 		*snapshot.NewChunk("ddeeff", 0, 4),
 		*snapshot.NewChunk("112233", 4, 4),
 	})

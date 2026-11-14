@@ -30,8 +30,8 @@ func (w WebDavRepositories) BlobStore() (blob.Store, error) {
 	return w.store, nil
 }
 
-func NewWebDavRepositories(address string) (*WebDavRepositories, error) {
-	conf, err := config.NewWebdavConfig()
+func NewWebDavRepositories(address string, environment map[string]string) (*WebDavRepositories, error) {
+	conf, err := config.NewWebdavConfigFrom(environment)
 	if err != nil {
 		return nil, err
 	}

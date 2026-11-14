@@ -846,7 +846,16 @@ When observability is enabled, Stowmark exports:
 
 - Traces for command and query execution, including duration and recorded errors.
 - Structured application logs correlated with active traces when a context is available.
-- Metrics for operation executions, duration, status and command events.
+- Metrics for operation executions, duration and status, and a `stowmark.events.dispatched` counter per domain
+  event name (`snapshot.created`, `objects.pruned`…).
+- One span event per domain event on the command span, and snapshot attributes (files, sizes, failures) on the
+  create and restore spans.
+
+Every command publishes its domain events on an internal event bus. Logging, tracing and metrics are subscribers of
+that bus, so a failing subscriber is logged as a warning and never fails the command.
+
+`STOWMARK_LOG_LEVEL` (`debug`, `info`, `warn`, `error`; default `info`) sets the log level with or without an OTLP
+endpoint. Without one, logs are written to stderr.
 
 `OTEL_EXPORTER_OTLP_PROTOCOL` defaults to `http/protobuf` and `OTEL_SERVICE_NAME` defaults to `stowmark`, so the
 endpoint is the only variable required to enable telemetry:

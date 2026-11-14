@@ -2,12 +2,10 @@ package stowmark
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
-	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 )
 
 type RetentionPolicy struct {
@@ -49,24 +47,9 @@ func (h *Handler) PlanForget(ctx context.Context, policy RetentionPolicy) ([]Sna
 	if err != nil {
 		return nil, err
 	}
-	obsv, err := buildObservability(ctx)
+	decisions, err := app.QueryResult[[]snapshot.RetentionDecision](h.repository.ForgetPlan().Handle(ctx, app.ForgetPlanQuery{Policy: retention}))
 	if err != nil {
 		return nil, err
-	}
-	defer func() {
-		_ = obsv.Shutdown(ctx)
-	}()
-	mdw, err := middlewares.BuildQueryMiddlewares(obsv)
-	if err != nil {
-		return nil, err
-	}
-	result, err := mdw(app.NewForgetPlan(h.manifestRepository, h.locker)).Handle(ctx, app.ForgetPlanQuery{Policy: retention})
-	if err != nil {
-		return nil, err
-	}
-	decisions, ok := result.([]snapshot.RetentionDecision)
-	if !ok {
-		return nil, fmt.Errorf("unexpected result type: %T", result)
 	}
 
 	snapshots := make([]SnapshotRetention, len(decisions))
@@ -93,19 +76,8 @@ func (h *Handler) Forget(ctx context.Context, policy RetentionPolicy) ([]Forgott
 	if err != nil {
 		return nil, err
 	}
-	obsv, err := buildObservability(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		_ = obsv.Shutdown(ctx)
-	}()
-	mdw, err := middlewares.BuildCommandMiddlewares(obsv, app.NewEventsTracing())
-	if err != nil {
-		return nil, err
-	}
-	events, err := mdw(app.NewForgetSnapshots(h.manifestRepository, h.locker)).Handle(ctx, app.ForgetSnapshotsCommand{
-		RepositoryPath: h.repositoryPath,
+	events, err := h.repository.ForgetSnapshots().Handle(ctx, app.ForgetSnapshotsCommand{
+		RepositoryPath: h.repository.Path(),
 		Policy:         retention,
 	})
 	if err != nil {

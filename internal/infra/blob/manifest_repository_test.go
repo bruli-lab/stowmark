@@ -18,8 +18,7 @@ func manifestAt(t *testing.T, id string, createdAt time.Time) *snapshot.Manifest
 	t.Helper()
 
 	comp := zstdCompression(t)
-	file := snapshot.File{}
-	file.Hydrate("/source/file.txt", "abcdef", 3, []snapshot.Chunk{})
+	file := *snapshot.HydrateFile("/source/file.txt", "abcdef", 3, []snapshot.Chunk{})
 	manifest := fixtures.ManifestBuilder{ID: &id, CreatedAt: &createdAt, Files: []snapshot.File{file}, Compression: comp}.Build()
 
 	return &manifest

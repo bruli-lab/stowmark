@@ -9,10 +9,8 @@ import (
 	"text/tabwriter"
 
 	"github.com/bruli-lab/stowmark/internal/app"
+	"github.com/bruli-lab/stowmark/internal/bootstrap"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
-	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
-	observabilityinfra "github.com/bruli-lab/stowmark/internal/infra/observability"
-	"github.com/bruli-lab/stowmark/internal/infra/repositories"
 	"github.com/spf13/cobra"
 )
 
@@ -30,22 +28,12 @@ func newPruneCommand() *cobra.Command {
 			"It takes an exclusive repository lock, so no other command can use the repository while it runs.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			obsv, err := buildObservability(cmd.Context())
-			if err != nil {
-				return fmt.Errorf("create observability: %w", err)
-			}
-			repoHandler, err := repositories.NewHandler(cmd.Context(), repositoryPath)
-			if err != nil {
-				return err
-			}
-			defer func() {
-				_ = obsv.Shutdown(cmd.Context())
-				_ = repoHandler.Close()
-			}()
-			if dryRun {
-				return runPrunePlan(cmd.Context(), cmd.OutOrStdout(), obsv, repoHandler)
-			}
-			return runPrune(cmd.Context(), cmd.OutOrStdout(), obsv, repoHandler)
+			return withRepository(cmd, repositoryPath, func(repo *bootstrap.Repository) error {
+				if dryRun {
+					return runPrunePlan(cmd.Context(), cmd.OutOrStdout(), repo)
+				}
+				return runPrune(cmd.Context(), cmd.OutOrStdout(), repo)
+			})
 		},
 	}
 
@@ -56,57 +44,10 @@ func newPruneCommand() *cobra.Command {
 	return cmd
 }
 
-type pruneDependencies struct {
-	folderRepo    app.FolderRepository
-	manifestRepo  app.ManifestRepository
-	objectRepo    app.ObjectRepository
-	encryptedRepo app.EncryptedObjectRepository
-	locker        *app.RepositoryLocker
-}
-
-func newPruneDependencies(repoHandler repositories.Repositories) (*pruneDependencies, error) {
-	manifestRepo, err := repoHandler.ManifestRepository()
-	if err != nil {
-		return nil, err
-	}
-	objectRepo, err := repoHandler.ObjectRepository()
-	if err != nil {
-		return nil, err
-	}
-	encryptedRepo, err := repoHandler.EncryptedObjectRepository()
-	if err != nil {
-		return nil, err
-	}
-	locker, err := newRepositoryLocker(repoHandler)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create repository locker: %w", err)
-	}
-	return &pruneDependencies{
-		folderRepo:    repoHandler.FolderRepository(),
-		manifestRepo:  manifestRepo,
-		objectRepo:    objectRepo,
-		encryptedRepo: encryptedRepo,
-		locker:        locker,
-	}, nil
-}
-
-func runPrunePlan(ctx context.Context, output io.Writer, obsv *observabilityinfra.OTLPObservability, repoHandler repositories.Repositories) error {
-	deps, err := newPruneDependencies(repoHandler)
-	if err != nil {
-		return err
-	}
-	queryMdw, err := middlewares.BuildQueryMiddlewares(obsv)
-	if err != nil {
-		return err
-	}
-	handler := queryMdw(app.NewPrunePlan(deps.folderRepo, deps.manifestRepo, deps.objectRepo, deps.encryptedRepo, deps.locker))
-	result, err := handler.Handle(ctx, app.PrunePlanQuery{RepositoryPath: repoHandler.RepositoryPath()})
+func runPrunePlan(ctx context.Context, output io.Writer, repo *bootstrap.Repository) error {
+	plan, err := app.QueryResult[*snapshot.PrunePlan](repo.PrunePlan().Handle(ctx, app.PrunePlanQuery{RepositoryPath: repo.Path()}))
 	if err != nil {
 		return fmt.Errorf("failed to plan prune: %w", err)
-	}
-	plan, ok := result.(*snapshot.PrunePlan)
-	if !ok {
-		return fmt.Errorf("unexpected result type: %T", result)
 	}
 
 	writer := tabwriter.NewWriter(output, 0, 4, 2, ' ', 0)
@@ -122,17 +63,8 @@ func runPrunePlan(ctx context.Context, output io.Writer, obsv *observabilityinfr
 	return printMissingObjects(output, len(plan.Missing()))
 }
 
-func runPrune(ctx context.Context, output io.Writer, obsv *observabilityinfra.OTLPObservability, repoHandler repositories.Repositories) error {
-	deps, err := newPruneDependencies(repoHandler)
-	if err != nil {
-		return err
-	}
-	multiMdw, err := middlewares.BuildCommandMiddlewares(obsv, app.NewEventsTracing())
-	if err != nil {
-		return err
-	}
-	handler := multiMdw(app.NewPruneRepository(deps.folderRepo, deps.manifestRepo, deps.objectRepo, deps.encryptedRepo, deps.locker))
-	events, err := handler.Handle(ctx, app.PruneRepositoryCommand{RepositoryPath: repoHandler.RepositoryPath()})
+func runPrune(ctx context.Context, output io.Writer, repo *bootstrap.Repository) error {
+	events, err := repo.PruneRepository().Handle(ctx, app.PruneRepositoryCommand{RepositoryPath: repo.Path()})
 	if err != nil {
 		return fmt.Errorf("failed to prune repository: %w", err)
 	}

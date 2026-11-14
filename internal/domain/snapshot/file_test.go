@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestFile_ChangeSourcePath(t *testing.T) {
+func TestFile_RelocatedTo(t *testing.T) {
 	t.Parallel()
 
 	source := filepath.FromSlash("/data")
@@ -50,20 +50,64 @@ func TestFile_ChangeSourcePath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(`Given a File,
-		when ChangeSourcePath method is called `+tt.name, func(t *testing.T) {
+		when RelocatedTo method is called `+tt.name, func(t *testing.T) {
 			t.Parallel()
 
 			file := fixtures.FileBuilder{Path: new(filepath.FromSlash(tt.path))}.Build()
 
-			err := file.ChangeSourcePath(source, destination)
+			relocated, err := file.RelocatedTo(source, destination)
 
+			require.Equal(t, filepath.FromSlash(tt.path), file.Path(), "the original file is never changed")
 			if tt.expectedErr != nil {
 				require.ErrorIs(t, err, tt.expectedErr)
-				require.Equal(t, filepath.FromSlash(tt.path), file.Path())
 				return
 			}
 			require.NoError(t, err)
-			require.Equal(t, filepath.FromSlash(tt.expectedPath), file.Path())
+			require.Equal(t, filepath.FromSlash(tt.expectedPath), relocated.Path())
+			require.Equal(t, file.Hash(), relocated.Hash())
+			require.Equal(t, file.Size(), relocated.Size())
 		})
 	}
+}
+
+func TestFile_WithHashAndChunks(t *testing.T) {
+	t.Parallel()
+
+	t.Run(`Given a new File,
+	when WithHash and WithChunks are called,
+	then they return a new file with the values and leave the original untouched`, func(t *testing.T) {
+		t.Parallel()
+
+		file := *snapshot.NewFile("/data/file.bin", 8)
+		chunks := []snapshot.Chunk{*snapshot.NewChunk("aa", 0, 4), *snapshot.NewChunk("bb", 4, 4)}
+
+		hashed := file.WithHash("abc").WithChunks(chunks)
+		chunks[0] = *snapshot.NewChunk("zz", 0, 4)
+
+		require.Empty(t, file.Hash())
+		require.Empty(t, file.Chunks())
+		require.Equal(t, "abc", hashed.Hash())
+		require.Equal(t, "aa", hashed.Chunks()[0].Hash(), "the chunks are copied")
+		require.Equal(t, file.Path(), hashed.Path())
+		require.Equal(t, file.Size(), hashed.Size())
+	})
+}
+
+func TestHydrateFile(t *testing.T) {
+	t.Parallel()
+
+	t.Run(`Given stored file values,
+	when HydrateFile is called,
+	then it returns a file with every value`, func(t *testing.T) {
+		t.Parallel()
+
+		chunks := []snapshot.Chunk{*snapshot.NewChunk("aa", 0, 4)}
+
+		file := snapshot.HydrateFile("/data/file.bin", "abc", 4, chunks)
+
+		require.Equal(t, "/data/file.bin", file.Path())
+		require.Equal(t, "abc", file.Hash())
+		require.Equal(t, int64(4), file.Size())
+		require.Equal(t, chunks, file.Chunks())
+	})
 }

@@ -15,7 +15,7 @@ import (
 func TestGenerateKey_Handle(t *testing.T) {
 	t.Parallel()
 
-	privateKey := &rsa.PrivateKey{PublicKey: rsa.PublicKey{N: big.NewInt(77), E: 3}}
+	privateKey := &rsa.PrivateKey{N: big.NewInt(77), E: 3}
 	errRepo := errors.New("repository failed")
 	tests := []struct {
 		name           string

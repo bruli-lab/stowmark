@@ -34,8 +34,8 @@ func (s SmbRepositories) BlobStore() (blob.Store, error) {
 	return smb.NewBlobStore(s.share, s.repositoryPath), nil
 }
 
-func NewSmbRepositories(ctx context.Context, repositoryPath string) (*SmbRepositories, error) {
-	conf, err := config.NewSMBConfig()
+func NewSmbRepositories(ctx context.Context, repositoryPath string, environment map[string]string) (*SmbRepositories, error) {
+	conf, err := config.NewSMBConfigFrom(environment)
 	if err != nil {
 		return nil, err
 	}

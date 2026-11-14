@@ -145,12 +145,11 @@ func TestObjectRepository_SaveChunk(t *testing.T) {
 		require.NoError(t, repo.SaveChunk(ctx, sourcePath, second, half, int64(len(data))-half, comp, key, 1))
 
 		destination := filepath.Join(t.TempDir(), "restored.bin")
-		file := snapshot.File{}
-		file.Hydrate(destination, "", int64(len(data)), []snapshot.Chunk{
+		file := snapshot.HydrateFile(destination, "", int64(len(data)), []snapshot.Chunk{
 			*snapshot.NewChunk(first, 0, half),
 			*snapshot.NewChunk(second, half, int64(len(data))-half),
 		})
-		require.NoError(t, repo.RestoreObject(ctx, comp, &file, key, 1))
+		require.NoError(t, repo.RestoreObject(ctx, comp, file, key, 1))
 		restored, err := os.ReadFile(destination)
 		require.NoError(t, err)
 		require.Equal(t, data, restored)

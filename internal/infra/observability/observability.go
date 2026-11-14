@@ -13,7 +13,7 @@ import (
 
 func New(ctx context.Context, conf *config.ObservabilityConfig) (*OTLPObservability, error) {
 	if conf.OTELExporterEndpoint == nil || *conf.OTELExporterEndpoint == "" {
-		return newNoop(), nil
+		return newNoop(logLevel(conf.LogLevel)), nil
 	}
 	return newOTLP(ctx, *conf)
 }

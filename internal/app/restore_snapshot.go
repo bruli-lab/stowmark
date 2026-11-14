@@ -51,7 +51,7 @@ func (r *RestoreSnapshot) restore(ctx context.Context, co RestoreSnapshotCommand
 	}
 	result := snapshot.NewResult(co.SnapshotID)
 	for _, f := range man.Files() {
-		if err := restoreFile(ctx, r.objectRepo, man, &f, co.DestinationPath, key); err != nil {
+		if err := restoreFile(ctx, r.objectRepo, man, f, co.DestinationPath, key); err != nil {
 			result.AddFailed(*snapshot.NewFailedResult(f.Path(), err.Error()))
 			continue
 		}
@@ -60,13 +60,15 @@ func (r *RestoreSnapshot) restore(ctx context.Context, co RestoreSnapshotCommand
 	return result.Restored(), nil
 }
 
-func restoreFile(ctx context.Context, objectRepo ObjectRepository, man *snapshot.Manifest, file *snapshot.File, destinationPath *string, key objectKey) error {
+func restoreFile(ctx context.Context, objectRepo ObjectRepository, man *snapshot.Manifest, file snapshot.File, destinationPath *string, key objectKey) error {
 	if destinationPath != nil {
-		if err := file.ChangeSourcePath(man.Source(), *destinationPath); err != nil {
+		relocated, err := file.RelocatedTo(man.Source(), *destinationPath)
+		if err != nil {
 			return err
 		}
+		file = relocated
 	}
-	return objectRepo.RestoreObject(ctx, man.Compression(), file, key.symmetricKey, key.generation)
+	return objectRepo.RestoreObject(ctx, man.Compression(), &file, key.symmetricKey, key.generation)
 }
 
 func NewRestoreSnapshot(

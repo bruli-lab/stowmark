@@ -2,11 +2,9 @@ package stowmark
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
-	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 )
 
 type CheckOptions struct {
@@ -49,33 +47,14 @@ func (h *Handler) Check(ctx context.Context, options CheckOptions) (*CheckResult
 		}
 		subset = parsed
 	}
-	obsv, err := buildObservability(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		_ = obsv.Shutdown(ctx)
-	}()
-	mdw, err := middlewares.BuildQueryMiddlewares(obsv)
-	if err != nil {
-		return nil, err
-	}
-	handler := mdw(app.NewCheckRepository(
-		h.folderRepository, h.manifestRepository, h.objectRepository, h.encryptedObjectRepository, h.lockRepository,
-		h.asymmetricKeyPairRepository, h.symmetricKeyRepository, h.locker,
-	))
-	result, err := handler.Handle(ctx, app.CheckRepositoryQuery{
-		RepositoryPath: h.repositoryPath,
+	report, err := app.QueryResult[*snapshot.CheckReport](h.repository.CheckRepository().Handle(ctx, app.CheckRepositoryQuery{
+		RepositoryPath: h.repository.Path(),
 		ReadData:       options.ReadData,
 		Subset:         subset,
 		PrivateKeyPath: options.PrivateKey,
-	})
+	}))
 	if err != nil {
 		return nil, err
-	}
-	report, ok := result.(*snapshot.CheckReport)
-	if !ok {
-		return nil, fmt.Errorf("unexpected result type: %T", result)
 	}
 
 	corruptManifests := make([]CheckProblem, len(report.CorruptManifests()))

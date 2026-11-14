@@ -94,9 +94,11 @@ func (c *CreateSnapshot) create(ctx context.Context, co CreateSnapshotCommand) (
 		}
 
 		group.Go(func() error {
-			if err := calculate(groupCtx, &files[i], conf.Compression()); err != nil {
+			hashed, err := calculate(groupCtx, files[i], conf.Compression())
+			if err != nil {
 				return err
 			}
+			files[i] = hashed
 
 			savedSize, err := c.saveFileObjects(groupCtx, &files[i], conf.Compression(), key)
 			if err != nil {

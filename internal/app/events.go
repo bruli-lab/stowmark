@@ -24,3 +24,15 @@ func SingleEvent[T event.Event](events []event.Event) (T, error) {
 	}
 	return matching[0], nil
 }
+
+func QueryResult[T any](result any, err error) (T, error) {
+	var zero T
+	if err != nil {
+		return zero, err
+	}
+	typed, ok := result.(T)
+	if !ok {
+		return zero, fmt.Errorf("unexpected query result type: %T", result)
+	}
+	return typed, nil
+}

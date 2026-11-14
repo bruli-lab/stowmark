@@ -41,8 +41,8 @@ func (s *SSHRepositories) BlobStore() (blob.Store, error) {
 	return sshinfra.NewBlobStore(s.client.Sftp(), s.repositoryPath), nil
 }
 
-func NewSSHRepositories(address string) (*SSHRepositories, error) {
-	conf, err := config.NewSSHConfig()
+func NewSSHRepositories(address string, environment map[string]string) (*SSHRepositories, error) {
+	conf, err := config.NewSSHConfigFrom(environment)
 	if err != nil {
 		return nil, fmt.Errorf("load SSH configuration: %w", err)
 	}

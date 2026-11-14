@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bruli-lab/stowmark/internal/config"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/infra/blob"
 	"github.com/bruli-lab/stowmark/internal/infra/blob/blobtest"
@@ -290,7 +291,7 @@ func mainFlow(t *testing.T, ctx context.Context, folders Folders, formatVersion 
 func blobStore(t *testing.T, ctx context.Context, repositoryURL string) blob.Store {
 	t.Helper()
 
-	repos, err := repositories.NewHandler(ctx, repositoryURL)
+	repos, err := repositories.NewHandler(ctx, repositoryURL, config.ProcessEnvironment())
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		_ = repos.Close()

@@ -3,12 +3,10 @@ package cli
 import (
 	"fmt"
 	"text/tabwriter"
-	"time"
 
 	"github.com/bruli-lab/stowmark/internal/app"
+	"github.com/bruli-lab/stowmark/internal/bootstrap"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
-	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
-	"github.com/bruli-lab/stowmark/internal/infra/repositories"
 	"github.com/spf13/cobra"
 )
 
@@ -20,82 +18,28 @@ func newSnapshotListCommand() *cobra.Command {
 		Short: "List repository snapshots",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			obsv, err := buildObservability(cmd.Context())
-			if err != nil {
-				return fmt.Errorf("create observability: %w", err)
-			}
-			repoHand, err := repositories.NewHandler(cmd.Context(), repositoryPath)
-			if err != nil {
-				return err
-			}
-			defer func() {
-				_ = obsv.Shutdown(cmd.Context())
-				_ = repoHand.Close()
-			}()
-
-			manifestRepo, err := repoHand.ManifestRepository()
-			if err != nil {
-				return err
-			}
-
-			multiMdw, err := middlewares.BuildQueryMiddlewares(obsv)
-			if err != nil {
-				return err
-			}
-			handler := multiMdw(app.NewSnapshotList(manifestRepo))
-
-			result, err := handler.Handle(cmd.Context(), app.SnapshotListQuery{})
-			snapshots, ok := result.([]snapshot.ManifestResume)
-			if !ok {
-				panic("unexpected result type")
-			}
-			if err != nil {
-				return err
-			}
-
-			if len(snapshots) == 0 {
-				_, err = fmt.Fprintln(
-					cmd.OutOrStdout(),
-					"No snapshots found.",
-				)
-
-				return err
-			}
-
-			writer := tabwriter.NewWriter(
-				cmd.OutOrStdout(),
-				0, // amplada mínima
-				4, // amplada del tabulador
-				2, // espais entre columnes
-				' ',
-				0,
-			)
-
-			_, err = fmt.Fprintln(
-				writer,
-				"ID\tCREATED AT\tFILES\tSIZE\tSOURCE",
-			)
-			if err != nil {
-				return err
-			}
-
-			for _, item := range snapshots {
-				created := item.CreatedAt().In(time.Local)
-				_, err = fmt.Fprintf(
-					writer,
-					"%s\t%s\t%d\t%s\t%s\n",
-					item.ID(),
-					created.Format("2006-01-02 15:04:05"),
-					item.Files(),
-					formatBytes(item.Size()),
-					item.Source(),
-				)
+			return withRepository(cmd, repositoryPath, func(repo *bootstrap.Repository) error {
+				snapshots, err := app.QueryResult[[]snapshot.ManifestResume](repo.SnapshotList().Handle(cmd.Context(), app.SnapshotListQuery{}))
 				if err != nil {
 					return err
 				}
-			}
-
-			return writer.Flush()
+				if len(snapshots) == 0 {
+					_, err = fmt.Fprintln(cmd.OutOrStdout(), "No snapshots found.")
+					return err
+				}
+				writer := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
+				if _, err := fmt.Fprintln(writer, "ID\tCREATED AT\tFILES\tSIZE\tSOURCE"); err != nil {
+					return err
+				}
+				for _, item := range snapshots {
+					if _, err := fmt.Fprintf(writer, "%s\t%s\t%d\t%s\t%s\n",
+						item.ID(), formatLocal(item.CreatedAt()), item.Files(), formatBytes(item.Size()), item.Source(),
+					); err != nil {
+						return err
+					}
+				}
+				return writer.Flush()
+			})
 		},
 	}
 

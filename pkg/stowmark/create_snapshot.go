@@ -5,7 +5,6 @@ import (
 
 	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
-	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 )
 
 const IgnoreFileName = snapshot.IgnoreFileName
@@ -23,31 +22,8 @@ type CreateResult struct {
 }
 
 func (h *Handler) CreateSnapshot(ctx context.Context, source string, privateKey *string, exclude ...string) (*CreateResult, error) {
-	obsv, err := buildObservability(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		_ = obsv.Shutdown(ctx)
-	}()
-	evtr := app.NewEventsTracing()
-	evtr.Add(snapshot.SnapshotCreatedEventName, app.NewCreateSnapshotTracer(obsv.Logger))
-	mdw, err := middlewares.BuildCommandMiddlewares(obsv, evtr)
-	if err != nil {
-		return nil, err
-	}
-	handler := mdw(app.NewCreateSnapshot(
-		h.sourceRepository,
-		h.manifestRepository,
-		h.objectRepository,
-		h.folderRepository,
-		h.asymmetricKeyPairRepository,
-		h.symmetricKeyRepository,
-		h.locker,
-	))
-
-	events, err := handler.Handle(ctx, app.CreateSnapshotCommand{
-		RepositoryPath: h.repositoryPath,
+	events, err := h.repository.CreateSnapshot().Handle(ctx, app.CreateSnapshotCommand{
+		RepositoryPath: h.repository.Path(),
 		SourcePath:     source,
 		PrivateKey:     privateKey,
 		Exclude:        exclude,

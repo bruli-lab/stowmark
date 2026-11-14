@@ -33,8 +33,8 @@ func (s S3Repositories) BlobStore() (blob.Store, error) {
 	return s3infra.NewBlobStore(s.client, s.bucket, s.repositoryPath), nil
 }
 
-func NewS3Repositories(ctx context.Context, repositoryPath string) (*S3Repositories, error) {
-	cfg, err := config.NewS3Config()
+func NewS3Repositories(ctx context.Context, repositoryPath string, environment map[string]string) (*S3Repositories, error) {
+	cfg, err := config.NewS3ConfigFrom(environment)
 	if err != nil {
 		return nil, err
 	}

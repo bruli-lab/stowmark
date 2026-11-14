@@ -55,7 +55,7 @@ func (r *RestoreFile) restore(ctx context.Context, co RestoreFileCommand) error 
 	if err != nil {
 		return err
 	}
-	return restoreFile(ctx, r.objectRepo, man, file, co.DestinationPath, key)
+	return restoreFile(ctx, r.objectRepo, man, *file, co.DestinationPath, key)
 }
 
 func NewRestoreFile(

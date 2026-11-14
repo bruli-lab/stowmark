@@ -12,7 +12,6 @@ import (
 	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
@@ -170,26 +169,23 @@ func TestTracerCommandMiddleware(t *testing.T) {
 		expectedStatus codes.Code
 	}{
 		{
-			name:           "that succeeds, then it records a span with the event attributes",
+			name:           "that succeeds, then it records a span named after the command",
 			expectedStatus: codes.Unset,
 		},
 		{
-			name:           "that fails, then it records an error span with the event attributes",
+			name:           "that fails, then it records an error span",
 			err:            errRepository,
 			expectedStatus: codes.Error,
 		},
 	}
 
 	for _, tt := range tests {
-		t.Run(`Given a tracer command middleware with a create snapshot tracer,
+		t.Run(`Given a tracer command middleware,
 		when it handles a command `+tt.name, func(t *testing.T) {
 			t.Parallel()
 
 			recorder, provider := newRecorder()
-			eventsTracing := app.NewEventsTracing()
-			eventsTracing.Add(snapshot.SnapshotCreatedEventName, app.NewCreateSnapshotTracer(slog.New(slog.DiscardHandler)))
-			events := []event.Event{createdEvent(), snapshot.NewFileRestored("id", "file")}
-			handler := app.NewTracerCommandMiddleware(provider, eventsTracing)(commandHandler(events, tt.err))
+			handler := app.NewTracerCommandMiddleware(provider)(commandHandler(nil, tt.err))
 
 			_, err := handler.Handle(context.Background(), namedCommand{})
 
@@ -198,7 +194,6 @@ func TestTracerCommandMiddleware(t *testing.T) {
 			require.Len(t, spans, 1)
 			require.Equal(t, "test-command", spans[0].Name())
 			require.Equal(t, tt.expectedStatus, spans[0].Status().Code)
-			require.Contains(t, spans[0].Attributes(), attribute.String("snapshot.id", "snapshot-id"))
 		})
 	}
 }

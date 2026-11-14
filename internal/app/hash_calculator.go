@@ -10,7 +10,7 @@ import (
 
 var ErrUnknownCalculator = errors.New("unknown calculator")
 
-type hashCalculator func(ctx context.Context, file *snapshot.File, comp *repository.Compression) error
+type hashCalculator func(ctx context.Context, file snapshot.File, comp *repository.Compression) (snapshot.File, error)
 
 func newHashCalculator(sourceRepo SourceRepository, version repository.FormatVersion) (hashCalculator, error) {
 	switch version {
@@ -24,32 +24,28 @@ func newHashCalculator(sourceRepo SourceRepository, version repository.FormatVer
 }
 
 func wholeFileHashCalculator(sourceRepo SourceRepository) hashCalculator {
-	return func(ctx context.Context, file *snapshot.File, comp *repository.Compression) error {
+	return func(ctx context.Context, file snapshot.File, comp *repository.Compression) (snapshot.File, error) {
 		hash, err := sourceRepo.CalculateHash(ctx, file.Path(), comp)
 		if err != nil {
-			return err
+			return snapshot.File{}, err
 		}
-		file.AddHash(hash)
-		return nil
+		return file.WithHash(hash), nil
 	}
 }
 
 func chunkedHashCalculator(sourceRepo SourceRepository) hashCalculator {
-	return func(ctx context.Context, file *snapshot.File, comp *repository.Compression) error {
+	return func(ctx context.Context, file snapshot.File, comp *repository.Compression) (snapshot.File, error) {
 		if file.Size() >= snapshot.ChunkThreshold {
 			chunks, err := sourceRepo.CalculateChunks(ctx, file.Path(), snapshot.ChunkSize, comp)
 			if err != nil {
-				return err
+				return snapshot.File{}, err
 			}
-			file.AddChunks(chunks)
-			return nil
+			return file.WithChunks(chunks), nil
 		}
 		hash, err := sourceRepo.CalculateHash(ctx, file.Path(), comp)
 		if err != nil {
-			return err
+			return snapshot.File{}, err
 		}
-		file.AddHash(hash)
-		file.AddChunks([]snapshot.Chunk{*snapshot.NewChunk(hash, 0, file.Size())})
-		return nil
+		return file.WithHash(hash).WithChunks([]snapshot.Chunk{*snapshot.NewChunk(hash, 0, file.Size())}), nil
 	}
 }

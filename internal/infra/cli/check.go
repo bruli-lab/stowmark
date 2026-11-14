@@ -9,11 +9,8 @@ import (
 	"text/tabwriter"
 
 	"github.com/bruli-lab/stowmark/internal/app"
+	"github.com/bruli-lab/stowmark/internal/bootstrap"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
-	"github.com/bruli-lab/stowmark/internal/infra/disk"
-	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
-	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
-	"github.com/bruli-lab/stowmark/internal/infra/repositories"
 	"github.com/spf13/cobra"
 )
 
@@ -44,71 +41,24 @@ func newCheckCommand() *cobra.Command {
 				}
 				subset = parsed
 			}
-			var privateKey *string
-			if privateKeyPath != "" {
-				privateKey = &privateKeyPath
-			}
-
-			obsv, err := buildObservability(cmd.Context())
-			if err != nil {
-				return fmt.Errorf("create observability: %w", err)
-			}
-			repoHandler, err := repositories.NewHandler(cmd.Context(), repositoryPath)
-			if err != nil {
-				return err
-			}
-			defer func() {
-				_ = obsv.Shutdown(cmd.Context())
-				_ = repoHandler.Close()
-			}()
-			manifestRepo, err := repoHandler.ManifestRepository()
-			if err != nil {
-				return err
-			}
-			objectRepo, err := repoHandler.ObjectRepository()
-			if err != nil {
-				return err
-			}
-			encryptedRepo, err := repoHandler.EncryptedObjectRepository()
-			if err != nil {
-				return err
-			}
-			lockRepo, err := repoHandler.LockRepository()
-			if err != nil {
-				return err
-			}
-			locker, err := newRepositoryLocker(repoHandler)
-			if err != nil {
-				return fmt.Errorf("failed to create repository locker: %w", err)
-			}
-			queryMdw, err := middlewares.BuildQueryMiddlewares(obsv)
-			if err != nil {
-				return err
-			}
-			handler := queryMdw(app.NewCheckRepository(
-				repoHandler.FolderRepository(), manifestRepo, objectRepo, encryptedRepo, lockRepo,
-				disk.NewAsymmetricKeyPairRepository(), encrypt.NewSymmetricRepository(), locker,
-			))
-			result, err := handler.Handle(cmd.Context(), app.CheckRepositoryQuery{
-				RepositoryPath: repoHandler.RepositoryPath(),
-				ReadData:       readData,
-				Subset:         subset,
-				PrivateKeyPath: privateKey,
+			return withRepository(cmd, repositoryPath, func(repo *bootstrap.Repository) error {
+				report, err := app.QueryResult[*snapshot.CheckReport](repo.CheckRepository().Handle(cmd.Context(), app.CheckRepositoryQuery{
+					RepositoryPath: repo.Path(),
+					ReadData:       readData,
+					Subset:         subset,
+					PrivateKeyPath: optionalPath(privateKeyPath),
+				}))
+				if err != nil {
+					return fmt.Errorf("failed to check repository: %w", err)
+				}
+				if err := printCheckReport(cmd.OutOrStdout(), report); err != nil {
+					return err
+				}
+				if report.HasErrors() {
+					return ErrRepositoryCheckFailed
+				}
+				return nil
 			})
-			if err != nil {
-				return fmt.Errorf("failed to check repository: %w", err)
-			}
-			report, ok := result.(*snapshot.CheckReport)
-			if !ok {
-				return fmt.Errorf("unexpected result type: %T", result)
-			}
-			if err := printCheckReport(cmd.OutOrStdout(), report); err != nil {
-				return err
-			}
-			if report.HasErrors() {
-				return ErrRepositoryCheckFailed
-			}
-			return nil
 		},
 	}
 

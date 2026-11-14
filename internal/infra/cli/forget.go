@@ -9,10 +9,8 @@ import (
 	"time"
 
 	"github.com/bruli-lab/stowmark/internal/app"
+	"github.com/bruli-lab/stowmark/internal/bootstrap"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
-	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
-	observabilityinfra "github.com/bruli-lab/stowmark/internal/infra/observability"
-	"github.com/bruli-lab/stowmark/internal/infra/repositories"
 	"github.com/spf13/cobra"
 )
 
@@ -41,51 +39,28 @@ func newForgetCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-
-			obsv, err := buildObservability(cmd.Context())
-			if err != nil {
-				return fmt.Errorf("create observability: %w", err)
-			}
-			repoHandler, err := repositories.NewHandler(cmd.Context(), repositoryPath)
-			if err != nil {
-				return err
-			}
-			defer func() {
-				_ = obsv.Shutdown(cmd.Context())
-				_ = repoHandler.Close()
-			}()
-			manifestRepo, err := repoHandler.ManifestRepository()
-			if err != nil {
-				return err
-			}
-			locker, err := newRepositoryLocker(repoHandler)
-			if err != nil {
-				return fmt.Errorf("failed to create repository locker: %w", err)
-			}
-			if dryRun {
-				return runForgetPlan(cmd.Context(), cmd.OutOrStdout(), obsv, manifestRepo, locker, policy)
-			}
-			multiMdw, err := middlewares.BuildCommandMiddlewares(obsv, app.NewEventsTracing())
-			if err != nil {
-				return err
-			}
-			events, err := multiMdw(app.NewForgetSnapshots(manifestRepo, locker)).Handle(cmd.Context(), app.ForgetSnapshotsCommand{
-				RepositoryPath: repoHandler.RepositoryPath(),
-				Policy:         policy,
+			return withRepository(cmd, repositoryPath, func(repo *bootstrap.Repository) error {
+				if dryRun {
+					return runForgetPlan(cmd.Context(), cmd.OutOrStdout(), repo, policy)
+				}
+				events, err := repo.ForgetSnapshots().Handle(cmd.Context(), app.ForgetSnapshotsCommand{
+					RepositoryPath: repo.Path(),
+					Policy:         policy,
+				})
+				if err != nil {
+					return fmt.Errorf("failed to forget snapshots: %w", err)
+				}
+				if err := printForgotten(cmd.OutOrStdout(), app.EventsOf[*snapshot.SnapshotForgotten](events)); err != nil {
+					return err
+				}
+				if !prune {
+					return nil
+				}
+				if _, err := fmt.Fprintln(cmd.OutOrStdout()); err != nil {
+					return err
+				}
+				return runPrune(cmd.Context(), cmd.OutOrStdout(), repo)
 			})
-			if err != nil {
-				return fmt.Errorf("failed to forget snapshots: %w", err)
-			}
-			if err := printForgotten(cmd.OutOrStdout(), app.EventsOf[*snapshot.SnapshotForgotten](events)); err != nil {
-				return err
-			}
-			if !prune {
-				return nil
-			}
-			if _, err := fmt.Fprintln(cmd.OutOrStdout()); err != nil {
-				return err
-			}
-			return runPrune(cmd.Context(), cmd.OutOrStdout(), obsv, repoHandler)
 		},
 	}
 
@@ -104,25 +79,10 @@ func newForgetCommand() *cobra.Command {
 	return cmd
 }
 
-func runForgetPlan(
-	ctx context.Context,
-	output io.Writer,
-	obsv *observabilityinfra.OTLPObservability,
-	manifestRepo app.ManifestRepository,
-	locker *app.RepositoryLocker,
-	policy *snapshot.RetentionPolicy,
-) error {
-	queryMdw, err := middlewares.BuildQueryMiddlewares(obsv)
-	if err != nil {
-		return err
-	}
-	result, err := queryMdw(app.NewForgetPlan(manifestRepo, locker)).Handle(ctx, app.ForgetPlanQuery{Policy: policy})
+func runForgetPlan(ctx context.Context, output io.Writer, repo *bootstrap.Repository, policy *snapshot.RetentionPolicy) error {
+	decisions, err := app.QueryResult[[]snapshot.RetentionDecision](repo.ForgetPlan().Handle(ctx, app.ForgetPlanQuery{Policy: policy}))
 	if err != nil {
 		return fmt.Errorf("failed to plan forget: %w", err)
-	}
-	decisions, ok := result.([]snapshot.RetentionDecision)
-	if !ok {
-		return fmt.Errorf("unexpected result type: %T", result)
 	}
 	if len(decisions) == 0 {
 		_, err := fmt.Fprintln(output, "No snapshots found.")
