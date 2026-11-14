@@ -524,7 +524,8 @@ webdavs://<host>[:<port>]/<repository-path>
 ```
 
 The `webdav://` scheme connects over HTTP and is intended for local development or trusted networks. Use
-`webdavs://` to connect over HTTPS in production so that credentials and repository data are encrypted in transit.
+`webdavs://` to connect over HTTPS in production so that credentials and repository data are encrypted in transit. `http://` and
+`https://` URLs are accepted too and behave like `webdav://` and `webdavs://`.
 
 Initialize a WebDAV repository:
 
