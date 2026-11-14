@@ -149,7 +149,8 @@ stowmark snapshot verify \
   --repo /srv/backups/stowmark
 ```
 
-Restore a snapshot. Without `--destination`, files are restored to their original paths:
+Restore a snapshot. Without `--destination`, files are restored to their original paths, inside the source directory
+of the snapshot:
 
 ```bash
 stowmark snapshot restore \
@@ -1109,6 +1110,11 @@ In every format version, the number, sizes and timestamps of the stored objects 
 
 What it does **not** protect:
 
+- Restored paths: every entry must be inside the source directory of its snapshot, with or without `--destination`, so
+  an edited manifest cannot make restore write elsewhere (for example to `~/.ssh`). Entries outside it are reported as
+  failed and are not written. Restoring without `--destination` also requires the source to be a clean absolute path
+  other than the filesystem root; otherwise restore stops before writing anything and asks for a destination. Restore
+  does not check for symbolic links that already exist on disk below the restore path and point elsewhere.
 - "Immutable-style" means objects and manifests are never overwritten by Stowmark. It is not enforced by the storage:
   anyone with write access to the backend can still delete or replace them. Use bucket versioning, object lock or
   backend snapshots if you need protection against that.

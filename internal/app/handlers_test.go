@@ -84,7 +84,7 @@ func manifestWithFiles(t *testing.T, sizes ...int64) snapshot.Manifest {
 	}
 	id := "20261113T222314Z-abcdef01"
 	createdAt := time.Date(2026, 11, 13, 22, 23, 14, 0, time.UTC)
-	source := "source"
+	source := "/source"
 
 	return fixtures.ManifestBuilder{ID: &id, Files: files, CreatedAt: &createdAt, Source: &source}.Build()
 }
@@ -111,7 +111,7 @@ func TestSnapshotList_Handle(t *testing.T) {
 				return []snapshot.Manifest{manifestWithFiles(t, 10, 20)}, nil
 			},
 			expectedResult: []snapshot.ManifestResume{
-				*snapshot.NewManifestResume("20261113T222314Z-abcdef01", time.Date(2026, 11, 13, 22, 23, 14, 0, time.UTC), 2, 30, "source"),
+				*snapshot.NewManifestResume("20261113T222314Z-abcdef01", time.Date(2026, 11, 13, 22, 23, 14, 0, time.UTC), 2, 30, "/source"),
 			},
 		},
 	}
@@ -198,7 +198,7 @@ func TestRestoreSnapshot_Handle(t *testing.T) {
 			},
 			expectedEvent: &expectedRestore{
 				totalFiles: 2,
-				failed:     []snapshot.FailedResult{*snapshot.NewFailedResult("source/path", errRepository.Error())},
+				failed:     []snapshot.FailedResult{*snapshot.NewFailedResult("/source/path", errRepository.Error())},
 			},
 		},
 		{

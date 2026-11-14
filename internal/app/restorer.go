@@ -38,6 +38,9 @@ func (r restorer) restoreSnapshot(
 	destinationPath *string,
 	progress Progress,
 ) (*snapshot.Result, error) {
+	if err := man.ValidateRestore(destinationPath); err != nil {
+		return nil, err
+	}
 	codec = codec.WithCompression(man.Compression())
 	plan := snapshot.NewRestorePlan(man.Files())
 	result := snapshot.NewResult(man.ID())
@@ -135,6 +138,9 @@ func largestObject(file snapshot.File) int64 {
 }
 
 func (r restorer) restoreEntry(ctx context.Context, man *snapshot.Manifest, entry snapshot.File, codec repository.Codec, destinationPath *string) error {
+	if err := man.ValidateRestore(destinationPath); err != nil {
+		return err
+	}
 	codec = codec.WithCompression(man.Compression())
 	return r.withEntry(man, entry, destinationPath, func(target snapshot.File) error {
 		switch target.Kind() {
@@ -152,14 +158,11 @@ func (r restorer) restoreEntry(ctx context.Context, man *snapshot.Manifest, entr
 }
 
 func (r restorer) withEntry(man *snapshot.Manifest, entry snapshot.File, destinationPath *string, restore func(snapshot.File) error) error {
-	if destinationPath == nil {
-		return restore(entry)
-	}
-	relocated, err := entry.RelocatedTo(man.Source(), *destinationPath)
+	target, err := man.RestoreTarget(entry, destinationPath)
 	if err != nil {
 		return err
 	}
-	return restore(relocated)
+	return restore(target)
 }
 
 func (r restorer) restoreContent(ctx context.Context, file snapshot.File, codec repository.Codec) error {

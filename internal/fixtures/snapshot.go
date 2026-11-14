@@ -29,7 +29,7 @@ type FileBuilder struct {
 }
 
 func (b FileBuilder) Build() snapshot.File {
-	path := fixtures.SetData("source/path", b.Path)
+	path := fixtures.SetData("/source/path", b.Path)
 	size := fixtures.SetData(20, b.Size)
 	hash := fixtures.SetData(uuid.NewString(), b.Hash)
 	return *snapshot.HydrateFile(path, hash, size, b.Chunks)
@@ -46,7 +46,7 @@ type ManifestBuilder struct {
 func (b ManifestBuilder) Build() snapshot.Manifest {
 	id := fixtures.SetData(uuid.NewString(), b.ID)
 	created := fixtures.SetData(time.Now(), b.CreatedAt)
-	source := fixtures.SetData("source", b.Source)
+	source := fixtures.SetData("/source", b.Source)
 	man := snapshot.NewManifest(id, b.Files, created, source, b.Compression)
 	return *man
 }

@@ -3,6 +3,7 @@ package snapshot
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
@@ -40,7 +41,28 @@ func NewManifest(id string, files []File, createdAt time.Time, source string, co
 	return &Manifest{id: id, files: files, createdAt: createdAt, source: source, compression: comp}
 }
 
-var ErrFileNotInSnapshot = errors.New("file not found in snapshot")
+var (
+	ErrFileNotInSnapshot    = errors.New("file not found in snapshot")
+	ErrUnsafeRestoreInPlace = errors.New("the snapshot source is not a safe place to restore in place")
+)
+
+func (m *Manifest) ValidateRestore(destination *string) error {
+	if destination != nil {
+		return nil
+	}
+	if !filepath.IsAbs(m.source) || filepath.Clean(m.source) != m.source || filepath.Dir(m.source) == m.source {
+		return fmt.Errorf("%w: %q must be a clean absolute path other than the filesystem root; use a destination",
+			ErrUnsafeRestoreInPlace, m.source)
+	}
+	return nil
+}
+
+func (m *Manifest) RestoreTarget(entry File, destination *string) (File, error) {
+	if destination == nil {
+		return entry.RelocatedTo(m.source, m.source)
+	}
+	return entry.RelocatedTo(m.source, *destination)
+}
 
 func (m *Manifest) FindFile(filePath string) (*File, error) {
 	for _, f := range m.files {

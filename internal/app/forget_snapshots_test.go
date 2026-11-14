@@ -77,7 +77,7 @@ func TestForgetSnapshots_Handle(t *testing.T) {
 		ids := make([]string, len(forgotten))
 		for i, ev := range forgotten {
 			require.Equal(t, snapshot.SnapshotForgottenEventName, ev.EventName())
-			require.Equal(t, "source", ev.Source())
+			require.Equal(t, "/source", ev.Source())
 			ids[i] = ev.SnapshotID()
 		}
 		require.Equal(t, []string{manifests[1].ID(), manifests[2].ID()}, ids)

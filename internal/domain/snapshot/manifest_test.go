@@ -92,3 +92,65 @@ func TestManifest_DirectoriesAndSymlinks(t *testing.T) {
 		require.Equal(t, int64(5), manifest.Resume().Size())
 	})
 }
+
+func TestManifest_ValidateRestore(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		source      string
+		destination *string
+		expectedErr error
+	}{
+		{name: "with a clean absolute source and no destination, then it can be restored in place", source: "/home/user/docs"},
+		{name: "with a relative source and no destination, then it cannot be restored in place", source: "home/user", expectedErr: snapshot.ErrUnsafeRestoreInPlace},
+		{name: "with a source that is not clean and no destination, then it cannot be restored in place", source: "/home/user/../../etc", expectedErr: snapshot.ErrUnsafeRestoreInPlace},
+		{name: "with the filesystem root as source and no destination, then it cannot be restored in place", source: "/", expectedErr: snapshot.ErrUnsafeRestoreInPlace},
+		{name: "with an empty source and no destination, then it cannot be restored in place", source: "", expectedErr: snapshot.ErrUnsafeRestoreInPlace},
+		{name: "with an unsafe source and a destination, then it can be restored", source: "/", destination: new("/restore")},
+	}
+	for _, tt := range tests {
+		t.Run(`Given a manifest `+tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			manifest := fixtures.ManifestBuilder{Source: new(tt.source)}.Build()
+
+			require.ErrorIs(t, manifest.ValidateRestore(tt.destination), tt.expectedErr)
+		})
+	}
+}
+
+func TestManifest_RestoreTarget(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		path         string
+		destination  *string
+		expectedPath string
+		expectedErr  error
+	}{
+		{name: "an entry inside the source and no destination, then it keeps its path", path: "/home/user/docs/a.txt", expectedPath: "/home/user/docs/a.txt"},
+		{name: "the source directory itself and no destination, then it keeps its path", path: "/home/user/docs", expectedPath: "/home/user/docs"},
+		{name: "an entry outside the source and no destination, then it is rejected", path: "/home/user/.ssh/authorized_keys", expectedErr: snapshot.ErrPathOutsideSource},
+		{name: "an entry that escapes the source with dot dot and no destination, then it is rejected", path: "/home/user/docs/../../../etc/passwd", expectedErr: snapshot.ErrPathOutsideSource},
+		{name: "an entry with a sibling prefix and no destination, then it is rejected", path: "/home/user/docs-private/key", expectedErr: snapshot.ErrPathOutsideSource},
+		{name: "an entry inside the source and a destination, then it is moved below the destination", path: "/home/user/docs/sub/a.txt", destination: new("/restore"), expectedPath: "/restore/sub/a.txt"},
+		{name: "an entry outside the source and a destination, then it is rejected", path: "/etc/passwd", destination: new("/restore"), expectedErr: snapshot.ErrPathOutsideSource},
+	}
+	for _, tt := range tests {
+		t.Run(`Given a manifest of /home/user/docs and `+tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			manifest := fixtures.ManifestBuilder{Source: new("/home/user/docs")}.Build()
+			entry := fixtures.FileBuilder{Path: new(tt.path)}.Build()
+
+			target, err := manifest.RestoreTarget(entry, tt.destination)
+
+			require.ErrorIs(t, err, tt.expectedErr)
+			if tt.expectedErr == nil {
+				require.Equal(t, tt.expectedPath, target.Path())
+			}
+		})
+	}
+}
