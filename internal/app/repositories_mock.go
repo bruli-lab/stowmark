@@ -257,8 +257,11 @@ var _ SourceRepository = &SourceRepositoryMock{}
 //			CalculateHashFunc: func(ctx context.Context, filePath string, comp *repository.Compression) (string, error) {
 //				panic("mock out the CalculateHash method")
 //			},
-//			ExploreFunc: func(ctx context.Context, sourcePath string) (*snapshot.Source, error) {
+//			ExploreFunc: func(ctx context.Context, sourcePath string, rules *snapshot.ExcludeRules) (*snapshot.Source, error) {
 //				panic("mock out the Explore method")
+//			},
+//			IgnorePatternsFunc: func(ctx context.Context, sourcePath string) ([]string, error) {
+//				panic("mock out the IgnorePatterns method")
 //			},
 //		}
 //
@@ -274,7 +277,10 @@ type SourceRepositoryMock struct {
 	CalculateHashFunc func(ctx context.Context, filePath string, comp *repository.Compression) (string, error)
 
 	// ExploreFunc mocks the Explore method.
-	ExploreFunc func(ctx context.Context, sourcePath string) (*snapshot.Source, error)
+	ExploreFunc func(ctx context.Context, sourcePath string, rules *snapshot.ExcludeRules) (*snapshot.Source, error)
+
+	// IgnorePatternsFunc mocks the IgnorePatterns method.
+	IgnorePatternsFunc func(ctx context.Context, sourcePath string) ([]string, error)
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -304,11 +310,21 @@ type SourceRepositoryMock struct {
 			Ctx context.Context
 			// SourcePath is the sourcePath argument value.
 			SourcePath string
+			// Rules is the rules argument value.
+			Rules *snapshot.ExcludeRules
+		}
+		// IgnorePatterns holds details about calls to the IgnorePatterns method.
+		IgnorePatterns []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// SourcePath is the sourcePath argument value.
+			SourcePath string
 		}
 	}
 	lockCalculateChunks sync.RWMutex
 	lockCalculateHash   sync.RWMutex
 	lockExplore         sync.RWMutex
+	lockIgnorePatterns  sync.RWMutex
 }
 
 // CalculateChunks calls CalculateChunksFunc.
@@ -396,21 +412,23 @@ func (mock *SourceRepositoryMock) CalculateHashCalls() []struct {
 }
 
 // Explore calls ExploreFunc.
-func (mock *SourceRepositoryMock) Explore(ctx context.Context, sourcePath string) (*snapshot.Source, error) {
+func (mock *SourceRepositoryMock) Explore(ctx context.Context, sourcePath string, rules *snapshot.ExcludeRules) (*snapshot.Source, error) {
 	if mock.ExploreFunc == nil {
 		panic("SourceRepositoryMock.ExploreFunc: method is nil but SourceRepository.Explore was just called")
 	}
 	callInfo := struct {
 		Ctx        context.Context
 		SourcePath string
+		Rules      *snapshot.ExcludeRules
 	}{
 		Ctx:        ctx,
 		SourcePath: sourcePath,
+		Rules:      rules,
 	}
 	mock.lockExplore.Lock()
 	mock.calls.Explore = append(mock.calls.Explore, callInfo)
 	mock.lockExplore.Unlock()
-	return mock.ExploreFunc(ctx, sourcePath)
+	return mock.ExploreFunc(ctx, sourcePath, rules)
 }
 
 // ExploreCalls gets all the calls that were made to Explore.
@@ -420,14 +438,52 @@ func (mock *SourceRepositoryMock) Explore(ctx context.Context, sourcePath string
 func (mock *SourceRepositoryMock) ExploreCalls() []struct {
 	Ctx        context.Context
 	SourcePath string
+	Rules      *snapshot.ExcludeRules
+} {
+	var calls []struct {
+		Ctx        context.Context
+		SourcePath string
+		Rules      *snapshot.ExcludeRules
+	}
+	mock.lockExplore.RLock()
+	calls = mock.calls.Explore
+	mock.lockExplore.RUnlock()
+	return calls
+}
+
+// IgnorePatterns calls IgnorePatternsFunc.
+func (mock *SourceRepositoryMock) IgnorePatterns(ctx context.Context, sourcePath string) ([]string, error) {
+	if mock.IgnorePatternsFunc == nil {
+		panic("SourceRepositoryMock.IgnorePatternsFunc: method is nil but SourceRepository.IgnorePatterns was just called")
+	}
+	callInfo := struct {
+		Ctx        context.Context
+		SourcePath string
+	}{
+		Ctx:        ctx,
+		SourcePath: sourcePath,
+	}
+	mock.lockIgnorePatterns.Lock()
+	mock.calls.IgnorePatterns = append(mock.calls.IgnorePatterns, callInfo)
+	mock.lockIgnorePatterns.Unlock()
+	return mock.IgnorePatternsFunc(ctx, sourcePath)
+}
+
+// IgnorePatternsCalls gets all the calls that were made to IgnorePatterns.
+// Check the length with:
+//
+//	len(mockedSourceRepository.IgnorePatternsCalls())
+func (mock *SourceRepositoryMock) IgnorePatternsCalls() []struct {
+	Ctx        context.Context
+	SourcePath string
 } {
 	var calls []struct {
 		Ctx        context.Context
 		SourcePath string
 	}
-	mock.lockExplore.RLock()
-	calls = mock.calls.Explore
-	mock.lockExplore.RUnlock()
+	mock.lockIgnorePatterns.RLock()
+	calls = mock.calls.IgnorePatterns
+	mock.lockIgnorePatterns.RUnlock()
 	return calls
 }
 

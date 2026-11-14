@@ -50,7 +50,8 @@ func newCreateDependencies(t *testing.T, files []snapshot.File) createDependenci
 
 	return createDependencies{
 		sourceRepo: &app.SourceRepositoryMock{
-			ExploreFunc: func(_ context.Context, _ string) (*snapshot.Source, error) {
+			IgnorePatternsFunc: func(context.Context, string) ([]string, error) { return nil, nil },
+			ExploreFunc: func(context.Context, string, *snapshot.ExcludeRules) (*snapshot.Source, error) {
 				return &source, nil
 			},
 			CalculateHashFunc: func(_ context.Context, filePath string, _ *repository.Compression) (string, error) {

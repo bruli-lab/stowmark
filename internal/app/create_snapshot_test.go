@@ -188,7 +188,8 @@ func TestCreateSnapshot_Handle(t *testing.T) {
 		when Handle method is called `+tt.name, func(t *testing.T) {
 			t.Parallel()
 			sourceRepo := &app.SourceRepositoryMock{}
-			sourceRepo.ExploreFunc = func(_ context.Context, _ string) (*snapshot.Source, error) {
+			sourceRepo.IgnorePatternsFunc = func(context.Context, string) ([]string, error) { return nil, nil }
+			sourceRepo.ExploreFunc = func(context.Context, string, *snapshot.ExcludeRules) (*snapshot.Source, error) {
 				return tt.source, tt.exploreErr
 			}
 			sourceRepo.CalculateHashFunc = func(_ context.Context, _ string, _ *repository.Compression) (string, error) {

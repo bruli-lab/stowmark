@@ -8,13 +8,15 @@ import (
 	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 )
 
+const IgnoreFileName = snapshot.IgnoreFileName
+
 type CreateResult struct {
 	ID        string
 	FileCount int
 	TotalSize int64
 }
 
-func (h *Handler) CreateSnapshot(ctx context.Context, source string, privateKey *string) (*CreateResult, error) {
+func (h *Handler) CreateSnapshot(ctx context.Context, source string, privateKey *string, exclude ...string) (*CreateResult, error) {
 	obsv, err := buildObservability(ctx)
 	if err != nil {
 		return nil, err
@@ -42,6 +44,7 @@ func (h *Handler) CreateSnapshot(ctx context.Context, source string, privateKey 
 		RepositoryPath: h.repositoryPath,
 		SourcePath:     source,
 		PrivateKey:     privateKey,
+		Exclude:        exclude,
 	})
 	if err != nil {
 		return nil, err

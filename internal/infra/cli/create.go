@@ -17,13 +17,17 @@ func newSnapshotCreateCommand() *cobra.Command {
 	var (
 		repositoryPath string
 		privateKeyPath string
+		exclude        []string
 	)
 	sourceRepo := disk.NewSourceRepository()
 
 	cmd := &cobra.Command{
 		Use:   "create <source>",
 		Short: "Create a snapshot of a directory",
-		Args:  cobra.ExactArgs(1),
+		Long: "Create a snapshot of a directory. Files and directories that match the patterns in the " +
+			snapshot.IgnoreFileName + " file at the root of the source, or an --exclude pattern, are not backed up. " +
+			"--exclude patterns are applied after the ignore file, so they can override it.",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			sourcePath := args[0]
 
@@ -83,6 +87,7 @@ func newSnapshotCreateCommand() *cobra.Command {
 				RepositoryPath: repoHand.RepositoryPath(),
 				SourcePath:     sourcePath,
 				PrivateKey:     privateKey,
+				Exclude:        exclude,
 			})
 			if err != nil {
 				return err
@@ -117,6 +122,12 @@ func newSnapshotCreateCommand() *cobra.Command {
 		"private-key",
 		"",
 		"path to the private key for encryption",
+	)
+	cmd.Flags().StringArrayVar(
+		&exclude,
+		"exclude",
+		nil,
+		"exclude files and directories matching this pattern (repeatable, same syntax as "+snapshot.IgnoreFileName+")",
 	)
 	_ = cmd.MarkFlagRequired("repo")
 

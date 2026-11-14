@@ -19,7 +19,8 @@ type FolderRepository interface {
 }
 
 type SourceRepository interface {
-	Explore(ctx context.Context, sourcePath string) (*snapshot.Source, error)
+	IgnorePatterns(ctx context.Context, sourcePath string) ([]string, error)
+	Explore(ctx context.Context, sourcePath string, rules *snapshot.ExcludeRules) (*snapshot.Source, error)
 	CalculateHash(ctx context.Context, filePath string, comp *repository.Compression) (string, error)
 	CalculateChunks(ctx context.Context, filePath string, size int64, comp *repository.Compression) ([]snapshot.Chunk, error)
 }

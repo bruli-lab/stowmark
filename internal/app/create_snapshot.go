@@ -3,7 +3,9 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"runtime"
+	"slices"
 	"sync/atomic"
 	"time"
 
@@ -22,6 +24,7 @@ type CreateSnapshotCommand struct {
 	RepositoryPath string
 	SourcePath     string
 	PrivateKey     *string
+	Exclude        []string
 }
 
 func (c CreateSnapshotCommand) Name() string {
@@ -59,7 +62,12 @@ func (c *CreateSnapshot) create(ctx context.Context, co CreateSnapshotCommand) (
 		return nil, err
 	}
 
-	source, err := c.sourceRepo.Explore(ctx, co.SourcePath)
+	rules, err := c.excludeRules(ctx, co)
+	if err != nil {
+		return nil, err
+	}
+
+	source, err := c.sourceRepo.Explore(ctx, co.SourcePath, rules)
 	if err != nil {
 		return nil, err
 	}
@@ -117,6 +125,18 @@ func (c *CreateSnapshot) create(ctx context.Context, co CreateSnapshotCommand) (
 		return nil, err
 	}
 	return snapshot.NewSnapshotCreated(manifest, int(savedFiles.Load()), totalSize.Load()), nil
+}
+
+func (c *CreateSnapshot) excludeRules(ctx context.Context, co CreateSnapshotCommand) (*snapshot.ExcludeRules, error) {
+	filePatterns, err := c.sourceRepo.IgnorePatterns(ctx, co.SourcePath)
+	if err != nil {
+		return nil, err
+	}
+	rules, err := snapshot.NewExcludeRules(slices.Concat(filePatterns, co.Exclude))
+	if err != nil {
+		return nil, fmt.Errorf("parse exclude patterns: %w", err)
+	}
+	return rules, nil
 }
 
 func (c *CreateSnapshot) saveFileObjects(ctx context.Context, file *snapshot.File, comp *repository.Compression, key objectKey) (int64, error) {

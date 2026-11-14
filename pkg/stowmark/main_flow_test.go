@@ -161,8 +161,19 @@ func mainFlow(t *testing.T, ctx context.Context, folders Folders, formatVersion 
 
 	require.NoError(t, os.Remove(filepath.Join(folders.Source, "documents", "notes.txt")))
 	writeFixtureFile(t, folders.Source, "documents/new.txt", []byte("A file added after the first snapshot.\n"))
-	second, err := handler.CreateSnapshot(ctx, folders.Source, new(newKeys.PrivateKey()))
+	writeFixtureFile(t, folders.Source, stowmark.IgnoreFileName, []byte("# temporary files\n*.tmp\n"))
+	writeFixtureFile(t, folders.Source, "documents/scratch.tmp", []byte("not backed up\n"))
+	writeFixtureFile(t, folders.Source, "cache/data.bin", []byte("not backed up either\n"))
+	second, err := handler.CreateSnapshot(ctx, folders.Source, new(newKeys.PrivateKey()), "cache/")
 	require.NoError(t, err)
+	secondManifest, err := handler.GetManifest(ctx, second.ID)
+	require.NoError(t, err)
+	for _, file := range secondManifest.Files {
+		require.NotContains(t, file.Path, "scratch.tmp", "files matching the ignore file must not be backed up")
+		require.NotContains(t, file.Path, "cache", "files matching an exclude pattern must not be backed up")
+	}
+	require.NoError(t, os.Remove(filepath.Join(folders.Source, "documents", "scratch.tmp")))
+	require.NoError(t, os.RemoveAll(filepath.Join(folders.Source, "cache")))
 
 	keepLast := stowmark.RetentionPolicy{KeepLast: 1}
 	plan, err := handler.PlanForget(ctx, keepLast)

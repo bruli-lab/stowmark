@@ -31,6 +31,7 @@ the source path, creation time and references to its files.
 - Content-addressed object storage using SHA-256.
 - Deduplication of unchanged files between snapshots.
 - Automatic chunking for files larger than 8 MiB.
+- Exclusion of files and directories with a `.stowmarkignore` file or `--exclude` patterns.
 - Optional `gzip`, `zstd`, `lz4` and `xz` compression.
 - Optional client-side encryption using AES-256-GCM and RSA-OAEP-SHA256.
 - Encryption key rotation without exposing plaintext data to remote storage.
@@ -471,7 +472,7 @@ and remove files and collections under the repository path.
 | Command                                                                 | Description                              |
 |-------------------------------------------------------------------------|------------------------------------------|
 | `stowmark init --repo <repository>`                                     | Initialize a new repository.             |
-| `stowmark snapshot create <source> --repo <repository>`                 | Create a snapshot of a directory.        |
+| `stowmark snapshot create <source> --repo <repository> [--exclude <pattern>]` | Create a snapshot of a directory.  |
 | `stowmark snapshot list --repo <repository>`                            | List snapshots from newest to oldest.    |
 | `stowmark snapshot get --id <id> --repo <repository>`                   | Display a snapshot manifest.             |
 | `stowmark snapshot verify --id <id> --repo <repository>`                | Verify snapshot integrity.               |
@@ -643,6 +644,44 @@ stowmark init --repo /srv/backups/stowmark-xz --compression xz
 
 The selected compression is applied to every object in the snapshot and recorded in its manifest. Compression is
 transparent during restoration: Stowmark decodes each stored object before writing the original file.
+
+## Excluding files
+
+Put a `.stowmarkignore` file at the root of the source directory to skip files and directories, and use
+`--exclude` (repeatable) for one-off patterns:
+
+```text
+# .stowmarkignore
+node_modules/
+*.log
+!important.log
+/build
+.cache/**
+```
+
+```bash
+stowmark snapshot create ~/projects --repo /backups/stowmark --exclude 'target/' --exclude '*.iso'
+```
+
+The syntax is a subset of `.gitignore`:
+
+| Pattern | Matches |
+|---|---|
+| `*.log` | Any file or directory named `*.log` at any depth. `*`, `?` and `[abc]` work inside one path segment. |
+| `node_modules/` | Directories only. |
+| `/build` or `docs/*.md` | A pattern with a `/` is relative to the source root. |
+| `docs/**/*.md` | `**` matches any number of directories, including none. |
+| `logs/**` | Everything inside `logs`, but not `logs` itself. |
+| `!important.log` | Negation: the last matching pattern wins. |
+| `# comment` | Comment. Use `\#` for a name that starts with `#`. |
+
+- Only the `.stowmarkignore` at the root of the source is read; files with that name in subdirectories are ordinary
+  files. The ignore file itself is backed up.
+- `--exclude` patterns are applied after the ignore file, so `--exclude '!keep.log'` overrides it.
+- An excluded directory is not explored, so a negation cannot bring back a file inside it. Use `logs/**` together with
+  `!logs/keep.txt` instead of `logs/` when you need that.
+- Paths are matched with `/` on every platform and are case-sensitive.
+- An invalid pattern stops the snapshot before anything is written.
 
 ## Chunking
 

@@ -85,7 +85,8 @@ func TestCreateSnapshot_Handle_HashCalculation(t *testing.T) {
 			config := fixtures.ConfigBuilder{FormatVersion: &tt.formatVersion}.Build(t)
 			source := fixtures.SourceBuilder{Files: []snapshot.File{fixtures.FileBuilder{Size: &tt.size, Hash: new("")}.Build()}}.Build()
 			sourceRepo := &app.SourceRepositoryMock{
-				ExploreFunc: func(context.Context, string) (*snapshot.Source, error) {
+				IgnorePatternsFunc: func(context.Context, string) ([]string, error) { return nil, nil },
+				ExploreFunc: func(context.Context, string, *snapshot.ExcludeRules) (*snapshot.Source, error) {
 					return &source, nil
 				},
 				CalculateHashFunc: func(context.Context, string, *repository.Compression) (string, error) {
