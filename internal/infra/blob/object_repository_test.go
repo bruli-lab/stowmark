@@ -308,3 +308,45 @@ func TestObjectRepository_Rekey(t *testing.T) {
 		require.ErrorIs(t, err, blob.ErrSourceRequired)
 	})
 }
+
+func TestObjectRepository_ListAndDeleteObjects(t *testing.T) {
+	t.Parallel()
+
+	t.Run(`Given a blob ObjectRepository with plain objects, encrypted objects and unrelated blobs,
+	when ListObjects and DeleteObject are called,
+	then each namespace lists only its own objects and a deleted object disappears`, func(t *testing.T) {
+		t.Parallel()
+
+		ctx := context.Background()
+		store := blobtest.NewMemoryStore()
+		repo := blob.NewObjectRepository(store)
+		comp := zstdCompression(t)
+		first := []byte("first object")
+		second := []byte("second object")
+		firstHash := compressedHash(t, comp, first)
+		secondHash := compressedHash(t, comp, second)
+		key := newKey(t)
+		require.NoError(t, repo.Save(ctx, writeSource(t, first), firstHash, comp, nil, 0))
+		require.NoError(t, repo.Save(ctx, writeSource(t, second), secondHash, comp, nil, 0))
+		require.NoError(t, repo.Save(ctx, writeSource(t, first), firstHash, comp, key, 2))
+		require.NoError(t, store.Put(ctx, "objects/readme.txt", func(io.Writer) error { return nil }))
+
+		plain, err := repo.ListObjects(ctx, false, 0)
+		require.NoError(t, err)
+		require.ElementsMatch(t, []string{firstHash, secondHash}, plain)
+		encrypted, err := repo.ListObjects(ctx, true, 2)
+		require.NoError(t, err)
+		require.Equal(t, []string{firstHash}, encrypted)
+
+		require.NoError(t, repo.DeleteObject(ctx, secondHash, false, 0))
+		require.NoError(t, repo.DeleteObject(ctx, firstHash, true, 2))
+
+		plain, err = repo.ListObjects(ctx, false, 0)
+		require.NoError(t, err)
+		require.Equal(t, []string{firstHash}, plain)
+		encrypted, err = repo.ListObjects(ctx, true, 2)
+		require.NoError(t, err)
+		require.Empty(t, encrypted)
+		require.ErrorIs(t, repo.DeleteObject(ctx, "../x", false, 0), blob.ErrInvalidHash)
+	})
+}

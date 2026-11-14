@@ -51,6 +51,21 @@ func (m *Manifest) FindFile(filePath string) (*File, error) {
 	return nil, fmt.Errorf("%w: %s", ErrFileNotInSnapshot, filePath)
 }
 
+func (m *Manifest) ReferencedHashes() []string {
+	hashes := make([]string, 0, len(m.files))
+	for i := range m.files {
+		chunks := m.files[i].Chunks()
+		if len(chunks) == 0 {
+			hashes = append(hashes, m.files[i].Hash())
+			continue
+		}
+		for _, chunk := range chunks {
+			hashes = append(hashes, chunk.Hash())
+		}
+	}
+	return hashes
+}
+
 func (m *Manifest) Resume() *ManifestResume {
 	var size int64
 	for _, f := range m.files {

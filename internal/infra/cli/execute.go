@@ -27,6 +27,8 @@ func Execute() error {
 	rootCmd.AddCommand(newSnapshotCommand())
 	rootCmd.AddCommand(newKeyCommand())
 	rootCmd.AddCommand(newUnlockCommand())
+	rootCmd.AddCommand(newForgetCommand())
+	rootCmd.AddCommand(newPruneCommand())
 
 	return rootCmd.ExecuteContext(ctx)
 }

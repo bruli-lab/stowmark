@@ -130,15 +130,15 @@ func (o ObjectRepository) RestoreObject(ctx context.Context, comp *repository.Co
 	})
 }
 
-func (o ObjectRepository) ListEncryptedObjects(ctx context.Context, generation uint64) ([]string, error) {
+func (o ObjectRepository) ListObjects(ctx context.Context, encrypted bool, generation uint64) ([]string, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 
-	prefix := generationPrefix(generation)
+	prefix := objectsPrefix(encrypted, generation)
 	keys, err := o.store.List(ctx, prefix)
 	if err != nil {
-		return nil, fmt.Errorf("list encrypted objects from generation %d: %w", generation, err)
+		return nil, fmt.Errorf("list objects from %q: %w", prefix, err)
 	}
 
 	hashes := make([]string, 0, len(keys))
@@ -148,6 +148,32 @@ func (o ObjectRepository) ListEncryptedObjects(ctx context.Context, generation u
 		}
 	}
 	sort.Strings(hashes)
+
+	return hashes, nil
+}
+
+func (o ObjectRepository) DeleteObject(ctx context.Context, hash string, encrypted bool, generation uint64) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	key, err := objectKey(hash, encrypted, generation)
+	if err != nil {
+		return err
+	}
+
+	if err := o.store.Delete(ctx, key); err != nil {
+		return fmt.Errorf("delete object %q: %w", hash, err)
+	}
+
+	return nil
+}
+
+func (o ObjectRepository) ListEncryptedObjects(ctx context.Context, generation uint64) ([]string, error) {
+	hashes, err := o.ListObjects(ctx, true, generation)
+	if err != nil {
+		return nil, fmt.Errorf("list encrypted objects from generation %d: %w", generation, err)
+	}
 
 	return hashes, nil
 }

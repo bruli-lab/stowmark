@@ -18,7 +18,7 @@ func ValidateKey(key string) error {
 	if key == "" || strings.HasPrefix(key, "/") || strings.Contains(key, "\\") || path.Clean(key) != key {
 		return fmt.Errorf("%w: %q", ErrInvalidKey, key)
 	}
-	for _, segment := range strings.Split(key, "/") {
+	for segment := range strings.SplitSeq(key, "/") {
 		if segment == ".." || strings.HasPrefix(segment, ".") {
 			return fmt.Errorf("%w: %q", ErrInvalidKey, key)
 		}

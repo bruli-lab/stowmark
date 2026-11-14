@@ -38,6 +38,7 @@ the source path, creation time and references to its files.
 - Snapshot listing ordered from newest to oldest.
 - Inspection of a snapshot and all its files.
 - Integrity verification using SHA-256 hashes.
+- Retention policies (`forget`) and garbage collection of unreferenced objects (`prune`).
 - Local repositories with no external service required.
 - Remote repositories over SSH/SFTP using public-key authentication.
 - Remote repositories over SMB using password authentication.
@@ -479,6 +480,8 @@ and remove files and collections under the repository path.
 | `stowmark key rewrap --repo <repository> --old-private-key <key> --new-public-key <key>` | Re-encrypt the repository key with a new RSA key pair. |
 | `stowmark key rekey --repo <repository> --private-key <key> --public-key <key>` | Rotate the symmetric key and re-encrypt every object. |
 | `stowmark unlock --repo <repository> [--all]`                           | Remove stale (or all) repository locks.  |
+| `stowmark forget --repo <repository> --keep-<rule> <n> [--prune]`       | Forget the snapshots a retention policy does not keep. |
+| `stowmark prune --repo <repository>`                                    | Delete objects that no snapshot references. |
 
 Run the built-in help for the complete set of options:
 
@@ -704,8 +707,8 @@ different machines cannot corrupt each other:
 
 | Lock | Commands | Compatible with |
 |---|---|---|
-| Shared | `snapshot create`, `snapshot restore`, `snapshot verify` | Other shared locks |
-| Exclusive | `init`, `key rekey`, `key rewrap` | Nothing |
+| Shared | `snapshot create`, `snapshot restore`, `snapshot verify`, `forget --dry-run`, `prune --dry-run` | Other shared locks |
+| Exclusive | `init`, `key rekey`, `key rewrap`, `forget`, `prune` | Nothing |
 
 A command fails with `repository is locked` and shows the host and process that hold a conflicting lock. A running
 command refreshes its lock every 5 minutes and removes it when it finishes, including when it is interrupted with
@@ -827,6 +830,42 @@ A successful release produces:
 See all published versions on the
 [GitHub Releases page](https://github.com/bruli-lab/stowmark/releases).
 
+## Retention and pruning
+
+Snapshots are never removed automatically. Removing old backups takes two steps:
+
+1. `forget` applies a retention policy and deletes the manifests of the snapshots it does not keep.
+2. `prune` deletes the objects that no remaining manifest references. Objects are deduplicated, so forgetting a
+   snapshot does not free space by itself: an object is deleted only when no snapshot uses it any more.
+
+```bash
+stowmark forget --repo /backups/stowmark --keep-last 3 --keep-daily 7 --keep-weekly 4 --keep-monthly 12 --dry-run
+stowmark forget --repo /backups/stowmark --keep-last 3 --keep-daily 7 --keep-weekly 4 --keep-monthly 12 --prune
+stowmark prune --repo /backups/stowmark --dry-run
+```
+
+| Flag | Keeps |
+|---|---|
+| `--keep-last N` | The N most recent snapshots. |
+| `--keep-daily N` | The most recent snapshot of each of the last N days that have snapshots. |
+| `--keep-weekly N` | The most recent snapshot of each of the last N ISO weeks that have snapshots. |
+| `--keep-monthly N` | The most recent snapshot of each of the last N months that have snapshots. |
+| `--keep-yearly N` | The most recent snapshot of each of the last N years that have snapshots. |
+| `--keep-within D` | Every snapshot newer than `D` (`30d`, `2w`, `36h`…). |
+
+- At least one rule is required. A snapshot is kept if any rule keeps it, and the output shows which rules did.
+- The policy is applied separately to the snapshots of each source directory.
+- Days, weeks, months and years are calculated in UTC.
+- `--dry-run` shows what would happen without changing the repository. It cannot be combined with `--prune`.
+- `forget` and `prune` take an exclusive lock, so they never run while a snapshot is being created or restored.
+- Manifests are deleted before objects. If `prune` is interrupted, the only effect is that some unreferenced objects
+  remain until the next `prune`.
+- `prune` warns when a manifest references an object that is missing from the repository. Run `snapshot verify` to
+  find the affected snapshots.
+- In encrypted repositories, `prune` works on the objects of the current key generation and does not need the
+  private key.
+- `prune` lists every object of the repository, which can take a while on large S3 or GCS repositories.
+
 ## Security model and limitations
 
 What encryption protects, when a repository is created with `--public-key`:
@@ -859,7 +898,6 @@ What is not backed up:
 Planned areas of development include:
 
 - Remote storage drivers.
-- Repository maintenance and garbage collection.
 - More installation formats and platforms.
 
 ## Contributing

@@ -91,6 +91,28 @@ func TestManifestRepository(t *testing.T) {
 		}
 	})
 
+	t.Run(`Given a blob ManifestRepository with two manifests,
+	when Delete is called with one id and then with a missing id,
+	then only the other manifest is listed and the missing id does not fail`, func(t *testing.T) {
+		t.Parallel()
+
+		ctx := context.Background()
+		repo := blob.NewManifestRepository(blobtest.NewMemoryStore())
+		kept := manifestAt(t, "20261101T000000Z-aaaaaaaa", time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC))
+		deleted := manifestAt(t, "20261113T000000Z-bbbbbbbb", time.Date(2026, 11, 13, 0, 0, 0, 0, time.UTC))
+		require.NoError(t, repo.Save(ctx, kept))
+		require.NoError(t, repo.Save(ctx, deleted))
+
+		require.NoError(t, repo.Delete(ctx, deleted.ID()))
+		require.NoError(t, repo.Delete(ctx, deleted.ID()))
+
+		listed, err := repo.List(ctx)
+		require.NoError(t, err)
+		require.Len(t, listed, 1)
+		require.Equal(t, kept.ID(), listed[0].ID())
+		require.ErrorIs(t, repo.Delete(ctx, "../config"), blob.ErrInvalidKey)
+	})
+
 	t.Run(`Given a blob ManifestRepository with a corrupted manifest,
 	when List is called,
 	then it returns an error`, func(t *testing.T) {

@@ -28,6 +28,7 @@ type ManifestRepository interface {
 	Save(ctx context.Context, m *snapshot.Manifest) error
 	List(ctx context.Context) ([]snapshot.Manifest, error)
 	Get(ctx context.Context, snapshotID string) (*snapshot.Manifest, error)
+	Delete(ctx context.Context, snapshotID string) error
 }
 
 type ObjectRepository interface {
@@ -36,6 +37,8 @@ type ObjectRepository interface {
 	ReadObject(ctx context.Context, hash string, symmetricKey []byte, generation uint64) (io.ReadCloser, error)
 	RestoreObject(ctx context.Context, comp *repository.Compression, obj *snapshot.File, symmetricKey []byte, generation uint64) error
 	SaveChunk(ctx context.Context, filePath string, hash string, offset int64, size int64, comp *repository.Compression, key []byte, generation uint64) error
+	ListObjects(ctx context.Context, encrypted bool, generation uint64) ([]string, error)
+	DeleteObject(ctx context.Context, hash string, encrypted bool, generation uint64) error
 	ListEncryptedObjects(ctx context.Context, generation uint64) ([]string, error)
 	ReadEncryptedObject(ctx context.Context, hash string, generation uint64, key []byte) (io.ReadCloser, error)
 	SaveRekeyedObject(ctx context.Context, hash string, source io.Reader, generation uint64, key []byte) error

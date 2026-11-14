@@ -159,6 +159,58 @@ func mainFlow(t *testing.T, ctx context.Context, folders Folders, formatVersion 
 	require.NoError(t, err)
 	require.Empty(t, remainingLocks)
 
+	require.NoError(t, os.Remove(filepath.Join(folders.Source, "documents", "notes.txt")))
+	writeFixtureFile(t, folders.Source, "documents/new.txt", []byte("A file added after the first snapshot.\n"))
+	second, err := handler.CreateSnapshot(ctx, folders.Source, new(newKeys.PrivateKey()))
+	require.NoError(t, err)
+
+	keepLast := stowmark.RetentionPolicy{KeepLast: 1}
+	forgotten, err := handler.Forget(ctx, keepLast, true)
+	require.NoError(t, err)
+	require.Len(t, forgotten.Snapshots, 2)
+	require.Equal(t, second.ID, forgotten.Snapshots[0].ID)
+	require.True(t, forgotten.Snapshots[0].Keep)
+	require.Equal(t, []string{"last"}, forgotten.Snapshots[0].Reasons)
+	require.False(t, forgotten.Snapshots[1].Keep)
+	snapshots, err = handler.ListSnapshots(ctx)
+	require.NoError(t, err)
+	require.Len(t, snapshots, 2, "a dry run must not forget snapshots")
+
+	pruned, err := handler.Prune(ctx, true)
+	require.NoError(t, err)
+	require.Zero(t, pruned.UnreferencedObjects)
+	require.Zero(t, pruned.MissingObjects)
+
+	_, err = handler.Forget(ctx, keepLast, false)
+	require.NoError(t, err)
+	snapshots, err = handler.ListSnapshots(ctx)
+	require.NoError(t, err)
+	require.Len(t, snapshots, 1)
+	require.Equal(t, second.ID, snapshots[0].ID)
+
+	pruned, err = handler.Prune(ctx, false)
+	require.NoError(t, err)
+	require.Equal(t, 1, pruned.UnreferencedObjects, "only the object of the removed file must be unreferenced")
+	require.Zero(t, pruned.MissingObjects)
+	require.Equal(t, pruned.ReferencedObjects, pruned.StoredObjects-pruned.UnreferencedObjects)
+
+	pruned, err = handler.Prune(ctx, true)
+	require.NoError(t, err)
+	require.Zero(t, pruned.UnreferencedObjects, "a second prune must find nothing to remove")
+
+	verification, err = handler.VerifySnapshot(ctx, second.ID, new(newKeys.PrivateKey()))
+	require.NoError(t, err)
+	require.True(t, verification.IsSuccess)
+	prunedRestore := filepath.Join(t.TempDir(), "pruned-restore")
+	restored, err = handler.RestoreSnapshot(ctx, second.ID, &prunedRestore, new(newKeys.PrivateKey()))
+	require.NoError(t, err)
+	require.True(t, restored.IsSuccess)
+	requireDirectoriesEqual(t, folders.Source, prunedRestore)
+
+	remainingLocks, err = store.List(ctx, repository.LocksFolder)
+	require.NoError(t, err)
+	require.Empty(t, remainingLocks)
+
 	var contractRepositories atomic.Int64
 	t.Run("blob store contract", func(t *testing.T) {
 		blobtest.RunStoreContract(t, func(t *testing.T) blob.Store {

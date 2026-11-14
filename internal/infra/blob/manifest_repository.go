@@ -82,6 +82,23 @@ func (m ManifestRepository) List(ctx context.Context) ([]snapshot.Manifest, erro
 	return manifests, nil
 }
 
+func (m ManifestRepository) Delete(ctx context.Context, snapshotID string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	key, err := manifestKey(snapshotID)
+	if err != nil {
+		return err
+	}
+
+	if err := m.store.Delete(ctx, key); err != nil {
+		return fmt.Errorf("delete manifest %q: %w", snapshotID, err)
+	}
+
+	return nil
+}
+
 func (m ManifestRepository) read(ctx context.Context, key string) (*snapshot.Manifest, error) {
 	reader, err := m.store.Get(ctx, key)
 	if err != nil {
