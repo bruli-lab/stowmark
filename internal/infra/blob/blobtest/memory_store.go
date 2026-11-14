@@ -78,7 +78,7 @@ func (m *MemoryStore) Exists(ctx context.Context, key string) (bool, error) {
 	return ok, nil
 }
 
-func (m *MemoryStore) List(ctx context.Context, prefix string) ([]string, error) {
+func (m *MemoryStore) List(ctx context.Context, prefix string) ([]blob.Entry, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -88,15 +88,15 @@ func (m *MemoryStore) List(ctx context.Context, prefix string) ([]string, error)
 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	keys := make([]string, 0)
-	for key := range m.blobs {
+	entries := make([]blob.Entry, 0)
+	for key, data := range m.blobs {
 		if strings.HasPrefix(key, prefix+"/") {
-			keys = append(keys, key)
+			entries = append(entries, blob.Entry{Key: key, Size: int64(len(data))})
 		}
 	}
-	sort.Strings(keys)
+	blob.SortEntries(entries)
 
-	return keys, nil
+	return entries, nil
 }
 
 func (m *MemoryStore) Delete(ctx context.Context, key string) error {

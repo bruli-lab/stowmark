@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"path"
-	"sort"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -110,23 +109,23 @@ func (s BlobStore) Exists(ctx context.Context, key string) (bool, error) {
 	}
 }
 
-func (s BlobStore) List(ctx context.Context, prefix string) ([]string, error) {
+func (s BlobStore) List(ctx context.Context, prefix string) ([]blob.Entry, error) {
 	objectPrefix, err := s.objectKey(ctx, prefix)
 	if err != nil {
 		return nil, err
 	}
 
-	keys := make([]string, 0)
-	err = s.each(ctx, objectPrefix+"/", func(objectKey string) error {
-		keys = append(keys, s.blobKey(objectKey))
+	entries := make([]blob.Entry, 0)
+	err = s.each(ctx, objectPrefix+"/", func(objectKey string, size int64) error {
+		entries = append(entries, blob.Entry{Key: s.blobKey(objectKey), Size: size})
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	sort.Strings(keys)
+	blob.SortEntries(entries)
 
-	return keys, nil
+	return entries, nil
 }
 
 func (s BlobStore) Delete(ctx context.Context, key string) error {
@@ -152,7 +151,7 @@ func (s BlobStore) DeletePrefix(ctx context.Context, prefix string) error {
 		return err
 	}
 
-	return s.each(ctx, objectPrefix+"/", func(objectKey string) error {
+	return s.each(ctx, objectPrefix+"/", func(objectKey string, _ int64) error {
 		_, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
 			Bucket: aws.String(s.bucket),
 			Key:    aws.String(objectKey),
@@ -164,7 +163,7 @@ func (s BlobStore) DeletePrefix(ctx context.Context, prefix string) error {
 	})
 }
 
-func (s BlobStore) each(ctx context.Context, objectPrefix string, visit func(objectKey string) error) error {
+func (s BlobStore) each(ctx context.Context, objectPrefix string, visit func(objectKey string, size int64) error) error {
 	paginator := s3.NewListObjectsV2Paginator(s.client, &s3.ListObjectsV2Input{
 		Bucket: aws.String(s.bucket),
 		Prefix: aws.String(objectPrefix),
@@ -180,7 +179,7 @@ func (s BlobStore) each(ctx context.Context, objectPrefix string, visit func(obj
 			if objectKey == "" {
 				continue
 			}
-			if err := visit(objectKey); err != nil {
+			if err := visit(objectKey, aws.ToInt64(item.Size)); err != nil {
 				return err
 			}
 		}

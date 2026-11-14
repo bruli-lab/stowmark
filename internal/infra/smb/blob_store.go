@@ -8,7 +8,6 @@ import (
 	"io/fs"
 	"os"
 	"path"
-	"sort"
 
 	"github.com/bruli-lab/stowmark/internal/infra/blob"
 	"github.com/cloudsoda/go-smb2"
@@ -80,25 +79,25 @@ func (s BlobStore) Exists(ctx context.Context, key string) (bool, error) {
 	}
 }
 
-func (s BlobStore) List(ctx context.Context, prefix string) ([]string, error) {
+func (s BlobStore) List(ctx context.Context, prefix string) ([]blob.Entry, error) {
 	prefixPath, err := s.path(ctx, prefix)
 	if err != nil {
 		return nil, err
 	}
 
-	keys := make([]string, 0)
-	if err := s.walk(ctx, s.share.WithContext(ctx), prefixPath, prefix, &keys); err != nil {
+	entries := make([]blob.Entry, 0)
+	if err := s.walk(ctx, s.share.WithContext(ctx), prefixPath, prefix, &entries); err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return []string{}, nil
+			return []blob.Entry{}, nil
 		}
 		return nil, err
 	}
-	sort.Strings(keys)
+	blob.SortEntries(entries)
 
-	return keys, nil
+	return entries, nil
 }
 
-func (s BlobStore) walk(ctx context.Context, share *smb2.Share, directory, keyPrefix string, keys *[]string) error {
+func (s BlobStore) walk(ctx context.Context, share *smb2.Share, directory, keyPrefix string, found *[]blob.Entry) error {
 	entries, err := share.ReadDir(directory)
 	if err != nil {
 		return fmt.Errorf("list SMB directory %q: %w", directory, err)
@@ -114,12 +113,12 @@ func (s BlobStore) walk(ctx context.Context, share *smb2.Share, directory, keyPr
 		entryPath := path.Join(directory, entry.Name())
 		entryKey := path.Join(keyPrefix, entry.Name())
 		if entry.IsDir() {
-			if err := s.walk(ctx, share, entryPath, entryKey, keys); err != nil {
+			if err := s.walk(ctx, share, entryPath, entryKey, found); err != nil {
 				return err
 			}
 			continue
 		}
-		*keys = append(*keys, entryKey)
+		*found = append(*found, blob.Entry{Key: entryKey, Size: entry.Size()})
 	}
 
 	return nil

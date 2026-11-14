@@ -89,7 +89,7 @@ func TestSnapshotEvents(t *testing.T) {
 		manifests := []snapshot.Manifest{fixtures.ManifestBuilder{Files: []snapshot.File{
 			fixtures.FileBuilder{Hash: new("aa01")}.Build(),
 		}}.Build()}
-		plan := snapshot.NewPrunePlan(manifests, []string{"bb02", "cc03"})
+		plan := snapshot.NewPrunePlan(manifests, []snapshot.StoredObject{snapshot.NewStoredObject("bb02", 10), snapshot.NewStoredObject("cc03", 32)})
 
 		pruned := plan.Pruned("repository-id")
 		missing := plan.MissingDetected("repository-id")
@@ -97,6 +97,7 @@ func TestSnapshotEvents(t *testing.T) {
 		require.Equal(t, snapshot.ObjectsPrunedEventName, pruned.EventName())
 		require.Equal(t, "repository-id", pruned.RepositoryID())
 		require.Equal(t, 2, pruned.Removed())
+		require.Equal(t, int64(42), pruned.FreedBytes())
 		require.Equal(t, snapshot.MissingObjectsDetectedEventName, missing.EventName())
 		require.Equal(t, "repository-id", missing.RepositoryID())
 		require.Equal(t, []string{"aa01"}, missing.Hashes())

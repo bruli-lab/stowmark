@@ -65,8 +65,8 @@ func newCheckDependencies(t *testing.T, setup checkSetup) *checkDependencies {
 		},
 	}
 	deps.objectRepo = &app.ObjectRepositoryMock{
-		ListObjectsFunc: func(context.Context, bool, uint64) ([]string, error) {
-			return []string{hashOf(healthyContent), hashOf(corruptContent), hashOf(orphanContent)}, setup.listObjErr
+		ListObjectsFunc: func(context.Context, bool, uint64) ([]snapshot.StoredObject, error) {
+			return fixtures.StoredObjects(hashOf(healthyContent), hashOf(corruptContent), hashOf(orphanContent)), setup.listObjErr
 		},
 		VerifyObjectFunc: func(_ context.Context, hash string, codec repository.Codec) error {
 			deps.mu.Lock()

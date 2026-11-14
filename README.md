@@ -484,7 +484,7 @@ and remove files and collections under the repository path.
 | Command                                                                 | Description                              |
 |-------------------------------------------------------------------------|------------------------------------------|
 | `stowmark init --repo <repository> [--version 3]`                       | Initialize a new repository.             |
-| `stowmark snapshot create <source> --repo <repository> [--exclude <pattern>]` | Create a snapshot of a directory.  |
+| `stowmark snapshot create <source> --repo <repository> [--exclude <pattern>] [--no-ignore-file]` | Create a snapshot of a directory.  |
 | `stowmark snapshot list --repo <repository> [--private-key <key>]`      | List snapshots from newest to oldest.    |
 | `stowmark snapshot get --id <id> --repo <repository> [--private-key <key>]` | Display a snapshot manifest.         |
 | `stowmark snapshot verify --id <id> --repo <repository>`                | Verify snapshot integrity.               |
@@ -667,8 +667,8 @@ transparent during restoration: Stowmark decodes each stored object before writi
 
 ## Excluding files
 
-Put a `.stowmarkignore` file at the root of the source directory to skip files and directories, and use
-`--exclude` (repeatable) for one-off patterns:
+Put a `.stowmarkignore` file in the source directory, or in any of its subdirectories, to skip files and
+directories, and use `--exclude` (repeatable) for one-off patterns:
 
 ```text
 # .stowmarkignore
@@ -695,9 +695,13 @@ The syntax is a subset of `.gitignore`:
 | `!important.log` | Negation: the last matching pattern wins. |
 | `# comment` | Comment. Use `\#` for a name that starts with `#`. |
 
-- Only the `.stowmarkignore` at the root of the source is read; files with that name in subdirectories are ordinary
-  files. The ignore file itself is backed up.
-- `--exclude` patterns are applied after the ignore file, so `--exclude '!keep.log'` overrides it.
+- A `.stowmarkignore` applies to its own directory and everything below it, like a `.gitignore`. Patterns with a `/`
+  are relative to the directory of the ignore file, not to the source root.
+- The ignore files of subdirectories are applied after the ones of their parents, so `!keep.tmp` in
+  `docs/.stowmarkignore` brings back a file that the root ignore file excludes with `*.tmp`.
+- The ignore files themselves are backed up.
+- `--exclude` patterns are applied after every ignore file, so `--exclude '!keep.log'` overrides them.
+- `--no-ignore-file` backs up without reading any `.stowmarkignore`; only the `--exclude` patterns apply.
 - An excluded directory is not explored, so a negation cannot bring back a file inside it. Use `logs/**` together with
   `!logs/keep.txt` instead of `logs/` when you need that.
 - Paths are matched with `/` on every platform and are case-sensitive.
@@ -896,6 +900,10 @@ snapshots, err := handler.ListSnapshots(ctx)
 an encrypted format version 3 repository without it returns `stowmark.ErrPrivateKeyRequired`. Operations that take a
 private key argument use that argument when it is not `nil`.
 
+`CreateSnapshotWithOptions` takes the `--exclude` patterns and the `--no-ignore-file` switch as
+`stowmark.CreateOptions{Exclude: …, SkipIgnoreFiles: true}`. `PlanPrune` and `Prune` return the bytes that would be or
+were freed in `UnreferencedBytes` and `FreedBytes`.
+
 ## Observability
 
 Stowmark provides optional OpenTelemetry observability through OTLP. Telemetry is disabled by default: no exporters
@@ -1023,6 +1031,9 @@ stowmark prune --repo /backups/stowmark --dry-run
 - `prune` also deletes the objects of old key generations left by an interrupted `key rekey`, and the temporary files
   (names starting with `.`) left by interrupted writes on local, SSH and SMB repositories. `--dry-run` lists the old
   key generations too.
+- `prune` reports how much space it freed, and `prune --dry-run` how much it would free. The figure is the size of the
+  unreferenced objects as stored, after compression and encryption. It does not include old key generations or
+  temporary files.
 - `prune` lists every object of the repository, which can take a while on large S3 or GCS repositories.
 
 ## Security model and limitations

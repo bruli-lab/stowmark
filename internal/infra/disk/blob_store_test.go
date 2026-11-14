@@ -48,7 +48,7 @@ func TestBlobStore_TemporaryFiles(t *testing.T) {
 		keys, err := store.List(context.Background(), "objects")
 
 		require.NoError(t, err)
-		require.Equal(t, []string{"objects/ab/cdef"}, keys)
+		require.Equal(t, []string{"objects/ab/cdef"}, blob.Keys(keys))
 	})
 
 	t.Run(`Given a disk BlobStore with leftover temporary files from interrupted writes,
@@ -71,7 +71,7 @@ func TestBlobStore_TemporaryFiles(t *testing.T) {
 		require.Equal(t, 2, removed)
 		keys, err := store.List(context.Background(), "objects")
 		require.NoError(t, err)
-		require.Equal(t, []string{"objects/ab/cdef"}, keys)
+		require.Equal(t, []string{"objects/ab/cdef"}, blob.Keys(keys))
 		require.NoFileExists(t, filepath.Join(root, "objects", "ab", ".cdef.tmp-1"))
 		require.FileExists(t, filepath.Join(root, "snapshots", ".id.json.tmp-3"))
 	})

@@ -8,7 +8,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"sort"
 
 	"github.com/bruli-lab/stowmark/internal/infra/blob"
 )
@@ -79,13 +78,13 @@ func (s BlobStore) Exists(ctx context.Context, key string) (bool, error) {
 	}
 }
 
-func (s BlobStore) List(ctx context.Context, prefix string) ([]string, error) {
+func (s BlobStore) List(ctx context.Context, prefix string) ([]blob.Entry, error) {
 	prefixPath, err := s.path(ctx, prefix)
 	if err != nil {
 		return nil, err
 	}
 
-	keys := make([]string, 0)
+	entries := make([]blob.Entry, 0)
 	err = filepath.WalkDir(prefixPath, func(filePath string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -101,19 +100,23 @@ func (s BlobStore) List(ctx context.Context, prefix string) ([]string, error) {
 		if err != nil {
 			return fmt.Errorf("relative path of %q: %w", filePath, err)
 		}
-		keys = append(keys, filepath.ToSlash(relativePath))
+		info, err := entry.Info()
+		if err != nil {
+			return fmt.Errorf("stat %q: %w", filePath, err)
+		}
+		entries = append(entries, blob.Entry{Key: filepath.ToSlash(relativePath), Size: info.Size()})
 
 		return nil
 	})
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return []string{}, nil
+			return []blob.Entry{}, nil
 		}
 		return nil, fmt.Errorf("list %q: %w", prefixPath, err)
 	}
-	sort.Strings(keys)
+	blob.SortEntries(entries)
 
-	return keys, nil
+	return entries, nil
 }
 
 func (s BlobStore) Delete(ctx context.Context, key string) error {

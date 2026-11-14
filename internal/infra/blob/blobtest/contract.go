@@ -107,11 +107,11 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) blob.Store) {
 
 		keys, err := store.List(context.Background(), "objects/encrypted/1")
 		require.NoError(t, err)
-		require.Equal(t, []string{"objects/encrypted/1/ab/cd", "objects/encrypted/1/cd/ef"}, keys)
+		require.Equal(t, []string{"objects/encrypted/1/ab/cd", "objects/encrypted/1/cd/ef"}, blob.Keys(keys))
 
 		keys, err = store.List(context.Background(), "objects")
 		require.NoError(t, err)
-		require.Equal(t, []string{"objects/ab/cd", "objects/encrypted/1/ab/cd", "objects/encrypted/1/cd/ef"}, keys)
+		require.Equal(t, []string{"objects/ab/cd", "objects/encrypted/1/ab/cd", "objects/encrypted/1/cd/ef"}, blob.Keys(keys))
 	})
 
 	t.Run(`Given an empty store,
@@ -137,7 +137,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) blob.Store) {
 
 		keys, err := store.List(context.Background(), "objects")
 		require.NoError(t, err)
-		require.Equal(t, []string{"objects/encrypted/2/ab/cd"}, keys)
+		require.Equal(t, []string{"objects/encrypted/2/ab/cd"}, blob.Keys(keys))
 		require.NoError(t, store.DeletePrefix(context.Background(), "objects/encrypted/7"))
 	})
 
@@ -154,7 +154,25 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) blob.Store) {
 
 		keys, err := store.List(context.Background(), "locks")
 		require.NoError(t, err)
-		require.Equal(t, []string{"locks/two.json"}, keys)
+		require.Equal(t, []string{"locks/two.json"}, blob.Keys(keys))
+	})
+
+	t.Run(`Given a store with blobs of different sizes,
+	when List is called,
+	then every entry carries the size of its blob`, func(t *testing.T) {
+		store := newStore(t)
+		putString(t, store, "objects/ab/cd", "small")
+		putString(t, store, "objects/ef/01", "a larger blob")
+		putString(t, store, "objects/ff/02", "")
+
+		entries, err := store.List(context.Background(), "objects")
+
+		require.NoError(t, err)
+		require.Equal(t, []blob.Entry{
+			{Key: "objects/ab/cd", Size: 5},
+			{Key: "objects/ef/01", Size: 13},
+			{Key: "objects/ff/02", Size: 0},
+		}, entries)
 	})
 
 	t.Run(`Given a store,

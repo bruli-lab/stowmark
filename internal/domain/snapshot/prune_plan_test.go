@@ -65,32 +65,41 @@ func TestNewPrunePlan(t *testing.T) {
 	tests := []struct {
 		name                 string
 		manifests            []snapshot.Manifest
-		stored               []string
+		stored               []snapshot.StoredObject
 		expectedStored       int
+		expectedFreedBytes   int64
 		expectedReferenced   int
 		expectedUnreferenced []string
 		expectedMissing      []string
 	}{
 		{
-			name:                 "with manifests that share objects and duplicated stored objects, then it counts each object once",
-			manifests:            manifests,
-			stored:               []string{"ff09", "aa01", "bb02", "ee08", "ff09"},
+			name:      "with manifests that share objects and duplicated stored objects, then it counts each object once",
+			manifests: manifests,
+			stored: []snapshot.StoredObject{
+				snapshot.NewStoredObject("ff09", 100),
+				snapshot.NewStoredObject("aa01", 1),
+				snapshot.NewStoredObject("bb02", 2),
+				snapshot.NewStoredObject("ee08", 20),
+				snapshot.NewStoredObject("ff09", 100),
+			},
 			expectedStored:       4,
+			expectedFreedBytes:   120,
 			expectedReferenced:   3,
 			expectedUnreferenced: []string{"ee08", "ff09"},
 			expectedMissing:      []string{"cc03"},
 		},
 		{
 			name:                 "without manifests, then every stored object is unreferenced",
-			stored:               []string{"bb02", "aa01"},
+			stored:               []snapshot.StoredObject{snapshot.NewStoredObject("bb02", 5), snapshot.NewStoredObject("aa01", 7)},
 			expectedStored:       2,
+			expectedFreedBytes:   12,
 			expectedUnreferenced: []string{"aa01", "bb02"},
 			expectedMissing:      []string{},
 		},
 		{
 			name:                 "with every object referenced and stored, then there is nothing to prune",
 			manifests:            manifests,
-			stored:               []string{"aa01", "bb02", "cc03"},
+			stored:               fixtures.StoredObjects("aa01", "bb02", "cc03"),
 			expectedStored:       3,
 			expectedReferenced:   3,
 			expectedUnreferenced: []string{},
@@ -108,6 +117,7 @@ func TestNewPrunePlan(t *testing.T) {
 			require.Equal(t, tt.expectedReferenced, plan.ReferencedObjects())
 			require.Equal(t, tt.expectedUnreferenced, plan.Unreferenced())
 			require.Equal(t, tt.expectedMissing, plan.Missing())
+			require.Equal(t, tt.expectedFreedBytes, plan.UnreferencedBytes())
 		})
 	}
 }

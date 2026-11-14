@@ -50,3 +50,11 @@ func (b ManifestBuilder) Build() snapshot.Manifest {
 	man := snapshot.NewManifest(id, b.Files, created, source, b.Compression)
 	return *man
 }
+
+func StoredObjects(hashes ...string) []snapshot.StoredObject {
+	objects := make([]snapshot.StoredObject, len(hashes))
+	for i, hash := range hashes {
+		objects[i] = snapshot.NewStoredObject(hash, 0)
+	}
+	return objects
+}

@@ -33,10 +33,11 @@ func (l LockRepository) Save(ctx context.Context, lock *repository.Lock) error {
 }
 
 func (l LockRepository) List(ctx context.Context) ([]repository.Lock, error) {
-	keys, err := l.store.List(ctx, repository.LocksFolder)
+	entries, err := l.store.List(ctx, repository.LocksFolder)
 	if err != nil {
 		return nil, fmt.Errorf("list locks: %w", err)
 	}
+	keys := Keys(entries)
 
 	locks := make([]repository.Lock, 0, len(keys))
 	for _, key := range keys {

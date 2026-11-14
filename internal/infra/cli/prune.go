@@ -58,8 +58,9 @@ func runPrunePlan(ctx context.Context, output io.Writer, repo *bootstrap.Reposit
 
 	writer := tabwriter.NewWriter(output, 0, 4, 2, ' ', 0)
 	if _, err := fmt.Fprintf(writer,
-		"STORED OBJECTS:\t%d\nREFERENCED OBJECTS:\t%d\nWOULD REMOVE:\t%d\nOLD KEY GENERATIONS:\t%s\n",
-		plan.StoredObjects(), plan.ReferencedObjects(), len(plan.Unreferenced()), formatGenerations(plan.OrphanGenerations()),
+		"STORED OBJECTS:\t%d\nREFERENCED OBJECTS:\t%d\nWOULD REMOVE:\t%d (%s)\nOLD KEY GENERATIONS:\t%s\n",
+		plan.StoredObjects(), plan.ReferencedObjects(), len(plan.Unreferenced()), formatBytes(plan.UnreferencedBytes()),
+		formatGenerations(plan.OrphanGenerations()),
 	); err != nil {
 		return err
 	}
@@ -79,10 +80,12 @@ func runPrune(ctx context.Context, output io.Writer, repo *bootstrap.Repository,
 	}
 
 	removed := 0
+	var freed int64
 	for _, pruned := range app.EventsOf[*snapshot.ObjectsPruned](events) {
 		removed += pruned.Removed()
+		freed += pruned.FreedBytes()
 	}
-	if _, err := fmt.Fprintf(output, "Removed %d unreferenced object(s)\n", removed); err != nil {
+	if _, err := fmt.Fprintf(output, "Removed %d unreferenced object(s), freed %s\n", removed, formatBytes(freed)); err != nil {
 		return err
 	}
 	for _, generations := range app.EventsOf[*snapshot.GenerationsRemoved](events) {

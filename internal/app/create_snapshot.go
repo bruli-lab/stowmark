@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"runtime"
-	"slices"
 	"sync/atomic"
 	"time"
 
@@ -21,10 +20,11 @@ const CreateSnapshotCommandName = "create-snapshot"
 var defaultCreateWorkers = runtime.GOMAXPROCS(0) * 2
 
 type CreateSnapshotCommand struct {
-	RepositoryPath string
-	SourcePath     string
-	PrivateKey     *string
-	Exclude        []string
+	RepositoryPath  string
+	SourcePath      string
+	PrivateKey      *string
+	Exclude         []string
+	SkipIgnoreFiles bool
 }
 
 func (c CreateSnapshotCommand) Name() string {
@@ -132,13 +132,24 @@ func (c *CreateSnapshot) create(ctx context.Context, co CreateSnapshotCommand) (
 }
 
 func (c *CreateSnapshot) excludeRules(ctx context.Context, co CreateSnapshotCommand) (*snapshot.ExcludeRules, error) {
-	filePatterns, err := c.sourceRepo.IgnorePatterns(ctx, co.SourcePath)
-	if err != nil {
-		return nil, err
+	var filePatterns []string
+	if !co.SkipIgnoreFiles {
+		patterns, err := c.sourceRepo.IgnorePatterns(ctx, co.SourcePath)
+		if err != nil {
+			return nil, err
+		}
+		filePatterns = patterns
 	}
-	rules, err := snapshot.NewExcludeRules(slices.Concat(filePatterns, co.Exclude))
+	rules, err := snapshot.NewExcludeRules(filePatterns)
+	if err != nil {
+		return nil, fmt.Errorf("parse %s: %w", snapshot.IgnoreFileName, err)
+	}
+	rules, err = rules.WithOverrides(co.Exclude)
 	if err != nil {
 		return nil, fmt.Errorf("parse exclude patterns: %w", err)
+	}
+	if co.SkipIgnoreFiles {
+		return rules.WithoutIgnoreFiles(), nil
 	}
 	return rules, nil
 }

@@ -177,3 +177,93 @@ func TestSourceExplorer_IgnorePatterns(t *testing.T) {
 		require.Error(t, err)
 	})
 }
+
+func TestSourceExplorer_Explore_NestedIgnoreFiles(t *testing.T) {
+	t.Parallel()
+
+	files := []string{
+		"main.log",
+		"app/debug.log",
+		"app/keep.log",
+		"app/build/out.bin",
+		"app/lib/build/out.bin",
+		"web/build/out.bin",
+	}
+	tests := []struct {
+		name     string
+		skip     bool
+		override []string
+		expected []string
+	}{
+		{
+			name:     "then each ignore file applies to its own directory and can override its parents",
+			expected: []string{".stowmarkignore", "app/.stowmarkignore", "app/keep.log", "app/lib/build/out.bin", "web/build/out.bin"},
+		},
+		{
+			name:     "with an exclude override, then it wins over the nested ignore files",
+			override: []string{"keep.log"},
+			expected: []string{".stowmarkignore", "app/.stowmarkignore", "app/lib/build/out.bin", "web/build/out.bin"},
+		},
+		{
+			name:     "without reading ignore files, then only the command patterns apply",
+			skip:     true,
+			override: []string{"web/"},
+			expected: append([]string{".stowmarkignore", "app/.stowmarkignore"}, files[:5]...),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(`Given a source with a root ignore file and a nested ignore file,
+		when Explore is called `+tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			root := t.TempDir()
+			writeTree(t, root, files...)
+			require.NoError(t, os.WriteFile(filepath.Join(root, snapshot.IgnoreFileName), []byte("*.log\n"), 0o600))
+			require.NoError(t, os.WriteFile(filepath.Join(root, "app", snapshot.IgnoreFileName), []byte("!keep.log\n/build/\n"), 0o600))
+			explorer := disk.NewSourceRepository()
+			var rootPatterns []string
+			if !tt.skip {
+				patterns, err := explorer.IgnorePatterns(context.Background(), root)
+				require.NoError(t, err)
+				rootPatterns = patterns
+			}
+			rules, err := snapshot.NewExcludeRules(rootPatterns)
+			require.NoError(t, err)
+			rules, err = rules.WithOverrides(tt.override)
+			require.NoError(t, err)
+			if tt.skip {
+				rules = rules.WithoutIgnoreFiles()
+			}
+
+			source, err := explorer.Explore(context.Background(), root, rules)
+
+			require.NoError(t, err)
+			paths := make([]string, 0, len(source.Files()))
+			for _, file := range source.Files() {
+				if file.Kind() != snapshot.RegularEntry {
+					continue
+				}
+				relative, err := filepath.Rel(root, file.Path())
+				require.NoError(t, err)
+				paths = append(paths, filepath.ToSlash(relative))
+			}
+			require.ElementsMatch(t, tt.expected, paths)
+		})
+	}
+
+	t.Run(`Given a source with a nested ignore file with an invalid pattern,
+	when Explore is called,
+	then it returns an invalid exclude pattern error`, func(t *testing.T) {
+		t.Parallel()
+
+		root := t.TempDir()
+		writeTree(t, root, "app/main.go")
+		require.NoError(t, os.WriteFile(filepath.Join(root, "app", snapshot.IgnoreFileName), []byte("[broken\n"), 0o600))
+		rules, err := snapshot.NewExcludeRules(nil)
+		require.NoError(t, err)
+
+		_, err = disk.NewSourceRepository().Explore(context.Background(), root, rules)
+
+		require.ErrorIs(t, err, snapshot.ErrInvalidExcludePattern)
+	})
+}

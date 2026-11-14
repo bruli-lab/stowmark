@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"path"
-	"sort"
 	"strings"
 	"sync"
 
@@ -121,7 +120,7 @@ func (s *BlobStore) Exists(ctx context.Context, key string) (bool, error) {
 	}
 }
 
-func (s *BlobStore) List(ctx context.Context, prefix string) ([]string, error) {
+func (s *BlobStore) List(ctx context.Context, prefix string) ([]blob.Entry, error) {
 	prefixPath, err := s.path(ctx, prefix)
 	if err != nil {
 		return nil, err
@@ -129,21 +128,21 @@ func (s *BlobStore) List(ctx context.Context, prefix string) ([]string, error) {
 
 	if _, err := s.client.Stat(prefixPath); err != nil {
 		if gowebdav.IsErrNotFound(err) {
-			return []string{}, nil
+			return []blob.Entry{}, nil
 		}
 		return nil, fmt.Errorf("stat WebDAV directory %q: %w", prefixPath, err)
 	}
 
-	keys := make([]string, 0)
-	if err := s.walk(ctx, prefixPath, prefix, &keys); err != nil {
+	entries := make([]blob.Entry, 0)
+	if err := s.walk(ctx, prefixPath, prefix, &entries); err != nil {
 		return nil, err
 	}
-	sort.Strings(keys)
+	blob.SortEntries(entries)
 
-	return keys, nil
+	return entries, nil
 }
 
-func (s *BlobStore) walk(ctx context.Context, directory, keyPrefix string, keys *[]string) error {
+func (s *BlobStore) walk(ctx context.Context, directory, keyPrefix string, found *[]blob.Entry) error {
 	entries, err := s.client.ReadDir(directory)
 	if err != nil {
 		return fmt.Errorf("list WebDAV directory %q: %w", directory, err)
@@ -158,12 +157,12 @@ func (s *BlobStore) walk(ctx context.Context, directory, keyPrefix string, keys 
 		}
 		entryKey := path.Join(keyPrefix, entry.Name())
 		if entry.IsDir() {
-			if err := s.walk(ctx, path.Join(directory, entry.Name()), entryKey, keys); err != nil {
+			if err := s.walk(ctx, path.Join(directory, entry.Name()), entryKey, found); err != nil {
 				return err
 			}
 			continue
 		}
-		*keys = append(*keys, entryKey)
+		*found = append(*found, blob.Entry{Key: entryKey, Size: entry.Size()})
 	}
 
 	return nil

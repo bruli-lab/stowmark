@@ -69,7 +69,7 @@ type CheckReport struct {
 	corruptObjects    []ObjectProblem
 }
 
-func NewCheckReport(manifests []Manifest, corruptManifests []ManifestProblem, stored []string) *CheckReport {
+func NewCheckReport(manifests []Manifest, corruptManifests []ManifestProblem, stored []StoredObject) *CheckReport {
 	plan := NewPrunePlan(manifests, stored)
 
 	missingSnapshots := make(map[string][]string, len(plan.Missing()))
@@ -98,7 +98,7 @@ func NewCheckReport(manifests []Manifest, corruptManifests []ManifestProblem, st
 
 	unreferenced := plan.Unreferenced()
 	readable := make([]string, 0, plan.StoredObjects()-len(unreferenced))
-	for _, hash := range slices.Compact(slices.Sorted(slices.Values(stored))) {
+	for _, hash := range slices.Compact(slices.Sorted(slices.Values(StoredHashes(stored)))) {
 		if _, isUnreferenced := slices.BinarySearch(unreferenced, hash); !isUnreferenced {
 			readable = append(readable, hash)
 		}

@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"path"
-	"sort"
 	"strings"
 
 	"cloud.google.com/go/storage"
@@ -91,23 +90,23 @@ func (s BlobStore) Exists(ctx context.Context, key string) (bool, error) {
 	}
 }
 
-func (s BlobStore) List(ctx context.Context, prefix string) ([]string, error) {
+func (s BlobStore) List(ctx context.Context, prefix string) ([]blob.Entry, error) {
 	objectPrefix, err := s.objectName(ctx, prefix)
 	if err != nil {
 		return nil, err
 	}
 
-	keys := make([]string, 0)
-	err = s.each(ctx, objectPrefix+"/", func(objectName string) error {
-		keys = append(keys, strings.TrimPrefix(objectName, s.root+"/"))
+	entries := make([]blob.Entry, 0)
+	err = s.each(ctx, objectPrefix+"/", func(objectName string, size int64) error {
+		entries = append(entries, blob.Entry{Key: strings.TrimPrefix(objectName, s.root+"/"), Size: size})
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	sort.Strings(keys)
+	blob.SortEntries(entries)
 
-	return keys, nil
+	return entries, nil
 }
 
 func (s BlobStore) Delete(ctx context.Context, key string) error {
@@ -130,7 +129,7 @@ func (s BlobStore) DeletePrefix(ctx context.Context, prefix string) error {
 	}
 
 	bucket := s.client.Bucket(s.bucket)
-	return s.each(ctx, objectPrefix+"/", func(objectName string) error {
+	return s.each(ctx, objectPrefix+"/", func(objectName string, _ int64) error {
 		if err := bucket.Object(objectName).Delete(ctx); err != nil && !errors.Is(err, storage.ErrObjectNotExist) {
 			return fmt.Errorf("delete object %q from bucket %q: %w", objectName, s.bucket, err)
 		}
@@ -138,7 +137,7 @@ func (s BlobStore) DeletePrefix(ctx context.Context, prefix string) error {
 	})
 }
 
-func (s BlobStore) each(ctx context.Context, objectPrefix string, visit func(objectName string) error) error {
+func (s BlobStore) each(ctx context.Context, objectPrefix string, visit func(objectName string, size int64) error) error {
 	objects := s.client.Bucket(s.bucket).Objects(ctx, &storage.Query{Prefix: objectPrefix})
 	for {
 		attrs, err := objects.Next()
@@ -148,7 +147,7 @@ func (s BlobStore) each(ctx context.Context, objectPrefix string, visit func(obj
 		if err != nil {
 			return fmt.Errorf("list objects under %q in bucket %q: %w", objectPrefix, s.bucket, err)
 		}
-		if err := visit(attrs.Name); err != nil {
+		if err := visit(attrs.Name, attrs.Size); err != nil {
 			return err
 		}
 	}

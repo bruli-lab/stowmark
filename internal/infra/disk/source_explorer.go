@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	pathpkg "path"
 	"path/filepath"
 	"strings"
 
@@ -111,6 +112,7 @@ func (s SourceExplorer) Explore(ctx context.Context, sourcePath string, rules *s
 
 func (s SourceExplorer) readFiles(ctx context.Context, root string, rules *snapshot.ExcludeRules) (files []snapshot.File, skipped []snapshot.SkippedFile, err error) {
 	files = make([]snapshot.File, 0)
+	directoryRules := map[string]*snapshot.ExcludeRules{".": rules}
 
 	err = filepath.WalkDir(root, func(
 		path string,
@@ -131,11 +133,20 @@ func (s SourceExplorer) readFiles(ctx context.Context, root string, rules *snaps
 		if err != nil {
 			return err
 		}
-		if rules != nil && rules.Excludes(filepath.ToSlash(relative), dirEntry.IsDir()) {
+		slashed := filepath.ToSlash(relative)
+		parentRules := directoryRules[pathpkg.Dir(slashed)]
+		if parentRules != nil && parentRules.Excludes(slashed, dirEntry.IsDir()) {
 			if dirEntry.IsDir() {
 				return filepath.SkipDir
 			}
 			return nil
+		}
+		if dirEntry.IsDir() {
+			nested, err := s.nestedRules(ctx, path, slashed, parentRules)
+			if err != nil {
+				return err
+			}
+			directoryRules[slashed] = nested
 		}
 
 		entry, skip, err := readEntry(path, relative, dirEntry.Type())
@@ -154,6 +165,17 @@ func (s SourceExplorer) readFiles(ctx context.Context, root string, rules *snaps
 		return nil, nil, fmt.Errorf("walk directory %q: %w", root, err)
 	}
 	return files, skipped, nil
+}
+
+func (s SourceExplorer) nestedRules(ctx context.Context, directory, relative string, parent *snapshot.ExcludeRules) (*snapshot.ExcludeRules, error) {
+	if parent == nil || !parent.ReadsIgnoreFiles() {
+		return parent, nil
+	}
+	lines, err := s.IgnorePatterns(ctx, directory)
+	if err != nil {
+		return nil, err
+	}
+	return parent.WithIgnoreFile(relative, lines)
 }
 
 func readEntry(path, relative string, mode fs.FileMode) (snapshot.File, *snapshot.SkippedFile, error) {

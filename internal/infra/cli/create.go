@@ -15,14 +15,16 @@ func newSnapshotCreateCommand() *cobra.Command {
 		repositoryPath string
 		privateKeyPath string
 		exclude        []string
+		noIgnoreFile   bool
 	)
 
 	cmd := &cobra.Command{
 		Use:   "create <source>",
 		Short: "Create a snapshot of a directory",
-		Long: "Create a snapshot of a directory. Files and directories that match the patterns in the " +
-			snapshot.IgnoreFileName + " file at the root of the source, or an --exclude pattern, are not backed up. " +
-			"--exclude patterns are applied after the ignore file, so they can override it.",
+		Long: "Create a snapshot of a directory. Files and directories that match the patterns of a " +
+			snapshot.IgnoreFileName + " file, or an --exclude pattern, are not backed up. An ignore file applies to " +
+			"its own directory and below and can override the ignore files of its parents. --exclude patterns are " +
+			"applied last, so they can override every ignore file. --no-ignore-file backs up without reading them.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if repositoryPath == "" {
@@ -30,10 +32,11 @@ func newSnapshotCreateCommand() *cobra.Command {
 			}
 			return withRepository(cmd, repositoryPath, func(repo *bootstrap.Repository) error {
 				events, err := repo.CreateSnapshot().Handle(cmd.Context(), app.CreateSnapshotCommand{
-					RepositoryPath: repo.Path(),
-					SourcePath:     args[0],
-					PrivateKey:     optionalPath(privateKeyPath),
-					Exclude:        exclude,
+					RepositoryPath:  repo.Path(),
+					SourcePath:      args[0],
+					PrivateKey:      optionalPath(privateKeyPath),
+					Exclude:         exclude,
+					SkipIgnoreFiles: noIgnoreFile,
 				})
 				if err != nil {
 					return err
@@ -75,6 +78,12 @@ func newSnapshotCreateCommand() *cobra.Command {
 		"exclude",
 		nil,
 		"exclude files and directories matching this pattern (repeatable, same syntax as "+snapshot.IgnoreFileName+")",
+	)
+	cmd.Flags().BoolVar(
+		&noIgnoreFile,
+		"no-ignore-file",
+		false,
+		"do not read "+snapshot.IgnoreFileName+" files; only --exclude patterns apply",
 	)
 	_ = cmd.MarkFlagRequired("repo")
 

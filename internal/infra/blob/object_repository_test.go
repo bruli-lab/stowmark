@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
@@ -335,17 +336,22 @@ func TestObjectRepository_ListAndDeleteObjects(t *testing.T) {
 
 		plain, err := repo.ListObjects(ctx, false, 0)
 		require.NoError(t, err)
-		require.ElementsMatch(t, []string{firstHash, secondHash}, plain)
+		require.ElementsMatch(t, []string{firstHash, secondHash}, snapshot.StoredHashes(plain))
+		for _, object := range plain {
+			require.Positive(t, object.Size())
+		}
 		encrypted, err := repo.ListObjects(ctx, true, 2)
 		require.NoError(t, err)
-		require.Equal(t, []string{firstHash}, encrypted)
+		require.Equal(t, []string{firstHash}, snapshot.StoredHashes(encrypted))
+		plainFirst := plain[slices.IndexFunc(plain, func(object snapshot.StoredObject) bool { return object.Hash() == firstHash })]
+		require.Greater(t, encrypted[0].Size(), plainFirst.Size(), "the encrypted object carries a nonce and a tag")
 
 		require.NoError(t, repo.DeleteObject(ctx, secondHash, false, 0))
 		require.NoError(t, repo.DeleteObject(ctx, firstHash, true, 2))
 
 		plain, err = repo.ListObjects(ctx, false, 0)
 		require.NoError(t, err)
-		require.Equal(t, []string{firstHash}, plain)
+		require.Equal(t, []string{firstHash}, snapshot.StoredHashes(plain))
 		encrypted, err = repo.ListObjects(ctx, true, 2)
 		require.NoError(t, err)
 		require.Empty(t, encrypted)

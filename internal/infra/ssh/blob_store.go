@@ -7,7 +7,6 @@ import (
 	"io"
 	"io/fs"
 	"path"
-	"sort"
 	"strings"
 
 	"github.com/bruli-lab/stowmark/internal/infra/blob"
@@ -77,18 +76,18 @@ func (s BlobStore) Exists(ctx context.Context, key string) (bool, error) {
 	}
 }
 
-func (s BlobStore) List(ctx context.Context, prefix string) ([]string, error) {
+func (s BlobStore) List(ctx context.Context, prefix string) ([]blob.Entry, error) {
 	prefixPath, err := s.path(ctx, prefix)
 	if err != nil {
 		return nil, err
 	}
 
-	keys := make([]string, 0)
+	entries := make([]blob.Entry, 0)
 	walker := s.client.Walk(prefixPath)
 	for walker.Step() {
 		if err := walker.Err(); err != nil {
 			if errors.Is(err, fs.ErrNotExist) && walker.Path() == prefixPath {
-				return []string{}, nil
+				return []blob.Entry{}, nil
 			}
 			return nil, fmt.Errorf("list SSH directory %q: %w", walker.Path(), err)
 		}
@@ -98,11 +97,14 @@ func (s BlobStore) List(ctx context.Context, prefix string) ([]string, error) {
 		if walker.Stat().IsDir() || isTemporaryFile(walker.Stat().Name()) {
 			continue
 		}
-		keys = append(keys, path.Join(prefix, strings.TrimPrefix(walker.Path(), prefixPath)))
+		entries = append(entries, blob.Entry{
+			Key:  path.Join(prefix, strings.TrimPrefix(walker.Path(), prefixPath)),
+			Size: walker.Stat().Size(),
+		})
 	}
-	sort.Strings(keys)
+	blob.SortEntries(entries)
 
-	return keys, nil
+	return entries, nil
 }
 
 func (s BlobStore) Delete(ctx context.Context, key string) error {

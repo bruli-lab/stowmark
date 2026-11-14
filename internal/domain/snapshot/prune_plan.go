@@ -3,14 +3,15 @@ package snapshot
 import "slices"
 
 type PrunePlan struct {
-	stored       int
-	referenced   int
-	unreferenced []string
-	missing      []string
-	generations  []uint64
+	stored            int
+	referenced        int
+	unreferenced      []string
+	unreferencedBytes int64
+	missing           []string
+	generations       []uint64
 }
 
-func NewPrunePlan(manifests []Manifest, stored []string) *PrunePlan {
+func NewPrunePlan(manifests []Manifest, stored []StoredObject) *PrunePlan {
 	referenced := map[string]struct{}{}
 	for i := range manifests {
 		for _, hash := range manifests[i].ReferencedHashes() {
@@ -20,13 +21,15 @@ func NewPrunePlan(manifests []Manifest, stored []string) *PrunePlan {
 
 	present := make(map[string]struct{}, len(stored))
 	unreferenced := make([]string, 0)
-	for _, hash := range stored {
-		if _, seen := present[hash]; seen {
+	var unreferencedBytes int64
+	for _, object := range stored {
+		if _, seen := present[object.hash]; seen {
 			continue
 		}
-		present[hash] = struct{}{}
-		if _, ok := referenced[hash]; !ok {
-			unreferenced = append(unreferenced, hash)
+		present[object.hash] = struct{}{}
+		if _, ok := referenced[object.hash]; !ok {
+			unreferenced = append(unreferenced, object.hash)
+			unreferencedBytes += object.size
 		}
 	}
 
@@ -41,11 +44,16 @@ func NewPrunePlan(manifests []Manifest, stored []string) *PrunePlan {
 	slices.Sort(missing)
 
 	return &PrunePlan{
-		stored:       len(present),
-		referenced:   len(referenced),
-		unreferenced: unreferenced,
-		missing:      missing,
+		stored:            len(present),
+		referenced:        len(referenced),
+		unreferenced:      unreferenced,
+		unreferencedBytes: unreferencedBytes,
+		missing:           missing,
 	}
+}
+
+func (p *PrunePlan) UnreferencedBytes() int64 {
+	return p.unreferencedBytes
 }
 
 func (p *PrunePlan) StoredObjects() int {

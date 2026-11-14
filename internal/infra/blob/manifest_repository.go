@@ -112,10 +112,11 @@ func (m ManifestRepository) List(ctx context.Context, codec repository.Codec) ([
 		return nil, err
 	}
 
-	keys, err := m.store.List(ctx, repository.SnapshotsFolder)
+	entries, err := m.store.List(ctx, repository.SnapshotsFolder)
 	if err != nil {
 		return nil, fmt.Errorf("list manifests: %w", err)
 	}
+	keys := Keys(entries)
 
 	keys = slices.DeleteFunc(keys, func(key string) bool { return !isManifestKey(key) })
 	manifests := make([]snapshot.Manifest, len(keys))
@@ -153,10 +154,11 @@ func (m ManifestRepository) ListIDs(ctx context.Context) ([]string, error) {
 		return nil, err
 	}
 
-	keys, err := m.store.List(ctx, repository.SnapshotsFolder)
+	entries, err := m.store.List(ctx, repository.SnapshotsFolder)
 	if err != nil {
 		return nil, fmt.Errorf("list manifests: %w", err)
 	}
+	keys := Keys(entries)
 
 	ids := make([]string, 0, len(keys))
 	for _, key := range keys {

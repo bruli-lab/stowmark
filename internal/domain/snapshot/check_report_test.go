@@ -28,7 +28,7 @@ func TestNewCheckReport(t *testing.T) {
 			fixtures.FileBuilder{Hash: new("aa01"), Size: new(int64(42))}.Build(),
 		}}.Build()
 
-		report := snapshot.NewCheckReport([]snapshot.Manifest{manifest}, nil, []string{"aa01"})
+		report := snapshot.NewCheckReport([]snapshot.Manifest{manifest}, nil, fixtures.StoredObjects("aa01"))
 
 		require.Equal(t, int64(42), report.ObjectSize("aa01"))
 		require.Zero(t, report.ObjectSize("ff99"))
@@ -44,7 +44,7 @@ func TestNewCheckReport(t *testing.T) {
 			manifestReferencing("s2", "bb02", "cc03", "dd04"),
 		}
 		corrupt := []snapshot.ManifestProblem{snapshot.NewManifestProblem("s3", "invalid json")}
-		stored := []string{"ee05", "aa01", "bb02", "aa01"}
+		stored := fixtures.StoredObjects("ee05", "aa01", "bb02", "aa01")
 
 		report := snapshot.NewCheckReport(manifests, corrupt, stored)
 
@@ -68,7 +68,7 @@ func TestNewCheckReport(t *testing.T) {
 	then the report keeps them and only corrupt data makes it fail`, func(t *testing.T) {
 		t.Parallel()
 
-		report := snapshot.NewCheckReport([]snapshot.Manifest{manifestReferencing("s1", "aa01")}, nil, []string{"aa01", "bb02"})
+		report := snapshot.NewCheckReport([]snapshot.Manifest{manifestReferencing("s1", "aa01")}, nil, fixtures.StoredObjects("aa01", "bb02"))
 		report.RecordStaleLocks(2)
 		report.RecordOrphanGenerations([]uint64{1})
 

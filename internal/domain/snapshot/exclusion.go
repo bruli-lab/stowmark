@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"slices"
 	"strings"
 )
 
@@ -14,27 +15,84 @@ var ErrInvalidExcludePattern = errors.New("invalid exclude pattern")
 const anySegments = "**"
 
 type excludePattern struct {
+	base          []string
 	segments      []string
 	negated       bool
 	directoryOnly bool
 }
 
 type ExcludeRules struct {
-	patterns []excludePattern
+	ignoreFiles      []excludePattern
+	overrides        []excludePattern
+	skipsIgnoreFiles bool
 }
 
 func NewExcludeRules(patterns []string) (*ExcludeRules, error) {
-	rules := &ExcludeRules{patterns: make([]excludePattern, 0, len(patterns))}
-	for _, raw := range patterns {
+	parsed, err := parseExcludePatterns(nil, patterns)
+	if err != nil {
+		return nil, err
+	}
+	return &ExcludeRules{ignoreFiles: parsed}, nil
+}
+
+func (r *ExcludeRules) WithOverrides(patterns []string) (*ExcludeRules, error) {
+	parsed, err := parseExcludePatterns(nil, patterns)
+	if err != nil {
+		return nil, err
+	}
+	rules := r.clone()
+	rules.overrides = append(rules.overrides, parsed...)
+	return rules, nil
+}
+
+func (r *ExcludeRules) WithIgnoreFile(directory string, lines []string) (*ExcludeRules, error) {
+	var base []string
+	if directory != "" && directory != "." {
+		base = strings.Split(directory, "/")
+	}
+	parsed, err := parseExcludePatterns(base, lines)
+	if err != nil {
+		return nil, fmt.Errorf("%s in %q: %w", IgnoreFileName, directory, err)
+	}
+	if len(parsed) == 0 {
+		return r, nil
+	}
+	rules := r.clone()
+	rules.ignoreFiles = append(rules.ignoreFiles, parsed...)
+	return rules, nil
+}
+
+func (r *ExcludeRules) WithoutIgnoreFiles() *ExcludeRules {
+	rules := r.clone()
+	rules.skipsIgnoreFiles = true
+	return rules
+}
+
+func (r *ExcludeRules) ReadsIgnoreFiles() bool {
+	return !r.skipsIgnoreFiles
+}
+
+func (r *ExcludeRules) clone() *ExcludeRules {
+	return &ExcludeRules{
+		ignoreFiles:      slices.Clone(r.ignoreFiles),
+		overrides:        slices.Clone(r.overrides),
+		skipsIgnoreFiles: r.skipsIgnoreFiles,
+	}
+}
+
+func parseExcludePatterns(base, lines []string) ([]excludePattern, error) {
+	patterns := make([]excludePattern, 0, len(lines))
+	for _, raw := range lines {
 		pattern, ok, err := parseExcludePattern(raw)
 		if err != nil {
 			return nil, err
 		}
 		if ok {
-			rules.patterns = append(rules.patterns, pattern)
+			pattern.base = base
+			patterns = append(patterns, pattern)
 		}
 	}
-	return rules, nil
+	return patterns, nil
 }
 
 func parseExcludePattern(raw string) (excludePattern, bool, error) {
@@ -79,15 +137,27 @@ func parseExcludePattern(raw string) (excludePattern, bool, error) {
 func (r *ExcludeRules) Excludes(relativePath string, isDir bool) bool {
 	name := strings.Split(relativePath, "/")
 	excluded := false
-	for _, pattern := range r.patterns {
-		if pattern.directoryOnly && !isDir {
-			continue
-		}
-		if matchSegments(pattern.segments, name) {
-			excluded = !pattern.negated
+	for _, patterns := range [][]excludePattern{r.ignoreFiles, r.overrides} {
+		for _, pattern := range patterns {
+			if matched, ok := pattern.matches(name, isDir); ok {
+				excluded = matched
+			}
 		}
 	}
 	return excluded
+}
+
+func (p excludePattern) matches(name []string, isDir bool) (excluded, matched bool) {
+	if p.directoryOnly && !isDir {
+		return false, false
+	}
+	if len(name) <= len(p.base) || !slices.Equal(name[:len(p.base)], p.base) {
+		return false, false
+	}
+	if !matchSegments(p.segments, name[len(p.base):]) {
+		return false, false
+	}
+	return !p.negated, true
 }
 
 func matchSegments(pattern, name []string) bool {

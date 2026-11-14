@@ -78,3 +78,111 @@ func TestExcludeRules_Excludes(t *testing.T) {
 		})
 	}
 }
+
+func TestExcludeRules_IgnoreFiles(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		build    func(t *testing.T) *snapshot.ExcludeRules
+		path     string
+		isDir    bool
+		expected bool
+	}{
+		{
+			name: "with a nested ignore file, then its patterns apply inside its directory",
+			build: func(t *testing.T) *snapshot.ExcludeRules {
+				return withIgnoreFile(t, nil, "app", "*.tmp")
+			},
+			path:     "app/cache/a.tmp",
+			expected: true,
+		},
+		{
+			name: "with a nested ignore file, then its patterns do not apply outside its directory",
+			build: func(t *testing.T) *snapshot.ExcludeRules {
+				return withIgnoreFile(t, nil, "app", "*.tmp")
+			},
+			path: "web/a.tmp",
+		},
+		{
+			name: "with a nested ignore file, then its anchored patterns are anchored to its directory",
+			build: func(t *testing.T) *snapshot.ExcludeRules {
+				return withIgnoreFile(t, nil, "app", "/build")
+			},
+			path:     "app/build",
+			isDir:    true,
+			expected: true,
+		},
+		{
+			name: "with a nested anchored pattern, then it does not match deeper directories",
+			build: func(t *testing.T) *snapshot.ExcludeRules {
+				return withIgnoreFile(t, nil, "app", "/build")
+			},
+			path:  "app/lib/build",
+			isDir: true,
+		},
+		{
+			name: "with a nested negation, then it overrides the root ignore file",
+			build: func(t *testing.T) *snapshot.ExcludeRules {
+				return withIgnoreFile(t, []string{"*.log"}, "app", "!keep.log")
+			},
+			path: "app/keep.log",
+		},
+		{
+			name: "with an exclude override, then it wins over a nested negation",
+			build: func(t *testing.T) *snapshot.ExcludeRules {
+				rules, err := withIgnoreFile(t, []string{"*.log"}, "app", "!keep.log").WithOverrides([]string{"keep.log"})
+				require.NoError(t, err)
+				return rules
+			},
+			path:     "app/keep.log",
+			expected: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(`Given exclude rules built from ignore files,
+		when Excludes method is called `+tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			require.Equal(t, tt.expected, tt.build(t).Excludes(tt.path, tt.isDir))
+		})
+	}
+
+	t.Run(`Given exclude rules,
+	when WithIgnoreFile is called with an invalid pattern,
+	then it returns an invalid exclude pattern error naming the directory`, func(t *testing.T) {
+		t.Parallel()
+
+		rules, err := snapshot.NewExcludeRules(nil)
+		require.NoError(t, err)
+
+		_, err = rules.WithIgnoreFile("app/lib", []string{"[broken"})
+
+		require.ErrorIs(t, err, snapshot.ErrInvalidExcludePattern)
+		require.ErrorContains(t, err, "app/lib")
+	})
+
+	t.Run(`Given exclude rules,
+	when WithoutIgnoreFiles is called,
+	then the rules stop reading ignore files and keep their patterns, and the original rules are unchanged`, func(t *testing.T) {
+		t.Parallel()
+
+		rules, err := snapshot.NewExcludeRules([]string{"*.log"})
+		require.NoError(t, err)
+
+		skipping := rules.WithoutIgnoreFiles()
+
+		require.True(t, rules.ReadsIgnoreFiles())
+		require.False(t, skipping.ReadsIgnoreFiles())
+		require.True(t, skipping.Excludes("a.log", false))
+	})
+}
+
+func withIgnoreFile(t *testing.T, root []string, directory string, lines ...string) *snapshot.ExcludeRules {
+	t.Helper()
+	rules, err := snapshot.NewExcludeRules(root)
+	require.NoError(t, err)
+	nested, err := rules.WithIgnoreFile(directory, lines)
+	require.NoError(t, err)
+	return nested
+}

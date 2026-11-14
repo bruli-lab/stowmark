@@ -149,8 +149,8 @@ func mainFlow(t *testing.T, ctx context.Context, folders Folders, formatVersion 
 	require.NoError(t, err)
 	require.NotEmpty(t, encryptedKeys)
 	generations := map[string]struct{}{}
-	for _, key := range encryptedKeys {
-		generations[strings.SplitN(key, "/", 4)[2]] = struct{}{}
+	for _, entry := range encryptedKeys {
+		generations[strings.SplitN(entry.Key, "/", 4)[2]] = struct{}{}
 	}
 	require.Len(t, generations, 1, "the previous encrypted generation must be deleted after rekey")
 
@@ -205,6 +205,7 @@ func mainFlow(t *testing.T, ctx context.Context, folders Folders, formatVersion 
 	prunePlan, err := handler.PlanPrune(ctx)
 	require.NoError(t, err)
 	require.Zero(t, prunePlan.UnreferencedObjects)
+	require.Zero(t, prunePlan.UnreferencedBytes)
 	require.Zero(t, prunePlan.MissingObjects)
 
 	forgotten, err := handler.Forget(ctx, keepLast)
@@ -220,10 +221,11 @@ func mainFlow(t *testing.T, ctx context.Context, folders Folders, formatVersion 
 	require.NoError(t, err)
 	require.Equal(t, 1, prunePlan.UnreferencedObjects, "only the object of the removed file must be unreferenced")
 	require.Equal(t, prunePlan.ReferencedObjects, prunePlan.StoredObjects-prunePlan.UnreferencedObjects)
+	require.Positive(t, prunePlan.UnreferencedBytes)
 
 	pruned, err := handler.Prune(ctx)
 	require.NoError(t, err)
-	require.Equal(t, stowmark.PruneResult{RemovedObjects: 1}, *pruned)
+	require.Equal(t, stowmark.PruneResult{RemovedObjects: 1, FreedBytes: prunePlan.UnreferencedBytes}, *pruned)
 
 	pruned, err = handler.Prune(ctx)
 	require.NoError(t, err)
@@ -273,7 +275,7 @@ func mainFlow(t *testing.T, ctx context.Context, folders Folders, formatVersion 
 	objectKeys, err := store.List(ctx, "objects/encrypted")
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(objectKeys), 2)
-	missingKey, corruptKey := objectKeys[0], objectKeys[1]
+	missingKey, corruptKey := objectKeys[0].Key, objectKeys[1].Key
 	require.NoError(t, store.Delete(ctx, missingKey))
 	require.NoError(t, store.Delete(ctx, corruptKey))
 	require.NoError(t, store.Put(ctx, corruptKey, func(w io.Writer) error {

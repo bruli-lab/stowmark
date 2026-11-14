@@ -21,12 +21,23 @@ type CreateResult struct {
 	SkippedFiles []SkippedFile
 }
 
+type CreateOptions struct {
+	PrivateKey      *string
+	Exclude         []string
+	SkipIgnoreFiles bool
+}
+
 func (h *Handler) CreateSnapshot(ctx context.Context, source string, privateKey *string, exclude ...string) (*CreateResult, error) {
+	return h.CreateSnapshotWithOptions(ctx, source, CreateOptions{PrivateKey: privateKey, Exclude: exclude})
+}
+
+func (h *Handler) CreateSnapshotWithOptions(ctx context.Context, source string, options CreateOptions) (*CreateResult, error) {
 	events, err := h.repository.CreateSnapshot().Handle(ctx, app.CreateSnapshotCommand{
-		RepositoryPath: h.repository.Path(),
-		SourcePath:     source,
-		PrivateKey:     h.key(privateKey),
-		Exclude:        exclude,
+		RepositoryPath:  h.repository.Path(),
+		SourcePath:      source,
+		PrivateKey:      h.key(options.PrivateKey),
+		Exclude:         options.Exclude,
+		SkipIgnoreFiles: options.SkipIgnoreFiles,
 	})
 	if err != nil {
 		return nil, err

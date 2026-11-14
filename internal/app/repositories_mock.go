@@ -784,7 +784,7 @@ var _ ObjectRepository = &ObjectRepositoryMock{}
 //			DeleteTemporaryObjectsFunc: func(ctx context.Context) (int, error) {
 //				panic("mock out the DeleteTemporaryObjects method")
 //			},
-//			ListObjectsFunc: func(ctx context.Context, encrypted bool, generation uint64) ([]string, error) {
+//			ListObjectsFunc: func(ctx context.Context, encrypted bool, generation uint64) ([]snapshot.StoredObject, error) {
 //				panic("mock out the ListObjects method")
 //			},
 //			RestoreObjectFunc: func(ctx context.Context, file *snapshot.File, codec repository.Codec) error {
@@ -816,7 +816,7 @@ type ObjectRepositoryMock struct {
 	DeleteTemporaryObjectsFunc func(ctx context.Context) (int, error)
 
 	// ListObjectsFunc mocks the ListObjects method.
-	ListObjectsFunc func(ctx context.Context, encrypted bool, generation uint64) ([]string, error)
+	ListObjectsFunc func(ctx context.Context, encrypted bool, generation uint64) ([]snapshot.StoredObject, error)
 
 	// RestoreObjectFunc mocks the RestoreObject method.
 	RestoreObjectFunc func(ctx context.Context, file *snapshot.File, codec repository.Codec) error
@@ -1034,7 +1034,7 @@ func (mock *ObjectRepositoryMock) DeleteTemporaryObjectsCalls() []struct {
 }
 
 // ListObjects calls ListObjectsFunc.
-func (mock *ObjectRepositoryMock) ListObjects(ctx context.Context, encrypted bool, generation uint64) ([]string, error) {
+func (mock *ObjectRepositoryMock) ListObjects(ctx context.Context, encrypted bool, generation uint64) ([]snapshot.StoredObject, error) {
 	if mock.ListObjectsFunc == nil {
 		panic("ObjectRepositoryMock.ListObjectsFunc: method is nil but ObjectRepository.ListObjects was just called")
 	}

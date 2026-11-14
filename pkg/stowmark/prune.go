@@ -11,12 +11,14 @@ type PrunePlan struct {
 	StoredObjects       int
 	ReferencedObjects   int
 	UnreferencedObjects int
+	UnreferencedBytes   int64
 	MissingObjects      int
 	OldKeyGenerations   []uint64
 }
 
 type PruneResult struct {
 	RemovedObjects        int
+	FreedBytes            int64
 	MissingObjects        int
 	RemovedKeyGenerations []uint64
 	RemovedTemporaryFiles int
@@ -31,6 +33,7 @@ func (h *Handler) PlanPrune(ctx context.Context) (*PrunePlan, error) {
 		StoredObjects:       plan.StoredObjects(),
 		ReferencedObjects:   plan.ReferencedObjects(),
 		UnreferencedObjects: len(plan.Unreferenced()),
+		UnreferencedBytes:   plan.UnreferencedBytes(),
 		MissingObjects:      len(plan.Missing()),
 		OldKeyGenerations:   plan.OrphanGenerations(),
 	}, nil
@@ -44,6 +47,7 @@ func (h *Handler) Prune(ctx context.Context) (*PruneResult, error) {
 	result := &PruneResult{}
 	for _, pruned := range app.EventsOf[*snapshot.ObjectsPruned](events) {
 		result.RemovedObjects += pruned.Removed()
+		result.FreedBytes += pruned.FreedBytes()
 	}
 	for _, missing := range app.EventsOf[*snapshot.MissingObjectsDetected](events) {
 		result.MissingObjects += len(missing.Hashes())

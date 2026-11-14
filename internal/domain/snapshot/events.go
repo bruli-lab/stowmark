@@ -128,7 +128,8 @@ func (d *RetentionDecision) Forgotten() *SnapshotForgotten {
 
 type ObjectsPruned struct {
 	event.BasicEvent
-	removed int
+	removed    int
+	freedBytes int64
 }
 
 func (o *ObjectsPruned) RepositoryID() string {
@@ -139,10 +140,15 @@ func (o *ObjectsPruned) Removed() int {
 	return o.removed
 }
 
+func (o *ObjectsPruned) FreedBytes() int64 {
+	return o.freedBytes
+}
+
 func (p *PrunePlan) Pruned(repositoryID string) *ObjectsPruned {
 	return &ObjectsPruned{
 		BasicEvent: event.NewBasicEvent(ObjectsPrunedEventName, uuid.New(), repositoryID),
 		removed:    len(p.unreferenced),
+		freedBytes: p.unreferencedBytes,
 	}
 }
 

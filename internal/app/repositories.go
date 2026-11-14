@@ -39,7 +39,7 @@ type ObjectRepository interface {
 	AlreadyExists(ctx context.Context, hash string, codec repository.Codec) (bool, error)
 	VerifyObject(ctx context.Context, hash string, codec repository.Codec) error
 	RestoreObject(ctx context.Context, file *snapshot.File, codec repository.Codec) error
-	ListObjects(ctx context.Context, encrypted bool, generation uint64) ([]string, error)
+	ListObjects(ctx context.Context, encrypted bool, generation uint64) ([]snapshot.StoredObject, error)
 	DeleteObject(ctx context.Context, hash string, encrypted bool, generation uint64) error
 	DeleteTemporaryObjects(ctx context.Context) (int, error)
 }

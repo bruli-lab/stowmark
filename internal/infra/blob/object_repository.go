@@ -10,7 +10,6 @@ import (
 	"os"
 	"path"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -144,26 +143,26 @@ func (o ObjectRepository) RestoreObject(ctx context.Context, file *snapshot.File
 	})
 }
 
-func (o ObjectRepository) ListObjects(ctx context.Context, encrypted bool, generation uint64) ([]string, error) {
+func (o ObjectRepository) ListObjects(ctx context.Context, encrypted bool, generation uint64) ([]snapshot.StoredObject, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 
 	prefix := objectsPrefix(encrypted, generation)
-	keys, err := o.store.List(ctx, prefix)
+	entries, err := o.store.List(ctx, prefix)
 	if err != nil {
 		return nil, fmt.Errorf("list objects from %q: %w", prefix, err)
 	}
 
-	hashes := make([]string, 0, len(keys))
-	for _, key := range keys {
-		if hash, ok := hashFromKey(prefix, key); ok {
-			hashes = append(hashes, hash)
+	objects := make([]snapshot.StoredObject, 0, len(entries))
+	for _, entry := range entries {
+		if hash, ok := hashFromKey(prefix, entry.Key); ok {
+			objects = append(objects, snapshot.NewStoredObject(hash, entry.Size))
 		}
 	}
-	sort.Strings(hashes)
+	slices.SortFunc(objects, func(a, b snapshot.StoredObject) int { return strings.Compare(a.Hash(), b.Hash()) })
 
-	return hashes, nil
+	return objects, nil
 }
 
 func (o ObjectRepository) DeleteObject(ctx context.Context, hash string, encrypted bool, generation uint64) error {
@@ -184,12 +183,12 @@ func (o ObjectRepository) DeleteObject(ctx context.Context, hash string, encrypt
 }
 
 func (o ObjectRepository) ListEncryptedObjects(ctx context.Context, generation uint64) ([]string, error) {
-	hashes, err := o.ListObjects(ctx, true, generation)
+	objects, err := o.ListObjects(ctx, true, generation)
 	if err != nil {
 		return nil, fmt.Errorf("list encrypted objects from generation %d: %w", generation, err)
 	}
 
-	return hashes, nil
+	return snapshot.StoredHashes(objects), nil
 }
 
 func (o ObjectRepository) ListEncryptedGenerations(ctx context.Context) ([]uint64, error) {
@@ -198,10 +197,11 @@ func (o ObjectRepository) ListEncryptedGenerations(ctx context.Context) ([]uint6
 	}
 
 	prefix := path.Join(repository.ObjectsFolder, repository.EncryptedFolder)
-	keys, err := o.store.List(ctx, prefix)
+	entries, err := o.store.List(ctx, prefix)
 	if err != nil {
 		return nil, fmt.Errorf("list encrypted generations: %w", err)
 	}
+	keys := Keys(entries)
 
 	generations := make([]uint64, 0)
 	for _, key := range keys {

@@ -31,6 +31,8 @@ func (d *pruneDependencies) deletedObjects() []string {
 	return d.deleted
 }
 
+const storedObjectSize = 10
+
 type pruneSetup struct {
 	config         *encryption.EncryptionConfig
 	manifests      []snapshot.Manifest
@@ -59,7 +61,13 @@ func newPruneDependencies(t *testing.T, setup *pruneSetup) *pruneDependencies {
 		},
 	}
 	deps.objectRepo = &app.ObjectRepositoryMock{
-		ListObjectsFunc: func(context.Context, bool, uint64) ([]string, error) { return setup.stored, setup.listErr },
+		ListObjectsFunc: func(context.Context, bool, uint64) ([]snapshot.StoredObject, error) {
+			stored := make([]snapshot.StoredObject, len(setup.stored))
+			for i, hash := range setup.stored {
+				stored[i] = snapshot.NewStoredObject(hash, storedObjectSize)
+			}
+			return stored, setup.listErr
+		},
 		DeleteObjectFunc: func(_ context.Context, hash string, _ bool, _ uint64) error {
 			deps.mu.Lock()
 			defer deps.mu.Unlock()
@@ -125,6 +133,7 @@ func TestPruneRepository_Handle(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, snapshot.ObjectsPrunedEventName, pruned.EventName())
 			require.Equal(t, 2, pruned.Removed())
+			require.Equal(t, int64(2*storedObjectSize), pruned.FreedBytes())
 			require.Equal(t, deps.config.ID().String(), pruned.RepositoryID())
 			require.Len(t, deps.objectRepo.ListObjectsCalls(), 1)
 			require.Equal(t, tt.expectedEncrypted, deps.objectRepo.ListObjectsCalls()[0].Encrypted)
@@ -246,6 +255,7 @@ func TestPrunePlan_Handle(t *testing.T) {
 		require.Equal(t, 4, plan.StoredObjects())
 		require.Equal(t, 3, plan.ReferencedObjects())
 		require.Equal(t, []string{"dd04", "ee05"}, plan.Unreferenced())
+		require.Equal(t, int64(2*storedObjectSize), plan.UnreferencedBytes())
 		require.Equal(t, []string{"cc03"}, plan.Missing())
 		require.Empty(t, deps.deletedObjects())
 	})
