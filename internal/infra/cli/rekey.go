@@ -39,7 +39,7 @@ func newKeyReKeyCommand() *cobra.Command {
 				_ = repoHandler.Close()
 			}()
 			folderRepo := repoHandler.FolderRepository()
-			objectRepo, err := repoHandler.ObjectRepository()
+			encryptedRepo, err := repoHandler.EncryptedObjectRepository()
 			if err != nil {
 				return fmt.Errorf("failed to create object repository: %w", err)
 			}
@@ -52,7 +52,7 @@ func newKeyReKeyCommand() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to create repository locker: %w", err)
 			}
-			handler := multiMdw(app.NewRekeyKey(folderRepo, objectRepo, asymmetricRepo, symmetricRepo, locker))
+			handler := multiMdw(app.NewRekeyKey(folderRepo, encryptedRepo, asymmetricRepo, symmetricRepo, locker))
 			_, err = handler.Handle(cmd.Context(), app.RekeyKeyCommand{
 				RepositoryPath: repoHandler.RepositoryPath(),
 				PrivateKeyPath: privateKey,

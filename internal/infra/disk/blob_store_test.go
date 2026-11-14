@@ -51,6 +51,44 @@ func TestBlobStore_TemporaryFiles(t *testing.T) {
 		require.Equal(t, []string{"objects/ab/cdef"}, keys)
 	})
 
+	t.Run(`Given a disk BlobStore with leftover temporary files from interrupted writes,
+	when DeleteTemporaries is called,
+	then it deletes only the temporary files under the prefix and returns how many`, func(t *testing.T) {
+		t.Parallel()
+
+		store, root := newBlobStore(t)
+		putBlob(t, store, "objects/ab/cdef", "content")
+		putBlob(t, store, "snapshots/id.json", "manifest")
+		for _, leftover := range []string{"objects/ab/.cdef.tmp-1", "objects/cd/.ef01.tmp-2", "snapshots/.id.json.tmp-3"} {
+			path := filepath.Join(root, filepath.FromSlash(leftover))
+			require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+			require.NoError(t, os.WriteFile(path, []byte("partial"), 0o600))
+		}
+
+		removed, err := store.DeleteTemporaries(context.Background(), "objects")
+
+		require.NoError(t, err)
+		require.Equal(t, 2, removed)
+		keys, err := store.List(context.Background(), "objects")
+		require.NoError(t, err)
+		require.Equal(t, []string{"objects/ab/cdef"}, keys)
+		require.NoFileExists(t, filepath.Join(root, "objects", "ab", ".cdef.tmp-1"))
+		require.FileExists(t, filepath.Join(root, "snapshots", ".id.json.tmp-3"))
+	})
+
+	t.Run(`Given a disk BlobStore without the prefix directory,
+	when DeleteTemporaries is called,
+	then it removes nothing`, func(t *testing.T) {
+		t.Parallel()
+
+		store, _ := newBlobStore(t)
+
+		removed, err := store.DeleteTemporaries(context.Background(), "objects")
+
+		require.NoError(t, err)
+		require.Zero(t, removed)
+	})
+
 	t.Run(`Given a disk BlobStore,
 	when a blob is put,
 	then it is stored under the repository root with the key as relative path`, func(t *testing.T) {

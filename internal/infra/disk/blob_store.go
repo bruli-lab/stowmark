@@ -161,3 +161,33 @@ func NewBlobStore(repositoryPath string) (*BlobStore, error) {
 
 	return &BlobStore{root: root}, nil
 }
+
+func (s BlobStore) DeleteTemporaries(ctx context.Context, prefix string) (int, error) {
+	prefixPath, err := s.path(ctx, prefix)
+	if err != nil {
+		return 0, err
+	}
+
+	removed := 0
+	err = filepath.WalkDir(prefixPath, func(filePath string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if entry.IsDir() || !isTemporaryFile(entry.Name()) {
+			return nil
+		}
+		if err := os.Remove(filePath); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("delete temporary file %q: %w", filePath, err)
+		}
+		removed++
+		return nil
+	})
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return removed, fmt.Errorf("delete temporaries under %q: %w", prefixPath, err)
+	}
+
+	return removed, nil
+}

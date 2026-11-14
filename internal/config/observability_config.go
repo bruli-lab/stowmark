@@ -10,10 +10,13 @@ type ObservabilityConfig struct {
 }
 
 func NewObservabilityConfig() (*ObservabilityConfig, error) {
+	return NewObservabilityConfigFrom(nil)
+}
+
+func NewObservabilityConfigFrom(environment map[string]string) (*ObservabilityConfig, error) {
 	var cfg ObservabilityConfig
-	if err := env.Parse(&cfg); err != nil {
+	if err := env.ParseWithOptions(&cfg, env.Options{Environment: environment}); err != nil {
 		return nil, err
 	}
-
 	return &cfg, nil
 }

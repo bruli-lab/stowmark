@@ -37,6 +37,7 @@ type CreateSnapshot struct {
 	objectRepo   ObjectRepository
 	folderRepo   FolderRepository
 	keys         keyring
+	budget       *memoryBudget
 	locker       *RepositoryLocker
 	workers      int
 }
@@ -124,7 +125,7 @@ func (c *CreateSnapshot) create(ctx context.Context, co CreateSnapshotCommand) (
 	if err := c.manifestRepo.Save(ctx, manifest); err != nil {
 		return nil, err
 	}
-	return snapshot.NewSnapshotCreated(manifest, int(savedFiles.Load()), totalSize.Load()), nil
+	return snapshot.NewSnapshotCreated(manifest, int(savedFiles.Load()), totalSize.Load(), source.Skipped()), nil
 }
 
 func (c *CreateSnapshot) excludeRules(ctx context.Context, co CreateSnapshotCommand) (*snapshot.ExcludeRules, error) {
@@ -162,6 +163,11 @@ func (c *CreateSnapshot) saveObject(ctx context.Context, file *snapshot.File, co
 		return 0, err
 	}
 
+	release, err := c.budget.reserve(ctx, key, file.Size())
+	if err != nil {
+		return 0, err
+	}
+	defer release()
 	if err := c.objectRepo.Save(ctx, file.Path(), file.Hash(), comp, key.symmetricKey, key.generation); err != nil {
 		return 0, err
 	}
@@ -174,6 +180,11 @@ func (c *CreateSnapshot) saveChunk(ctx context.Context, filePath string, chunk s
 		return 0, err
 	}
 
+	release, err := c.budget.reserve(ctx, key, chunk.Size())
+	if err != nil {
+		return 0, err
+	}
+	defer release()
 	if err := c.objectRepo.SaveChunk(ctx, filePath, chunk.Hash(), chunk.Offset(), chunk.Size(), comp, key.symmetricKey, key.generation); err != nil {
 		return 0, err
 	}
@@ -211,6 +222,7 @@ func NewCreateSnapshotWithWorkers(
 		objectRepo:   objectRepo,
 		folderRepo:   folderRepo,
 		keys:         newKeyring(folderRepo, asymmetricRepo, symmetricRepo),
+		budget:       newMemoryBudget(defaultMemoryBudget),
 		locker:       locker,
 		workers:      workers,
 	}

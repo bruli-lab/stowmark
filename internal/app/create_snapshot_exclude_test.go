@@ -41,6 +41,28 @@ func TestCreateSnapshot_Handle_Exclude(t *testing.T) {
 		require.False(t, rules.Excludes("app/main.go", false))
 	})
 
+	t.Run(`Given a source with skipped files,
+	when the CreateSnapshot command handler is called,
+	then the created event reports the skipped files`, func(t *testing.T) {
+		t.Parallel()
+
+		deps := newCreateDependencies(t, sourceFiles(1))
+		explore := deps.sourceRepo.ExploreFunc
+		skipped := []snapshot.SkippedFile{snapshot.NewSkippedFile("link", snapshot.SymlinkKind)}
+		deps.sourceRepo.ExploreFunc = func(ctx context.Context, sourcePath string, rules *snapshot.ExcludeRules) (*snapshot.Source, error) {
+			source, err := explore(ctx, sourcePath, rules)
+			if err != nil {
+				return nil, err
+			}
+			return snapshot.NewSource(source.AbsolutePath(), source.Files(), skipped), nil
+		}
+
+		created, err := createSnapshot(t.Context(), deps.handler(1), createCommand)
+
+		require.NoError(t, err)
+		require.Equal(t, skipped, created.SkippedFiles())
+	})
+
 	errIgnore := errors.New("ignore file cannot be read")
 	tests := []struct {
 		name           string

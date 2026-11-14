@@ -145,3 +145,33 @@ func (s BlobStore) path(ctx context.Context, key string) (string, error) {
 func NewBlobStore(client *sftp.Client, repositoryPath string) *BlobStore {
 	return &BlobStore{client: client, root: path.Clean(repositoryPath)}
 }
+
+func (s BlobStore) DeleteTemporaries(ctx context.Context, prefix string) (int, error) {
+	prefixPath, err := s.path(ctx, prefix)
+	if err != nil {
+		return 0, err
+	}
+
+	removed := 0
+	walker := s.client.Walk(prefixPath)
+	for walker.Step() {
+		if err := walker.Err(); err != nil {
+			if errors.Is(err, fs.ErrNotExist) && walker.Path() == prefixPath {
+				return 0, nil
+			}
+			return removed, fmt.Errorf("list SSH directory %q: %w", walker.Path(), err)
+		}
+		if err := ctx.Err(); err != nil {
+			return removed, err
+		}
+		if walker.Stat().IsDir() || !isTemporaryFile(walker.Stat().Name()) {
+			continue
+		}
+		if err := s.client.Remove(walker.Path()); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return removed, fmt.Errorf("delete SSH temporary file %q: %w", walker.Path(), err)
+		}
+		removed++
+	}
+
+	return removed, nil
+}

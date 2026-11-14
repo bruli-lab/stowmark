@@ -14,6 +14,7 @@ type Repositories interface {
 	RepositoryPath() string
 	BlobStore() (blob.Store, error)
 	ObjectRepository() (app.ObjectRepository, error)
+	EncryptedObjectRepository() (app.EncryptedObjectRepository, error)
 	ManifestRepository() (app.ManifestRepository, error)
 	LockRepository() (app.LockRepository, error)
 	Close() error
@@ -31,6 +32,14 @@ type blobRepositories struct {
 }
 
 func (b blobRepositories) ObjectRepository() (app.ObjectRepository, error) {
+	store, err := b.BlobStore()
+	if err != nil {
+		return nil, err
+	}
+	return blob.NewObjectRepository(store), nil
+}
+
+func (b blobRepositories) EncryptedObjectRepository() (app.EncryptedObjectRepository, error) {
 	store, err := b.BlobStore()
 	if err != nil {
 		return nil, err

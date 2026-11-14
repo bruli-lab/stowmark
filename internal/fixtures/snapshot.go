@@ -12,11 +12,12 @@ import (
 type SourceBuilder struct {
 	AbsolutePath *string
 	Files        []snapshot.File
+	Skipped      []snapshot.SkippedFile
 }
 
 func (b SourceBuilder) Build() snapshot.Source {
 	path := fixtures.SetData("path", b.AbsolutePath)
-	so := snapshot.NewSource(path, b.Files)
+	so := snapshot.NewSource(path, b.Files, b.Skipped)
 	return *so
 }
 

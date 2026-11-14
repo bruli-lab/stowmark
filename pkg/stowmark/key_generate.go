@@ -5,6 +5,7 @@ import (
 
 	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/domain/encryption"
+	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
 	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 )
 
@@ -25,7 +26,7 @@ func (h *Handler) KeyGenerate(ctx context.Context, folder string) (*encryption.A
 	if err != nil {
 		return nil, err
 	}
-	handler := mdw(app.NewGenerateKey(h.asymmetricKeyPairRepository))
+	handler := mdw(app.NewGenerateKey(encrypt.NewRSAKeyGenerator(), h.asymmetricKeyPairRepository))
 	_, err = handler.Handle(ctx, app.GenerateKeyCommand{Keys: keys})
 	if err != nil {
 		return nil, err

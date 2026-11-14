@@ -7,6 +7,7 @@ type PrunePlan struct {
 	referenced   int
 	unreferenced []string
 	missing      []string
+	generations  []uint64
 }
 
 func NewPrunePlan(manifests []Manifest, stored []string) *PrunePlan {
@@ -61,4 +62,12 @@ func (p *PrunePlan) Unreferenced() []string {
 
 func (p *PrunePlan) Missing() []string {
 	return p.missing
+}
+
+func (p *PrunePlan) RecordOrphanGenerations(generations []uint64) {
+	p.generations = generations
+}
+
+func (p *PrunePlan) OrphanGenerations() []uint64 {
+	return p.generations
 }

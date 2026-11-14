@@ -810,7 +810,7 @@ Without flags it only reads the structure, so it is fast and does not need the p
 - Every manifest can be read and parsed.
 - Every object referenced by a manifest exists. A missing object is reported with the snapshots that use it.
 - Warnings, which do not make the check fail: objects no snapshot references (run `prune`), stale locks (run
-  `unlock`) and objects of old key generations left by an interrupted `key rekey`.
+  `unlock`) and objects of old key generations left by an interrupted `key rekey` (run `prune`).
 
 `--read-data` also downloads every referenced object once, even if several snapshots share it, and verifies it as
 `snapshot verify` does. `--read-data-subset` verifies only part of the objects:
@@ -934,6 +934,9 @@ stowmark prune --repo /backups/stowmark --dry-run
   affected snapshots.
 - In encrypted repositories, `prune` works on the objects of the current key generation and does not need the
   private key.
+- `prune` also deletes the objects of old key generations left by an interrupted `key rekey`, and the temporary files
+  (names starting with `.`) left by interrupted writes on local, SSH and SMB repositories. `--dry-run` lists the old
+  key generations too.
 - `prune` lists every object of the repository, which can take a while on large S3 or GCS repositories.
 
 ## Security model and limitations
@@ -959,7 +962,8 @@ What it does **not** protect yet:
 
 What is not backed up:
 
-- Only regular files are stored. Symbolic links, device files, sockets and named pipes are skipped.
+- Only regular files are stored. Symbolic links, device files, sockets and named pipes are skipped, and
+  `snapshot create` prints a warning for each one.
 - Empty directories are not recorded.
 - File permissions, ownership and modification times are not stored; restored files are created with mode `0644`.
 

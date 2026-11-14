@@ -33,7 +33,7 @@ func traceEvent(t *testing.T, tracer app.EventTracer, ev event.Event) []attribut
 
 func createdEvent() *snapshot.SnapshotCreated {
 	manifest := fixtures.ManifestBuilder{ID: new("snapshot-id")}.Build()
-	return snapshot.NewSnapshotCreated(&manifest, 3, 42)
+	return snapshot.NewSnapshotCreated(&manifest, 3, 42, nil)
 }
 
 func restoredEvent() *snapshot.SnapshotRestored {
@@ -65,6 +65,7 @@ func TestSnapshotTracers_Trace(t *testing.T) {
 				attribute.String("snapshot.id", "snapshot-id"),
 				attribute.Int("snapshot.file_count", 3),
 				attribute.Int64("snapshot.total_size", 42),
+				attribute.Int("snapshot.skipped_files", 0),
 			},
 		},
 		{

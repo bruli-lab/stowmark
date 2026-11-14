@@ -757,29 +757,17 @@ var _ ObjectRepository = &ObjectRepositoryMock{}
 //
 //		// make and configure a mocked ObjectRepository
 //		mockedObjectRepository := &ObjectRepositoryMock{
-//			AbortRekeyFunc: func(ctx context.Context, generation uint64) error {
-//				panic("mock out the AbortRekey method")
-//			},
 //			AlreadyExistsFunc: func(ctx context.Context, hash string, symmetricKey []byte, generation uint64) (bool, error) {
 //				panic("mock out the AlreadyExists method")
-//			},
-//			DeleteEncryptedGenerationFunc: func(ctx context.Context, generation uint64) error {
-//				panic("mock out the DeleteEncryptedGeneration method")
 //			},
 //			DeleteObjectFunc: func(ctx context.Context, hash string, encrypted bool, generation uint64) error {
 //				panic("mock out the DeleteObject method")
 //			},
-//			ListEncryptedGenerationsFunc: func(ctx context.Context) ([]uint64, error) {
-//				panic("mock out the ListEncryptedGenerations method")
-//			},
-//			ListEncryptedObjectsFunc: func(ctx context.Context, generation uint64) ([]string, error) {
-//				panic("mock out the ListEncryptedObjects method")
+//			DeleteTemporaryObjectsFunc: func(ctx context.Context) (int, error) {
+//				panic("mock out the DeleteTemporaryObjects method")
 //			},
 //			ListObjectsFunc: func(ctx context.Context, encrypted bool, generation uint64) ([]string, error) {
 //				panic("mock out the ListObjects method")
-//			},
-//			ReadEncryptedObjectFunc: func(ctx context.Context, hash string, generation uint64, key []byte) (io.ReadCloser, error) {
-//				panic("mock out the ReadEncryptedObject method")
 //			},
 //			ReadObjectFunc: func(ctx context.Context, hash string, symmetricKey []byte, generation uint64) (io.ReadCloser, error) {
 //				panic("mock out the ReadObject method")
@@ -793,9 +781,6 @@ var _ ObjectRepository = &ObjectRepositoryMock{}
 //			SaveChunkFunc: func(ctx context.Context, filePath string, hash string, offset int64, size int64, comp *repository.Compression, key []byte, generation uint64) error {
 //				panic("mock out the SaveChunk method")
 //			},
-//			SaveRekeyedObjectFunc: func(ctx context.Context, hash string, source io.Reader, generation uint64, key []byte) error {
-//				panic("mock out the SaveRekeyedObject method")
-//			},
 //		}
 //
 //		// use mockedObjectRepository in code that requires ObjectRepository
@@ -803,29 +788,17 @@ var _ ObjectRepository = &ObjectRepositoryMock{}
 //
 //	}
 type ObjectRepositoryMock struct {
-	// AbortRekeyFunc mocks the AbortRekey method.
-	AbortRekeyFunc func(ctx context.Context, generation uint64) error
-
 	// AlreadyExistsFunc mocks the AlreadyExists method.
 	AlreadyExistsFunc func(ctx context.Context, hash string, symmetricKey []byte, generation uint64) (bool, error)
-
-	// DeleteEncryptedGenerationFunc mocks the DeleteEncryptedGeneration method.
-	DeleteEncryptedGenerationFunc func(ctx context.Context, generation uint64) error
 
 	// DeleteObjectFunc mocks the DeleteObject method.
 	DeleteObjectFunc func(ctx context.Context, hash string, encrypted bool, generation uint64) error
 
-	// ListEncryptedGenerationsFunc mocks the ListEncryptedGenerations method.
-	ListEncryptedGenerationsFunc func(ctx context.Context) ([]uint64, error)
-
-	// ListEncryptedObjectsFunc mocks the ListEncryptedObjects method.
-	ListEncryptedObjectsFunc func(ctx context.Context, generation uint64) ([]string, error)
+	// DeleteTemporaryObjectsFunc mocks the DeleteTemporaryObjects method.
+	DeleteTemporaryObjectsFunc func(ctx context.Context) (int, error)
 
 	// ListObjectsFunc mocks the ListObjects method.
 	ListObjectsFunc func(ctx context.Context, encrypted bool, generation uint64) ([]string, error)
-
-	// ReadEncryptedObjectFunc mocks the ReadEncryptedObject method.
-	ReadEncryptedObjectFunc func(ctx context.Context, hash string, generation uint64, key []byte) (io.ReadCloser, error)
 
 	// ReadObjectFunc mocks the ReadObject method.
 	ReadObjectFunc func(ctx context.Context, hash string, symmetricKey []byte, generation uint64) (io.ReadCloser, error)
@@ -839,18 +812,8 @@ type ObjectRepositoryMock struct {
 	// SaveChunkFunc mocks the SaveChunk method.
 	SaveChunkFunc func(ctx context.Context, filePath string, hash string, offset int64, size int64, comp *repository.Compression, key []byte, generation uint64) error
 
-	// SaveRekeyedObjectFunc mocks the SaveRekeyedObject method.
-	SaveRekeyedObjectFunc func(ctx context.Context, hash string, source io.Reader, generation uint64, key []byte) error
-
 	// calls tracks calls to the methods.
 	calls struct {
-		// AbortRekey holds details about calls to the AbortRekey method.
-		AbortRekey []struct {
-			// Ctx is the ctx argument value.
-			Ctx context.Context
-			// Generation is the generation argument value.
-			Generation uint64
-		}
 		// AlreadyExists holds details about calls to the AlreadyExists method.
 		AlreadyExists []struct {
 			// Ctx is the ctx argument value.
@@ -859,13 +822,6 @@ type ObjectRepositoryMock struct {
 			Hash string
 			// SymmetricKey is the symmetricKey argument value.
 			SymmetricKey []byte
-			// Generation is the generation argument value.
-			Generation uint64
-		}
-		// DeleteEncryptedGeneration holds details about calls to the DeleteEncryptedGeneration method.
-		DeleteEncryptedGeneration []struct {
-			// Ctx is the ctx argument value.
-			Ctx context.Context
 			// Generation is the generation argument value.
 			Generation uint64
 		}
@@ -880,17 +836,10 @@ type ObjectRepositoryMock struct {
 			// Generation is the generation argument value.
 			Generation uint64
 		}
-		// ListEncryptedGenerations holds details about calls to the ListEncryptedGenerations method.
-		ListEncryptedGenerations []struct {
+		// DeleteTemporaryObjects holds details about calls to the DeleteTemporaryObjects method.
+		DeleteTemporaryObjects []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-		}
-		// ListEncryptedObjects holds details about calls to the ListEncryptedObjects method.
-		ListEncryptedObjects []struct {
-			// Ctx is the ctx argument value.
-			Ctx context.Context
-			// Generation is the generation argument value.
-			Generation uint64
 		}
 		// ListObjects holds details about calls to the ListObjects method.
 		ListObjects []struct {
@@ -900,17 +849,6 @@ type ObjectRepositoryMock struct {
 			Encrypted bool
 			// Generation is the generation argument value.
 			Generation uint64
-		}
-		// ReadEncryptedObject holds details about calls to the ReadEncryptedObject method.
-		ReadEncryptedObject []struct {
-			// Ctx is the ctx argument value.
-			Ctx context.Context
-			// Hash is the hash argument value.
-			Hash string
-			// Generation is the generation argument value.
-			Generation uint64
-			// Key is the key argument value.
-			Key []byte
 		}
 		// ReadObject holds details about calls to the ReadObject method.
 		ReadObject []struct {
@@ -970,69 +908,15 @@ type ObjectRepositoryMock struct {
 			// Generation is the generation argument value.
 			Generation uint64
 		}
-		// SaveRekeyedObject holds details about calls to the SaveRekeyedObject method.
-		SaveRekeyedObject []struct {
-			// Ctx is the ctx argument value.
-			Ctx context.Context
-			// Hash is the hash argument value.
-			Hash string
-			// Source is the source argument value.
-			Source io.Reader
-			// Generation is the generation argument value.
-			Generation uint64
-			// Key is the key argument value.
-			Key []byte
-		}
 	}
-	lockAbortRekey                sync.RWMutex
-	lockAlreadyExists             sync.RWMutex
-	lockDeleteEncryptedGeneration sync.RWMutex
-	lockDeleteObject              sync.RWMutex
-	lockListEncryptedGenerations  sync.RWMutex
-	lockListEncryptedObjects      sync.RWMutex
-	lockListObjects               sync.RWMutex
-	lockReadEncryptedObject       sync.RWMutex
-	lockReadObject                sync.RWMutex
-	lockRestoreObject             sync.RWMutex
-	lockSave                      sync.RWMutex
-	lockSaveChunk                 sync.RWMutex
-	lockSaveRekeyedObject         sync.RWMutex
-}
-
-// AbortRekey calls AbortRekeyFunc.
-func (mock *ObjectRepositoryMock) AbortRekey(ctx context.Context, generation uint64) error {
-	if mock.AbortRekeyFunc == nil {
-		panic("ObjectRepositoryMock.AbortRekeyFunc: method is nil but ObjectRepository.AbortRekey was just called")
-	}
-	callInfo := struct {
-		Ctx        context.Context
-		Generation uint64
-	}{
-		Ctx:        ctx,
-		Generation: generation,
-	}
-	mock.lockAbortRekey.Lock()
-	mock.calls.AbortRekey = append(mock.calls.AbortRekey, callInfo)
-	mock.lockAbortRekey.Unlock()
-	return mock.AbortRekeyFunc(ctx, generation)
-}
-
-// AbortRekeyCalls gets all the calls that were made to AbortRekey.
-// Check the length with:
-//
-//	len(mockedObjectRepository.AbortRekeyCalls())
-func (mock *ObjectRepositoryMock) AbortRekeyCalls() []struct {
-	Ctx        context.Context
-	Generation uint64
-} {
-	var calls []struct {
-		Ctx        context.Context
-		Generation uint64
-	}
-	mock.lockAbortRekey.RLock()
-	calls = mock.calls.AbortRekey
-	mock.lockAbortRekey.RUnlock()
-	return calls
+	lockAlreadyExists          sync.RWMutex
+	lockDeleteObject           sync.RWMutex
+	lockDeleteTemporaryObjects sync.RWMutex
+	lockListObjects            sync.RWMutex
+	lockReadObject             sync.RWMutex
+	lockRestoreObject          sync.RWMutex
+	lockSave                   sync.RWMutex
+	lockSaveChunk              sync.RWMutex
 }
 
 // AlreadyExists calls AlreadyExistsFunc.
@@ -1076,42 +960,6 @@ func (mock *ObjectRepositoryMock) AlreadyExistsCalls() []struct {
 	mock.lockAlreadyExists.RLock()
 	calls = mock.calls.AlreadyExists
 	mock.lockAlreadyExists.RUnlock()
-	return calls
-}
-
-// DeleteEncryptedGeneration calls DeleteEncryptedGenerationFunc.
-func (mock *ObjectRepositoryMock) DeleteEncryptedGeneration(ctx context.Context, generation uint64) error {
-	if mock.DeleteEncryptedGenerationFunc == nil {
-		panic("ObjectRepositoryMock.DeleteEncryptedGenerationFunc: method is nil but ObjectRepository.DeleteEncryptedGeneration was just called")
-	}
-	callInfo := struct {
-		Ctx        context.Context
-		Generation uint64
-	}{
-		Ctx:        ctx,
-		Generation: generation,
-	}
-	mock.lockDeleteEncryptedGeneration.Lock()
-	mock.calls.DeleteEncryptedGeneration = append(mock.calls.DeleteEncryptedGeneration, callInfo)
-	mock.lockDeleteEncryptedGeneration.Unlock()
-	return mock.DeleteEncryptedGenerationFunc(ctx, generation)
-}
-
-// DeleteEncryptedGenerationCalls gets all the calls that were made to DeleteEncryptedGeneration.
-// Check the length with:
-//
-//	len(mockedObjectRepository.DeleteEncryptedGenerationCalls())
-func (mock *ObjectRepositoryMock) DeleteEncryptedGenerationCalls() []struct {
-	Ctx        context.Context
-	Generation uint64
-} {
-	var calls []struct {
-		Ctx        context.Context
-		Generation uint64
-	}
-	mock.lockDeleteEncryptedGeneration.RLock()
-	calls = mock.calls.DeleteEncryptedGeneration
-	mock.lockDeleteEncryptedGeneration.RUnlock()
 	return calls
 }
 
@@ -1159,71 +1007,35 @@ func (mock *ObjectRepositoryMock) DeleteObjectCalls() []struct {
 	return calls
 }
 
-// ListEncryptedGenerations calls ListEncryptedGenerationsFunc.
-func (mock *ObjectRepositoryMock) ListEncryptedGenerations(ctx context.Context) ([]uint64, error) {
-	if mock.ListEncryptedGenerationsFunc == nil {
-		panic("ObjectRepositoryMock.ListEncryptedGenerationsFunc: method is nil but ObjectRepository.ListEncryptedGenerations was just called")
+// DeleteTemporaryObjects calls DeleteTemporaryObjectsFunc.
+func (mock *ObjectRepositoryMock) DeleteTemporaryObjects(ctx context.Context) (int, error) {
+	if mock.DeleteTemporaryObjectsFunc == nil {
+		panic("ObjectRepositoryMock.DeleteTemporaryObjectsFunc: method is nil but ObjectRepository.DeleteTemporaryObjects was just called")
 	}
 	callInfo := struct {
 		Ctx context.Context
 	}{
 		Ctx: ctx,
 	}
-	mock.lockListEncryptedGenerations.Lock()
-	mock.calls.ListEncryptedGenerations = append(mock.calls.ListEncryptedGenerations, callInfo)
-	mock.lockListEncryptedGenerations.Unlock()
-	return mock.ListEncryptedGenerationsFunc(ctx)
+	mock.lockDeleteTemporaryObjects.Lock()
+	mock.calls.DeleteTemporaryObjects = append(mock.calls.DeleteTemporaryObjects, callInfo)
+	mock.lockDeleteTemporaryObjects.Unlock()
+	return mock.DeleteTemporaryObjectsFunc(ctx)
 }
 
-// ListEncryptedGenerationsCalls gets all the calls that were made to ListEncryptedGenerations.
+// DeleteTemporaryObjectsCalls gets all the calls that were made to DeleteTemporaryObjects.
 // Check the length with:
 //
-//	len(mockedObjectRepository.ListEncryptedGenerationsCalls())
-func (mock *ObjectRepositoryMock) ListEncryptedGenerationsCalls() []struct {
+//	len(mockedObjectRepository.DeleteTemporaryObjectsCalls())
+func (mock *ObjectRepositoryMock) DeleteTemporaryObjectsCalls() []struct {
 	Ctx context.Context
 } {
 	var calls []struct {
 		Ctx context.Context
 	}
-	mock.lockListEncryptedGenerations.RLock()
-	calls = mock.calls.ListEncryptedGenerations
-	mock.lockListEncryptedGenerations.RUnlock()
-	return calls
-}
-
-// ListEncryptedObjects calls ListEncryptedObjectsFunc.
-func (mock *ObjectRepositoryMock) ListEncryptedObjects(ctx context.Context, generation uint64) ([]string, error) {
-	if mock.ListEncryptedObjectsFunc == nil {
-		panic("ObjectRepositoryMock.ListEncryptedObjectsFunc: method is nil but ObjectRepository.ListEncryptedObjects was just called")
-	}
-	callInfo := struct {
-		Ctx        context.Context
-		Generation uint64
-	}{
-		Ctx:        ctx,
-		Generation: generation,
-	}
-	mock.lockListEncryptedObjects.Lock()
-	mock.calls.ListEncryptedObjects = append(mock.calls.ListEncryptedObjects, callInfo)
-	mock.lockListEncryptedObjects.Unlock()
-	return mock.ListEncryptedObjectsFunc(ctx, generation)
-}
-
-// ListEncryptedObjectsCalls gets all the calls that were made to ListEncryptedObjects.
-// Check the length with:
-//
-//	len(mockedObjectRepository.ListEncryptedObjectsCalls())
-func (mock *ObjectRepositoryMock) ListEncryptedObjectsCalls() []struct {
-	Ctx        context.Context
-	Generation uint64
-} {
-	var calls []struct {
-		Ctx        context.Context
-		Generation uint64
-	}
-	mock.lockListEncryptedObjects.RLock()
-	calls = mock.calls.ListEncryptedObjects
-	mock.lockListEncryptedObjects.RUnlock()
+	mock.lockDeleteTemporaryObjects.RLock()
+	calls = mock.calls.DeleteTemporaryObjects
+	mock.lockDeleteTemporaryObjects.RUnlock()
 	return calls
 }
 
@@ -1264,50 +1076,6 @@ func (mock *ObjectRepositoryMock) ListObjectsCalls() []struct {
 	mock.lockListObjects.RLock()
 	calls = mock.calls.ListObjects
 	mock.lockListObjects.RUnlock()
-	return calls
-}
-
-// ReadEncryptedObject calls ReadEncryptedObjectFunc.
-func (mock *ObjectRepositoryMock) ReadEncryptedObject(ctx context.Context, hash string, generation uint64, key []byte) (io.ReadCloser, error) {
-	if mock.ReadEncryptedObjectFunc == nil {
-		panic("ObjectRepositoryMock.ReadEncryptedObjectFunc: method is nil but ObjectRepository.ReadEncryptedObject was just called")
-	}
-	callInfo := struct {
-		Ctx        context.Context
-		Hash       string
-		Generation uint64
-		Key        []byte
-	}{
-		Ctx:        ctx,
-		Hash:       hash,
-		Generation: generation,
-		Key:        key,
-	}
-	mock.lockReadEncryptedObject.Lock()
-	mock.calls.ReadEncryptedObject = append(mock.calls.ReadEncryptedObject, callInfo)
-	mock.lockReadEncryptedObject.Unlock()
-	return mock.ReadEncryptedObjectFunc(ctx, hash, generation, key)
-}
-
-// ReadEncryptedObjectCalls gets all the calls that were made to ReadEncryptedObject.
-// Check the length with:
-//
-//	len(mockedObjectRepository.ReadEncryptedObjectCalls())
-func (mock *ObjectRepositoryMock) ReadEncryptedObjectCalls() []struct {
-	Ctx        context.Context
-	Hash       string
-	Generation uint64
-	Key        []byte
-} {
-	var calls []struct {
-		Ctx        context.Context
-		Hash       string
-		Generation uint64
-		Key        []byte
-	}
-	mock.lockReadEncryptedObject.RLock()
-	calls = mock.calls.ReadEncryptedObject
-	mock.lockReadEncryptedObject.RUnlock()
 	return calls
 }
 
@@ -1515,10 +1283,308 @@ func (mock *ObjectRepositoryMock) SaveChunkCalls() []struct {
 	return calls
 }
 
+// Ensure, that EncryptedObjectRepositoryMock does implement EncryptedObjectRepository.
+// If this is not the case, regenerate this file with moq.
+var _ EncryptedObjectRepository = &EncryptedObjectRepositoryMock{}
+
+// EncryptedObjectRepositoryMock is a mock implementation of EncryptedObjectRepository.
+//
+//	func TestSomethingThatUsesEncryptedObjectRepository(t *testing.T) {
+//
+//		// make and configure a mocked EncryptedObjectRepository
+//		mockedEncryptedObjectRepository := &EncryptedObjectRepositoryMock{
+//			AbortRekeyFunc: func(ctx context.Context, generation uint64) error {
+//				panic("mock out the AbortRekey method")
+//			},
+//			DeleteEncryptedGenerationFunc: func(ctx context.Context, generation uint64) error {
+//				panic("mock out the DeleteEncryptedGeneration method")
+//			},
+//			ListEncryptedGenerationsFunc: func(ctx context.Context) ([]uint64, error) {
+//				panic("mock out the ListEncryptedGenerations method")
+//			},
+//			ListEncryptedObjectsFunc: func(ctx context.Context, generation uint64) ([]string, error) {
+//				panic("mock out the ListEncryptedObjects method")
+//			},
+//			ReadEncryptedObjectFunc: func(ctx context.Context, hash string, generation uint64, key []byte) (io.ReadCloser, error) {
+//				panic("mock out the ReadEncryptedObject method")
+//			},
+//			SaveRekeyedObjectFunc: func(ctx context.Context, hash string, source io.Reader, generation uint64, key []byte) error {
+//				panic("mock out the SaveRekeyedObject method")
+//			},
+//		}
+//
+//		// use mockedEncryptedObjectRepository in code that requires EncryptedObjectRepository
+//		// and then make assertions.
+//
+//	}
+type EncryptedObjectRepositoryMock struct {
+	// AbortRekeyFunc mocks the AbortRekey method.
+	AbortRekeyFunc func(ctx context.Context, generation uint64) error
+
+	// DeleteEncryptedGenerationFunc mocks the DeleteEncryptedGeneration method.
+	DeleteEncryptedGenerationFunc func(ctx context.Context, generation uint64) error
+
+	// ListEncryptedGenerationsFunc mocks the ListEncryptedGenerations method.
+	ListEncryptedGenerationsFunc func(ctx context.Context) ([]uint64, error)
+
+	// ListEncryptedObjectsFunc mocks the ListEncryptedObjects method.
+	ListEncryptedObjectsFunc func(ctx context.Context, generation uint64) ([]string, error)
+
+	// ReadEncryptedObjectFunc mocks the ReadEncryptedObject method.
+	ReadEncryptedObjectFunc func(ctx context.Context, hash string, generation uint64, key []byte) (io.ReadCloser, error)
+
+	// SaveRekeyedObjectFunc mocks the SaveRekeyedObject method.
+	SaveRekeyedObjectFunc func(ctx context.Context, hash string, source io.Reader, generation uint64, key []byte) error
+
+	// calls tracks calls to the methods.
+	calls struct {
+		// AbortRekey holds details about calls to the AbortRekey method.
+		AbortRekey []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Generation is the generation argument value.
+			Generation uint64
+		}
+		// DeleteEncryptedGeneration holds details about calls to the DeleteEncryptedGeneration method.
+		DeleteEncryptedGeneration []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Generation is the generation argument value.
+			Generation uint64
+		}
+		// ListEncryptedGenerations holds details about calls to the ListEncryptedGenerations method.
+		ListEncryptedGenerations []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+		}
+		// ListEncryptedObjects holds details about calls to the ListEncryptedObjects method.
+		ListEncryptedObjects []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Generation is the generation argument value.
+			Generation uint64
+		}
+		// ReadEncryptedObject holds details about calls to the ReadEncryptedObject method.
+		ReadEncryptedObject []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Hash is the hash argument value.
+			Hash string
+			// Generation is the generation argument value.
+			Generation uint64
+			// Key is the key argument value.
+			Key []byte
+		}
+		// SaveRekeyedObject holds details about calls to the SaveRekeyedObject method.
+		SaveRekeyedObject []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Hash is the hash argument value.
+			Hash string
+			// Source is the source argument value.
+			Source io.Reader
+			// Generation is the generation argument value.
+			Generation uint64
+			// Key is the key argument value.
+			Key []byte
+		}
+	}
+	lockAbortRekey                sync.RWMutex
+	lockDeleteEncryptedGeneration sync.RWMutex
+	lockListEncryptedGenerations  sync.RWMutex
+	lockListEncryptedObjects      sync.RWMutex
+	lockReadEncryptedObject       sync.RWMutex
+	lockSaveRekeyedObject         sync.RWMutex
+}
+
+// AbortRekey calls AbortRekeyFunc.
+func (mock *EncryptedObjectRepositoryMock) AbortRekey(ctx context.Context, generation uint64) error {
+	if mock.AbortRekeyFunc == nil {
+		panic("EncryptedObjectRepositoryMock.AbortRekeyFunc: method is nil but EncryptedObjectRepository.AbortRekey was just called")
+	}
+	callInfo := struct {
+		Ctx        context.Context
+		Generation uint64
+	}{
+		Ctx:        ctx,
+		Generation: generation,
+	}
+	mock.lockAbortRekey.Lock()
+	mock.calls.AbortRekey = append(mock.calls.AbortRekey, callInfo)
+	mock.lockAbortRekey.Unlock()
+	return mock.AbortRekeyFunc(ctx, generation)
+}
+
+// AbortRekeyCalls gets all the calls that were made to AbortRekey.
+// Check the length with:
+//
+//	len(mockedEncryptedObjectRepository.AbortRekeyCalls())
+func (mock *EncryptedObjectRepositoryMock) AbortRekeyCalls() []struct {
+	Ctx        context.Context
+	Generation uint64
+} {
+	var calls []struct {
+		Ctx        context.Context
+		Generation uint64
+	}
+	mock.lockAbortRekey.RLock()
+	calls = mock.calls.AbortRekey
+	mock.lockAbortRekey.RUnlock()
+	return calls
+}
+
+// DeleteEncryptedGeneration calls DeleteEncryptedGenerationFunc.
+func (mock *EncryptedObjectRepositoryMock) DeleteEncryptedGeneration(ctx context.Context, generation uint64) error {
+	if mock.DeleteEncryptedGenerationFunc == nil {
+		panic("EncryptedObjectRepositoryMock.DeleteEncryptedGenerationFunc: method is nil but EncryptedObjectRepository.DeleteEncryptedGeneration was just called")
+	}
+	callInfo := struct {
+		Ctx        context.Context
+		Generation uint64
+	}{
+		Ctx:        ctx,
+		Generation: generation,
+	}
+	mock.lockDeleteEncryptedGeneration.Lock()
+	mock.calls.DeleteEncryptedGeneration = append(mock.calls.DeleteEncryptedGeneration, callInfo)
+	mock.lockDeleteEncryptedGeneration.Unlock()
+	return mock.DeleteEncryptedGenerationFunc(ctx, generation)
+}
+
+// DeleteEncryptedGenerationCalls gets all the calls that were made to DeleteEncryptedGeneration.
+// Check the length with:
+//
+//	len(mockedEncryptedObjectRepository.DeleteEncryptedGenerationCalls())
+func (mock *EncryptedObjectRepositoryMock) DeleteEncryptedGenerationCalls() []struct {
+	Ctx        context.Context
+	Generation uint64
+} {
+	var calls []struct {
+		Ctx        context.Context
+		Generation uint64
+	}
+	mock.lockDeleteEncryptedGeneration.RLock()
+	calls = mock.calls.DeleteEncryptedGeneration
+	mock.lockDeleteEncryptedGeneration.RUnlock()
+	return calls
+}
+
+// ListEncryptedGenerations calls ListEncryptedGenerationsFunc.
+func (mock *EncryptedObjectRepositoryMock) ListEncryptedGenerations(ctx context.Context) ([]uint64, error) {
+	if mock.ListEncryptedGenerationsFunc == nil {
+		panic("EncryptedObjectRepositoryMock.ListEncryptedGenerationsFunc: method is nil but EncryptedObjectRepository.ListEncryptedGenerations was just called")
+	}
+	callInfo := struct {
+		Ctx context.Context
+	}{
+		Ctx: ctx,
+	}
+	mock.lockListEncryptedGenerations.Lock()
+	mock.calls.ListEncryptedGenerations = append(mock.calls.ListEncryptedGenerations, callInfo)
+	mock.lockListEncryptedGenerations.Unlock()
+	return mock.ListEncryptedGenerationsFunc(ctx)
+}
+
+// ListEncryptedGenerationsCalls gets all the calls that were made to ListEncryptedGenerations.
+// Check the length with:
+//
+//	len(mockedEncryptedObjectRepository.ListEncryptedGenerationsCalls())
+func (mock *EncryptedObjectRepositoryMock) ListEncryptedGenerationsCalls() []struct {
+	Ctx context.Context
+} {
+	var calls []struct {
+		Ctx context.Context
+	}
+	mock.lockListEncryptedGenerations.RLock()
+	calls = mock.calls.ListEncryptedGenerations
+	mock.lockListEncryptedGenerations.RUnlock()
+	return calls
+}
+
+// ListEncryptedObjects calls ListEncryptedObjectsFunc.
+func (mock *EncryptedObjectRepositoryMock) ListEncryptedObjects(ctx context.Context, generation uint64) ([]string, error) {
+	if mock.ListEncryptedObjectsFunc == nil {
+		panic("EncryptedObjectRepositoryMock.ListEncryptedObjectsFunc: method is nil but EncryptedObjectRepository.ListEncryptedObjects was just called")
+	}
+	callInfo := struct {
+		Ctx        context.Context
+		Generation uint64
+	}{
+		Ctx:        ctx,
+		Generation: generation,
+	}
+	mock.lockListEncryptedObjects.Lock()
+	mock.calls.ListEncryptedObjects = append(mock.calls.ListEncryptedObjects, callInfo)
+	mock.lockListEncryptedObjects.Unlock()
+	return mock.ListEncryptedObjectsFunc(ctx, generation)
+}
+
+// ListEncryptedObjectsCalls gets all the calls that were made to ListEncryptedObjects.
+// Check the length with:
+//
+//	len(mockedEncryptedObjectRepository.ListEncryptedObjectsCalls())
+func (mock *EncryptedObjectRepositoryMock) ListEncryptedObjectsCalls() []struct {
+	Ctx        context.Context
+	Generation uint64
+} {
+	var calls []struct {
+		Ctx        context.Context
+		Generation uint64
+	}
+	mock.lockListEncryptedObjects.RLock()
+	calls = mock.calls.ListEncryptedObjects
+	mock.lockListEncryptedObjects.RUnlock()
+	return calls
+}
+
+// ReadEncryptedObject calls ReadEncryptedObjectFunc.
+func (mock *EncryptedObjectRepositoryMock) ReadEncryptedObject(ctx context.Context, hash string, generation uint64, key []byte) (io.ReadCloser, error) {
+	if mock.ReadEncryptedObjectFunc == nil {
+		panic("EncryptedObjectRepositoryMock.ReadEncryptedObjectFunc: method is nil but EncryptedObjectRepository.ReadEncryptedObject was just called")
+	}
+	callInfo := struct {
+		Ctx        context.Context
+		Hash       string
+		Generation uint64
+		Key        []byte
+	}{
+		Ctx:        ctx,
+		Hash:       hash,
+		Generation: generation,
+		Key:        key,
+	}
+	mock.lockReadEncryptedObject.Lock()
+	mock.calls.ReadEncryptedObject = append(mock.calls.ReadEncryptedObject, callInfo)
+	mock.lockReadEncryptedObject.Unlock()
+	return mock.ReadEncryptedObjectFunc(ctx, hash, generation, key)
+}
+
+// ReadEncryptedObjectCalls gets all the calls that were made to ReadEncryptedObject.
+// Check the length with:
+//
+//	len(mockedEncryptedObjectRepository.ReadEncryptedObjectCalls())
+func (mock *EncryptedObjectRepositoryMock) ReadEncryptedObjectCalls() []struct {
+	Ctx        context.Context
+	Hash       string
+	Generation uint64
+	Key        []byte
+} {
+	var calls []struct {
+		Ctx        context.Context
+		Hash       string
+		Generation uint64
+		Key        []byte
+	}
+	mock.lockReadEncryptedObject.RLock()
+	calls = mock.calls.ReadEncryptedObject
+	mock.lockReadEncryptedObject.RUnlock()
+	return calls
+}
+
 // SaveRekeyedObject calls SaveRekeyedObjectFunc.
-func (mock *ObjectRepositoryMock) SaveRekeyedObject(ctx context.Context, hash string, source io.Reader, generation uint64, key []byte) error {
+func (mock *EncryptedObjectRepositoryMock) SaveRekeyedObject(ctx context.Context, hash string, source io.Reader, generation uint64, key []byte) error {
 	if mock.SaveRekeyedObjectFunc == nil {
-		panic("ObjectRepositoryMock.SaveRekeyedObjectFunc: method is nil but ObjectRepository.SaveRekeyedObject was just called")
+		panic("EncryptedObjectRepositoryMock.SaveRekeyedObjectFunc: method is nil but EncryptedObjectRepository.SaveRekeyedObject was just called")
 	}
 	callInfo := struct {
 		Ctx        context.Context
@@ -1542,8 +1608,8 @@ func (mock *ObjectRepositoryMock) SaveRekeyedObject(ctx context.Context, hash st
 // SaveRekeyedObjectCalls gets all the calls that were made to SaveRekeyedObject.
 // Check the length with:
 //
-//	len(mockedObjectRepository.SaveRekeyedObjectCalls())
-func (mock *ObjectRepositoryMock) SaveRekeyedObjectCalls() []struct {
+//	len(mockedEncryptedObjectRepository.SaveRekeyedObjectCalls())
+func (mock *EncryptedObjectRepositoryMock) SaveRekeyedObjectCalls() []struct {
 	Ctx        context.Context
 	Hash       string
 	Source     io.Reader
@@ -2188,5 +2254,71 @@ func (mock *LockRepositoryMock) SaveCalls() []struct {
 	mock.lockSave.RLock()
 	calls = mock.calls.Save
 	mock.lockSave.RUnlock()
+	return calls
+}
+
+// Ensure, that KeyGeneratorMock does implement KeyGenerator.
+// If this is not the case, regenerate this file with moq.
+var _ KeyGenerator = &KeyGeneratorMock{}
+
+// KeyGeneratorMock is a mock implementation of KeyGenerator.
+//
+//	func TestSomethingThatUsesKeyGenerator(t *testing.T) {
+//
+//		// make and configure a mocked KeyGenerator
+//		mockedKeyGenerator := &KeyGeneratorMock{
+//			GenerateRSAKeyFunc: func(ctx context.Context) (*rsa.PrivateKey, error) {
+//				panic("mock out the GenerateRSAKey method")
+//			},
+//		}
+//
+//		// use mockedKeyGenerator in code that requires KeyGenerator
+//		// and then make assertions.
+//
+//	}
+type KeyGeneratorMock struct {
+	// GenerateRSAKeyFunc mocks the GenerateRSAKey method.
+	GenerateRSAKeyFunc func(ctx context.Context) (*rsa.PrivateKey, error)
+
+	// calls tracks calls to the methods.
+	calls struct {
+		// GenerateRSAKey holds details about calls to the GenerateRSAKey method.
+		GenerateRSAKey []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+		}
+	}
+	lockGenerateRSAKey sync.RWMutex
+}
+
+// GenerateRSAKey calls GenerateRSAKeyFunc.
+func (mock *KeyGeneratorMock) GenerateRSAKey(ctx context.Context) (*rsa.PrivateKey, error) {
+	if mock.GenerateRSAKeyFunc == nil {
+		panic("KeyGeneratorMock.GenerateRSAKeyFunc: method is nil but KeyGenerator.GenerateRSAKey was just called")
+	}
+	callInfo := struct {
+		Ctx context.Context
+	}{
+		Ctx: ctx,
+	}
+	mock.lockGenerateRSAKey.Lock()
+	mock.calls.GenerateRSAKey = append(mock.calls.GenerateRSAKey, callInfo)
+	mock.lockGenerateRSAKey.Unlock()
+	return mock.GenerateRSAKeyFunc(ctx)
+}
+
+// GenerateRSAKeyCalls gets all the calls that were made to GenerateRSAKey.
+// Check the length with:
+//
+//	len(mockedKeyGenerator.GenerateRSAKeyCalls())
+func (mock *KeyGeneratorMock) GenerateRSAKeyCalls() []struct {
+	Ctx context.Context
+} {
+	var calls []struct {
+		Ctx context.Context
+	}
+	mock.lockGenerateRSAKey.RLock()
+	calls = mock.calls.GenerateRSAKey
+	mock.lockGenerateRSAKey.RUnlock()
 	return calls
 }

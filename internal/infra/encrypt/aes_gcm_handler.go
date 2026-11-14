@@ -51,7 +51,7 @@ func (h AESGCMHandler) Decode(source io.Reader, key []byte) (io.Reader, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read encrypted data: %w", err)
 	}
-	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
+	plaintext, err := gcm.Open(ciphertext[:0], nonce, ciphertext, nil)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrDecryptionFailed, err)
 	}
@@ -92,7 +92,8 @@ func (h AESGCMHandler) Encode(destination io.Writer, key []byte) (*Encoder, erro
 					return
 				}
 
-				encrypted := aead.Seal(nil, nonce, buffer.Bytes(), nil)
+				plaintext := buffer.Bytes()
+				encrypted := aead.Seal(plaintext[:0], nonce, plaintext, nil)
 
 				if err := writeFull(destination, nonce); err != nil {
 					closeErr = fmt.Errorf("write AES-GCM nonce: %w", err)

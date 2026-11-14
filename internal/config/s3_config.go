@@ -9,8 +9,12 @@ type S3Config struct {
 }
 
 func NewS3Config() (*S3Config, error) {
+	return NewS3ConfigFrom(nil)
+}
+
+func NewS3ConfigFrom(environment map[string]string) (*S3Config, error) {
 	var cfg S3Config
-	if err := env.Parse(&cfg); err != nil {
+	if err := env.ParseWithOptions(&cfg, env.Options{Environment: environment}); err != nil {
 		return nil, err
 	}
 	return &cfg, nil

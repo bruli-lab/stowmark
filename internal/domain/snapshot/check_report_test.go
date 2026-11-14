@@ -19,6 +19,21 @@ func manifestReferencing(id string, hashes ...string) snapshot.Manifest {
 func TestNewCheckReport(t *testing.T) {
 	t.Parallel()
 
+	t.Run(`Given manifests with objects of known sizes,
+	when ObjectSize is called,
+	then it returns the size of a referenced object and zero for an unknown one`, func(t *testing.T) {
+		t.Parallel()
+
+		manifest := fixtures.ManifestBuilder{Files: []snapshot.File{
+			fixtures.FileBuilder{Hash: new("aa01"), Size: new(int64(42))}.Build(),
+		}}.Build()
+
+		report := snapshot.NewCheckReport([]snapshot.Manifest{manifest}, nil, []string{"aa01"})
+
+		require.Equal(t, int64(42), report.ObjectSize("aa01"))
+		require.Zero(t, report.ObjectSize("ff99"))
+	})
+
 	t.Run(`Given manifests, a corrupt manifest and stored objects with orphans and gaps,
 	when NewCheckReport is called,
 	then it reports the missing objects with the snapshots that use them, the orphans and the readable objects`, func(t *testing.T) {

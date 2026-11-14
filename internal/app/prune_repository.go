@@ -25,10 +25,11 @@ func (p PruneRepositoryCommand) Name() string {
 }
 
 type PruneRepository struct {
-	planner    prunePlanner
-	objectRepo ObjectRepository
-	locker     *RepositoryLocker
-	workers    int
+	planner       prunePlanner
+	objectRepo    ObjectRepository
+	encryptedRepo EncryptedObjectRepository
+	locker        *RepositoryLocker
+	workers       int
 }
 
 func (p *PruneRepository) Handle(ctx context.Context, cmd cqs.Command) ([]event.Event, error) {
@@ -52,6 +53,19 @@ func (p *PruneRepository) Handle(ctx context.Context, cmd cqs.Command) ([]event.
 		}
 		if len(target.plan.Unreferenced()) > 0 {
 			events = append(events, target.plan.Pruned(repositoryID))
+		}
+		if err := p.deleteGenerations(ctx, target); err != nil {
+			return err
+		}
+		if len(target.plan.OrphanGenerations()) > 0 {
+			events = append(events, target.plan.GenerationsRemoved(repositoryID))
+		}
+		temporaries, err := p.objectRepo.DeleteTemporaryObjects(ctx)
+		if err != nil {
+			return fmt.Errorf("delete temporary objects: %w", err)
+		}
+		if temporaries > 0 {
+			events = append(events, snapshot.NewTemporariesRemoved(repositoryID, temporaries))
 		}
 		return nil
 	})
@@ -91,19 +105,30 @@ func (p *PruneRepository) deleteObjects(ctx context.Context, target *pruneTarget
 	return ctx.Err()
 }
 
+func (p *PruneRepository) deleteGenerations(ctx context.Context, target *pruneTarget) error {
+	for _, generation := range target.plan.OrphanGenerations() {
+		if err := p.encryptedRepo.DeleteEncryptedGeneration(ctx, generation); err != nil {
+			return fmt.Errorf("prune key generation %d: %w", generation, err)
+		}
+	}
+	return nil
+}
+
 func NewPruneRepository(
 	folderRepo FolderRepository,
 	manifestRepo ManifestRepository,
 	objectRepo ObjectRepository,
+	encryptedRepo EncryptedObjectRepository,
 	locker *RepositoryLocker,
 ) *PruneRepository {
-	return NewPruneRepositoryWithWorkers(folderRepo, manifestRepo, objectRepo, locker, defaultPruneWorkers)
+	return NewPruneRepositoryWithWorkers(folderRepo, manifestRepo, objectRepo, encryptedRepo, locker, defaultPruneWorkers)
 }
 
 func NewPruneRepositoryWithWorkers(
 	folderRepo FolderRepository,
 	manifestRepo ManifestRepository,
 	objectRepo ObjectRepository,
+	encryptedRepo EncryptedObjectRepository,
 	locker *RepositoryLocker,
 	workers int,
 ) *PruneRepository {
@@ -111,10 +136,11 @@ func NewPruneRepositoryWithWorkers(
 		workers = defaultPruneWorkers
 	}
 	return &PruneRepository{
-		planner:    prunePlanner{folderRepo: folderRepo, manifestRepo: manifestRepo, objectRepo: objectRepo},
-		objectRepo: objectRepo,
-		locker:     locker,
-		workers:    workers,
+		planner:       newPrunePlanner(folderRepo, manifestRepo, objectRepo, encryptedRepo),
+		objectRepo:    objectRepo,
+		encryptedRepo: encryptedRepo,
+		locker:        locker,
+		workers:       workers,
 	}
 }
 
@@ -126,9 +152,19 @@ type pruneTarget struct {
 }
 
 type prunePlanner struct {
-	folderRepo   FolderRepository
-	manifestRepo ManifestRepository
-	objectRepo   ObjectRepository
+	folderRepo    FolderRepository
+	manifestRepo  ManifestRepository
+	objectRepo    ObjectRepository
+	encryptedRepo EncryptedObjectRepository
+}
+
+func newPrunePlanner(
+	folderRepo FolderRepository,
+	manifestRepo ManifestRepository,
+	objectRepo ObjectRepository,
+	encryptedRepo EncryptedObjectRepository,
+) prunePlanner {
+	return prunePlanner{folderRepo: folderRepo, manifestRepo: manifestRepo, objectRepo: objectRepo, encryptedRepo: encryptedRepo}
 }
 
 func (p prunePlanner) plan(ctx context.Context, repositoryPath string) (*pruneTarget, error) {
@@ -152,6 +188,12 @@ func (p prunePlanner) plan(ctx context.Context, repositoryPath string) (*pruneTa
 		return nil, err
 	}
 
+	generations, err := p.encryptedRepo.ListEncryptedGenerations(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	target.plan = snapshot.NewPrunePlan(manifests, stored)
+	target.plan.RecordOrphanGenerations(conf.OrphanGenerations(generations))
 	return target, nil
 }

@@ -224,6 +224,25 @@ func mainFlow(t *testing.T, ctx context.Context, folders Folders, formatVersion 
 	require.True(t, restored.IsSuccess)
 	requireDirectoriesEqual(t, folders.Source, prunedRestore)
 
+	leftoverKey := "objects/encrypted/999/ab/" + strings.Repeat("cd", 31)
+	require.NoError(t, store.Put(ctx, leftoverKey, func(w io.Writer) error {
+		_, err := w.Write([]byte("object of an interrupted rekey"))
+		return err
+	}))
+	leftoverCheck, err := handler.Check(ctx, stowmark.CheckOptions{})
+	require.NoError(t, err)
+	require.False(t, leftoverCheck.HasErrors, "old key generations are a warning, not an error")
+	require.Equal(t, []uint64{999}, leftoverCheck.OldKeyGenerations)
+	prunePlan, err = handler.PlanPrune(ctx)
+	require.NoError(t, err)
+	require.Equal(t, []uint64{999}, prunePlan.OldKeyGenerations)
+	pruned, err = handler.Prune(ctx)
+	require.NoError(t, err)
+	require.Equal(t, []uint64{999}, pruned.RemovedKeyGenerations)
+	leftovers, err := store.List(ctx, "objects/encrypted/999")
+	require.NoError(t, err)
+	require.Empty(t, leftovers)
+
 	checked, err := handler.Check(ctx, stowmark.CheckOptions{})
 	require.NoError(t, err)
 	require.False(t, checked.HasErrors)

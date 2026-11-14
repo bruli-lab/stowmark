@@ -8,6 +8,8 @@ import (
 )
 
 func TestNewWebdavConfig(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name                               string
 		envVars                            map[string]string
@@ -15,19 +17,19 @@ func TestNewWebdavConfig(t *testing.T) {
 		expectedUsername, expectedPassword string
 	}{
 		{
-			name:        "with no env vars set, it returns an error",
+			name:        "with no env vars set, then it returns an error",
 			envVars:     map[string]string{},
 			expectedErr: true,
 		},
 		{
-			name: "with unrelated env vars set, it returns an error",
+			name: "with unrelated env vars set, then it returns an error",
 			envVars: map[string]string{
 				"EX_WEBDAV_USERNAME": "test",
 			},
 			expectedErr: true,
 		},
 		{
-			name: "with all valued set, it returns a valid config",
+			name: "with all values set, then it returns a valid config",
 			envVars: map[string]string{
 				"STOWMARK_WEBDAV_USERNAME": "username-test",
 				"STOWMARK_WEBDAV_PASSWORD": "password-test",
@@ -38,13 +40,11 @@ func TestNewWebdavConfig(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(`Given a WebdavConfig struct,
-		when the constructor is called `+tt.name, func(t *testing.T) {
-			for key, value := range tt.envVars {
-				t.Setenv(key, value)
-			}
+		t.Run(`Given an environment,
+		when NewWebdavConfigFrom is called `+tt.name, func(t *testing.T) {
+			t.Parallel()
 
-			got, err := config.NewWebdavConfig()
+			got, err := config.NewWebdavConfigFrom(tt.envVars)
 			if tt.expectedErr {
 				require.Error(t, err)
 				return

@@ -14,11 +14,14 @@ type PrunePlan struct {
 	ReferencedObjects   int
 	UnreferencedObjects int
 	MissingObjects      int
+	OldKeyGenerations   []uint64
 }
 
 type PruneResult struct {
-	RemovedObjects int
-	MissingObjects int
+	RemovedObjects        int
+	MissingObjects        int
+	RemovedKeyGenerations []uint64
+	RemovedTemporaryFiles int
 }
 
 func (h *Handler) PlanPrune(ctx context.Context) (*PrunePlan, error) {
@@ -33,7 +36,7 @@ func (h *Handler) PlanPrune(ctx context.Context) (*PrunePlan, error) {
 	if err != nil {
 		return nil, err
 	}
-	handler := mdw(app.NewPrunePlan(h.folderRepository, h.manifestRepository, h.objectRepository, h.locker))
+	handler := mdw(app.NewPrunePlan(h.folderRepository, h.manifestRepository, h.objectRepository, h.encryptedObjectRepository, h.locker))
 	result, err := handler.Handle(ctx, app.PrunePlanQuery{RepositoryPath: h.repositoryPath})
 	if err != nil {
 		return nil, err
@@ -47,6 +50,7 @@ func (h *Handler) PlanPrune(ctx context.Context) (*PrunePlan, error) {
 		ReferencedObjects:   plan.ReferencedObjects(),
 		UnreferencedObjects: len(plan.Unreferenced()),
 		MissingObjects:      len(plan.Missing()),
+		OldKeyGenerations:   plan.OrphanGenerations(),
 	}, nil
 }
 
@@ -62,7 +66,7 @@ func (h *Handler) Prune(ctx context.Context) (*PruneResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	handler := mdw(app.NewPruneRepository(h.folderRepository, h.manifestRepository, h.objectRepository, h.locker))
+	handler := mdw(app.NewPruneRepository(h.folderRepository, h.manifestRepository, h.objectRepository, h.encryptedObjectRepository, h.locker))
 	events, err := handler.Handle(ctx, app.PruneRepositoryCommand{RepositoryPath: h.repositoryPath})
 	if err != nil {
 		return nil, err
@@ -73,6 +77,12 @@ func (h *Handler) Prune(ctx context.Context) (*PruneResult, error) {
 	}
 	for _, missing := range app.EventsOf[*snapshot.MissingObjectsDetected](events) {
 		result.MissingObjects += len(missing.Hashes())
+	}
+	for _, generations := range app.EventsOf[*snapshot.GenerationsRemoved](events) {
+		result.RemovedKeyGenerations = append(result.RemovedKeyGenerations, generations.Generations()...)
+	}
+	for _, temporaries := range app.EventsOf[*snapshot.TemporariesRemoved](events) {
+		result.RemovedTemporaryFiles += temporaries.Removed()
 	}
 	return result, nil
 }

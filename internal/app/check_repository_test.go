@@ -34,12 +34,13 @@ type checkSetup struct {
 }
 
 type checkDependencies struct {
-	folderRepo   *app.FolderRepositoryMock
-	manifestRepo *app.ManifestRepositoryMock
-	objectRepo   *app.ObjectRepositoryMock
-	lockRepo     *app.LockRepositoryMock
-	mu           sync.Mutex
-	readKeys     [][]byte
+	folderRepo    *app.FolderRepositoryMock
+	manifestRepo  *app.ManifestRepositoryMock
+	objectRepo    *app.ObjectRepositoryMock
+	encryptedRepo *app.EncryptedObjectRepositoryMock
+	lockRepo      *app.LockRepositoryMock
+	mu            sync.Mutex
+	readKeys      [][]byte
 }
 
 func newCheckDependencies(t *testing.T, setup checkSetup) *checkDependencies {
@@ -69,7 +70,6 @@ func newCheckDependencies(t *testing.T, setup checkSetup) *checkDependencies {
 		ListObjectsFunc: func(context.Context, bool, uint64) ([]string, error) {
 			return []string{hashOf(healthyContent), hashOf(corruptContent), hashOf(orphanContent)}, setup.listObjErr
 		},
-		ListEncryptedGenerationsFunc: func(context.Context) ([]uint64, error) { return setup.generations, nil },
 		ReadObjectFunc: func(_ context.Context, hash string, key []byte, _ uint64) (io.ReadCloser, error) {
 			deps.mu.Lock()
 			deps.readKeys = append(deps.readKeys, key)
@@ -81,6 +81,9 @@ func newCheckDependencies(t *testing.T, setup checkSetup) *checkDependencies {
 			return io.NopCloser(strings.NewReader(content)), nil
 		},
 	}
+	deps.encryptedRepo = &app.EncryptedObjectRepositoryMock{
+		ListEncryptedGenerationsFunc: func(context.Context) ([]uint64, error) { return setup.generations, nil },
+	}
 	stale, err := repository.NewLock(repository.ExclusiveLock, otherOwner, time.Now().Add(-repository.LockStaleAfter-time.Minute))
 	require.NoError(t, err)
 	deps.lockRepo = newMemoryLocks(stale).mock
@@ -88,7 +91,7 @@ func newCheckDependencies(t *testing.T, setup checkSetup) *checkDependencies {
 }
 
 func (d *checkDependencies) handler(asymmetric *app.AsymmetricKeyPairRepositoryMock, symmetric *app.SymmetricKeyRepositoryMock) *app.CheckRepository {
-	return app.NewCheckRepositoryWithWorkers(d.folderRepo, d.manifestRepo, d.objectRepo, d.lockRepo, asymmetric, symmetric, newUnlockedLocker(), 2)
+	return app.NewCheckRepositoryWithWorkers(d.folderRepo, d.manifestRepo, d.objectRepo, d.encryptedRepo, d.lockRepo, asymmetric, symmetric, newUnlockedLocker(), 2)
 }
 
 func checkReport(t *testing.T, handler *app.CheckRepository, query app.CheckRepositoryQuery) *snapshot.CheckReport {

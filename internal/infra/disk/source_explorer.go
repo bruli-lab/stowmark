@@ -190,17 +190,17 @@ func (s SourceExplorer) Explore(ctx context.Context, sourcePath string, rules *s
 	if !info.IsDir() {
 		return nil, fmt.Errorf("source path is not a directory: %s", absolutePath)
 	}
-	files, err := s.readFiles(ctx, absolutePath, rules)
+	files, skipped, err := s.readFiles(ctx, absolutePath, rules)
 	if err != nil {
 		return nil, fmt.Errorf("read files: %w", err)
 	}
-	return snapshot.NewSource(absolutePath, files), nil
+	return snapshot.NewSource(absolutePath, files, skipped), nil
 }
 
-func (s SourceExplorer) readFiles(ctx context.Context, root string, rules *snapshot.ExcludeRules) ([]snapshot.File, error) {
-	files := make([]snapshot.File, 0)
+func (s SourceExplorer) readFiles(ctx context.Context, root string, rules *snapshot.ExcludeRules) (files []snapshot.File, skipped []snapshot.SkippedFile, err error) {
+	files = make([]snapshot.File, 0)
 
-	err := filepath.WalkDir(root, func(
+	err = filepath.WalkDir(root, func(
 		path string,
 		entry fs.DirEntry,
 		walkErr error,
@@ -226,7 +226,11 @@ func (s SourceExplorer) readFiles(ctx context.Context, root string, rules *snaps
 			return nil
 		}
 
-		if entry.IsDir() || !entry.Type().IsRegular() {
+		if entry.IsDir() {
+			return nil
+		}
+		if !entry.Type().IsRegular() {
+			skipped = append(skipped, snapshot.NewSkippedFile(filepath.ToSlash(relative), skippedKind(entry.Type())))
 			return nil
 		}
 		info, err := entry.Info()
@@ -239,9 +243,24 @@ func (s SourceExplorer) readFiles(ctx context.Context, root string, rules *snaps
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("walk directory %q: %w", root, err)
+		return nil, nil, fmt.Errorf("walk directory %q: %w", root, err)
 	}
-	return files, nil
+	return files, skipped, nil
+}
+
+func skippedKind(mode fs.FileMode) string {
+	switch {
+	case mode&fs.ModeSymlink != 0:
+		return snapshot.SymlinkKind
+	case mode&fs.ModeDevice != 0:
+		return snapshot.DeviceKind
+	case mode&fs.ModeSocket != 0:
+		return snapshot.SocketKind
+	case mode&fs.ModeNamedPipe != 0:
+		return snapshot.NamedPipeKind
+	default:
+		return snapshot.IrregularKind
+	}
 }
 
 func NewSourceRepository() *SourceExplorer {

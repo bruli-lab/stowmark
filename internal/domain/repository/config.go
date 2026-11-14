@@ -59,3 +59,14 @@ func HydrateConfig(
 		encryption:    encryptionConfig,
 	}
 }
+
+func (c Config) OrphanGenerations(stored []uint64) []uint64 {
+	orphans := make([]uint64, 0, len(stored))
+	for _, generation := range stored {
+		if c.encryption != nil && generation == c.encryption.Generation() {
+			continue
+		}
+		orphans = append(orphans, generation)
+	}
+	return orphans
+}

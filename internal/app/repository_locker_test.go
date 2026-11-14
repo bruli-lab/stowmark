@@ -293,16 +293,16 @@ func TestRekeyKey_Handle_Locked(t *testing.T) {
 		t.Parallel()
 
 		folderRepo := &app.FolderRepositoryMock{}
-		objectRepo := &app.ObjectRepositoryMock{}
+		encryptedRepo := &app.EncryptedObjectRepositoryMock{}
 		locker := app.NewRepositoryLocker(newMemoryLocks(otherLock(t, repository.SharedLock, time.Now())).mock)
-		handler := app.NewRekeyKey(folderRepo, objectRepo, &app.AsymmetricKeyPairRepositoryMock{}, &app.SymmetricKeyRepositoryMock{}, locker)
+		handler := app.NewRekeyKey(folderRepo, encryptedRepo, &app.AsymmetricKeyPairRepositoryMock{}, &app.SymmetricKeyRepositoryMock{}, locker)
 
 		events, err := handler.Handle(t.Context(), app.RekeyKeyCommand{RepositoryPath: "repo", PrivateKeyPath: "private", PublicKeyPath: "public"})
 
 		require.ErrorIs(t, err, repository.ErrRepositoryLocked)
 		require.Empty(t, events)
 		require.Empty(t, folderRepo.GetConfigCalls())
-		require.Empty(t, objectRepo.ListEncryptedObjectsCalls())
+		require.Empty(t, encryptedRepo.ListEncryptedObjectsCalls())
 	})
 }
 

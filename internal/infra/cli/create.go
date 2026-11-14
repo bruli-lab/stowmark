@@ -105,6 +105,9 @@ func newSnapshotCreateCommand() *cobra.Command {
 				result.FileCount(),
 				result.TotalSize(),
 			)
+			for _, skipped := range result.SkippedFiles() {
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "WARNING: %s skipped: %s is not supported\n", skipped.Path(), skipped.Kind())
+			}
 
 			return nil
 		},

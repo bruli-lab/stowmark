@@ -20,3 +20,7 @@ type Store interface {
 	Delete(ctx context.Context, key string) error
 	DeletePrefix(ctx context.Context, prefix string) error
 }
+
+type TemporaryCleaner interface {
+	DeleteTemporaries(ctx context.Context, prefix string) (int, error)
+}

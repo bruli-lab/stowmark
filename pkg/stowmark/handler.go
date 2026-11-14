@@ -14,6 +14,7 @@ type Handler struct {
 	sourceRepository            app.SourceRepository
 	manifestRepository          app.ManifestRepository
 	objectRepository            app.ObjectRepository
+	encryptedObjectRepository   app.EncryptedObjectRepository
 	repositoryPath              string
 	repositoriesHandler         repositories.Repositories
 	asymmetricKeyPairRepository app.AsymmetricKeyPairRepository
@@ -42,6 +43,10 @@ func NewHandler(ctx context.Context, repositoryPath string) (*Handler, error) {
 	if err != nil {
 		return nil, err
 	}
+	encryptedObjectRepo, err := repoHandler.EncryptedObjectRepository()
+	if err != nil {
+		return nil, err
+	}
 	lockRepo, err := repoHandler.LockRepository()
 	if err != nil {
 		return nil, err
@@ -52,6 +57,7 @@ func NewHandler(ctx context.Context, repositoryPath string) (*Handler, error) {
 		sourceRepository:            sourceRepo,
 		manifestRepository:          manifestRepo,
 		objectRepository:            objectRepo,
+		encryptedObjectRepository:   encryptedObjectRepo,
 		repositoryPath:              repoHandler.RepositoryPath(),
 		repositoriesHandler:         repoHandler,
 		asymmetricKeyPairRepository: disk.NewAsymmetricKeyPairRepository(),

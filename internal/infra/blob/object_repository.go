@@ -273,6 +273,21 @@ func (o ObjectRepository) SaveRekeyedObject(ctx context.Context, hash string, so
 	})
 }
 
+func (o ObjectRepository) DeleteTemporaryObjects(ctx context.Context) (int, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+	cleaner, ok := o.store.(TemporaryCleaner)
+	if !ok {
+		return 0, nil
+	}
+	removed, err := cleaner.DeleteTemporaries(ctx, repository.ObjectsFolder)
+	if err != nil {
+		return removed, fmt.Errorf("delete temporary objects: %w", err)
+	}
+	return removed, nil
+}
+
 func (o ObjectRepository) DeleteEncryptedGeneration(ctx context.Context, generation uint64) error {
 	if err := ctx.Err(); err != nil {
 		return err

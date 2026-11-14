@@ -49,10 +49,11 @@ func NewPrunePlan(
 	folderRepo FolderRepository,
 	manifestRepo ManifestRepository,
 	objectRepo ObjectRepository,
+	encryptedRepo EncryptedObjectRepository,
 	locker *RepositoryLocker,
 ) *PrunePlan {
 	return &PrunePlan{
-		planner: prunePlanner{folderRepo: folderRepo, manifestRepo: manifestRepo, objectRepo: objectRepo},
+		planner: newPrunePlanner(folderRepo, manifestRepo, objectRepo, encryptedRepo),
 		locker:  locker,
 	}
 }

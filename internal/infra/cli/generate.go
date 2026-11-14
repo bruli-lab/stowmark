@@ -6,6 +6,7 @@ import (
 	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/infra/disk"
+	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
 	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 	"github.com/spf13/cobra"
 )
@@ -29,7 +30,7 @@ func newKeyGenerateCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			handler := multiMdw(app.NewGenerateKey(disk.NewAsymmetricKeyPairRepository()))
+			handler := multiMdw(app.NewGenerateKey(encrypt.NewRSAKeyGenerator(), disk.NewAsymmetricKeyPairRepository()))
 			keys, err := encryption.NewAsymmetricKeyPair(folder)
 			if err != nil {
 				return fmt.Errorf("failed to create key pair: %w", err)

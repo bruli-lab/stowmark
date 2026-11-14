@@ -61,7 +61,7 @@ func (h *Handler) Check(ctx context.Context, options CheckOptions) (*CheckResult
 		return nil, err
 	}
 	handler := mdw(app.NewCheckRepository(
-		h.folderRepository, h.manifestRepository, h.objectRepository, h.lockRepository,
+		h.folderRepository, h.manifestRepository, h.objectRepository, h.encryptedObjectRepository, h.lockRepository,
 		h.asymmetricKeyPairRepository, h.symmetricKeyRepository, h.locker,
 	))
 	result, err := handler.Handle(ctx, app.CheckRepositoryQuery{

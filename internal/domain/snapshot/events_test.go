@@ -19,12 +19,15 @@ func TestSnapshotEvents(t *testing.T) {
 
 		manifest := fixtures.ManifestBuilder{ID: new("snapshot-id")}.Build()
 
-		created := snapshot.NewSnapshotCreated(&manifest, 3, 42)
+		skipped := []snapshot.SkippedFile{snapshot.NewSkippedFile("link", snapshot.SymlinkKind)}
+
+		created := snapshot.NewSnapshotCreated(&manifest, 3, 42, skipped)
 
 		require.Equal(t, snapshot.SnapshotCreatedEventName, created.EventName())
 		require.Equal(t, "snapshot-id", created.SnapshotID())
 		require.Equal(t, 3, created.FileCount())
 		require.Equal(t, int64(42), created.TotalSize())
+		require.Equal(t, skipped, created.SkippedFiles())
 		require.NotEmpty(t, created.EventID())
 	})
 
@@ -97,5 +100,32 @@ func TestSnapshotEvents(t *testing.T) {
 		require.Equal(t, snapshot.MissingObjectsDetectedEventName, missing.EventName())
 		require.Equal(t, "repository-id", missing.RepositoryID())
 		require.Equal(t, []string{"aa01"}, missing.Hashes())
+	})
+
+	t.Run(`Given a prune plan with orphan key generations,
+	when GenerationsRemoved is called,
+	then the event belongs to the repository and carries the generations`, func(t *testing.T) {
+		t.Parallel()
+
+		plan := snapshot.NewPrunePlan(nil, nil)
+		plan.RecordOrphanGenerations([]uint64{1, 2})
+
+		removed := plan.GenerationsRemoved("repository-id")
+
+		require.Equal(t, snapshot.GenerationsRemovedEventName, removed.EventName())
+		require.Equal(t, "repository-id", removed.RepositoryID())
+		require.Equal(t, []uint64{1, 2}, removed.Generations())
+	})
+
+	t.Run(`Given removed temporary files,
+	when NewTemporariesRemoved is called,
+	then the event belongs to the repository and carries the count`, func(t *testing.T) {
+		t.Parallel()
+
+		removed := snapshot.NewTemporariesRemoved("repository-id", 3)
+
+		require.Equal(t, snapshot.TemporariesRemovedEventName, removed.EventName())
+		require.Equal(t, "repository-id", removed.RepositoryID())
+		require.Equal(t, 3, removed.Removed())
 	})
 }

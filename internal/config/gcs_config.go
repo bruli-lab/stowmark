@@ -12,8 +12,12 @@ type GCSConfig struct {
 }
 
 func NewGCSConfig() *GCSConfig {
+	return NewGCSConfigFrom(nil)
+}
+
+func NewGCSConfigFrom(environment map[string]string) *GCSConfig {
 	var cfg GCSConfig
-	_ = env.Parse(&cfg)
+	_ = env.ParseWithOptions(&cfg, env.Options{Environment: environment})
 	if cfg.GoogleCredentials == nil && cfg.Endpoint == nil {
 		slog.Warn(
 			"GOOGLE_APPLICATION_CREDENTIALS is not set; using Application Default Credentials",

@@ -14,12 +14,15 @@ const (
 	SnapshotForgottenEventName      = "snapshot.forgotten"
 	ObjectsPrunedEventName          = "objects.pruned"
 	MissingObjectsDetectedEventName = "objects.missing_detected"
+	GenerationsRemovedEventName     = "objects.generations_removed"
+	TemporariesRemovedEventName     = "objects.temporaries_removed"
 )
 
 type SnapshotCreated struct {
 	event.BasicEvent
 	fileCount int
 	totalSize int64
+	skipped   []SkippedFile
 }
 
 func (s *SnapshotCreated) SnapshotID() string {
@@ -34,11 +37,16 @@ func (s *SnapshotCreated) TotalSize() int64 {
 	return s.totalSize
 }
 
-func NewSnapshotCreated(manifest *Manifest, savedFiles int, savedSize int64) *SnapshotCreated {
+func (s *SnapshotCreated) SkippedFiles() []SkippedFile {
+	return s.skipped
+}
+
+func NewSnapshotCreated(manifest *Manifest, savedFiles int, savedSize int64, skipped []SkippedFile) *SnapshotCreated {
 	return &SnapshotCreated{
 		BasicEvent: event.NewBasicEvent(SnapshotCreatedEventName, uuid.New(), manifest.ID()),
 		fileCount:  savedFiles,
 		totalSize:  savedSize,
+		skipped:    skipped,
 	}
 }
 
@@ -155,5 +163,45 @@ func (p *PrunePlan) MissingDetected(repositoryID string) *MissingObjectsDetected
 	return &MissingObjectsDetected{
 		BasicEvent: event.NewBasicEvent(MissingObjectsDetectedEventName, uuid.New(), repositoryID),
 		hashes:     p.missing,
+	}
+}
+
+type GenerationsRemoved struct {
+	event.BasicEvent
+	generations []uint64
+}
+
+func (g *GenerationsRemoved) RepositoryID() string {
+	return g.AggregateRootID()
+}
+
+func (g *GenerationsRemoved) Generations() []uint64 {
+	return g.generations
+}
+
+func (p *PrunePlan) GenerationsRemoved(repositoryID string) *GenerationsRemoved {
+	return &GenerationsRemoved{
+		BasicEvent:  event.NewBasicEvent(GenerationsRemovedEventName, uuid.New(), repositoryID),
+		generations: p.generations,
+	}
+}
+
+type TemporariesRemoved struct {
+	event.BasicEvent
+	removed int
+}
+
+func (t *TemporariesRemoved) RepositoryID() string {
+	return t.AggregateRootID()
+}
+
+func (t *TemporariesRemoved) Removed() int {
+	return t.removed
+}
+
+func NewTemporariesRemoved(repositoryID string, removed int) *TemporariesRemoved {
+	return &TemporariesRemoved{
+		BasicEvent: event.NewBasicEvent(TemporariesRemovedEventName, uuid.New(), repositoryID),
+		removed:    removed,
 	}
 }

@@ -266,33 +266,33 @@ func TestRekeyKey_Handle(t *testing.T) {
 				return tt.fingerprint, tt.fingerPrintErr
 			}
 
-			objectRepo := &app.ObjectRepositoryMock{}
-			objectRepo.ListEncryptedObjectsFunc = func(_ context.Context, _ uint64) ([]string, error) {
+			encryptedRepo := &app.EncryptedObjectRepositoryMock{}
+			encryptedRepo.ListEncryptedObjectsFunc = func(_ context.Context, _ uint64) ([]string, error) {
 				return tt.list, tt.listErr
 			}
-			objectRepo.ReadEncryptedObjectFunc = func(_ context.Context, _ string, _ uint64, _ []byte) (io.ReadCloser, error) {
+			encryptedRepo.ReadEncryptedObjectFunc = func(_ context.Context, _ string, _ uint64, _ []byte) (io.ReadCloser, error) {
 				return tt.reader, tt.readObjectErr
 			}
-			objectRepo.AbortRekeyFunc = func(_ context.Context, _ uint64) error {
+			encryptedRepo.AbortRekeyFunc = func(_ context.Context, _ uint64) error {
 				return tt.abortErr
 			}
-			objectRepo.SaveRekeyedObjectFunc = func(_ context.Context, _ string, _ io.Reader, _ uint64, _ []byte) error {
+			encryptedRepo.SaveRekeyedObjectFunc = func(_ context.Context, _ string, _ io.Reader, _ uint64, _ []byte) error {
 				return tt.saveObjectErr
 			}
-			objectRepo.DeleteEncryptedGenerationFunc = func(_ context.Context, _ uint64) error {
+			encryptedRepo.DeleteEncryptedGenerationFunc = func(_ context.Context, _ uint64) error {
 				return tt.deleteErr
 			}
-			objectRepo.AbortRekeyFunc = func(_ context.Context, _ uint64) error {
+			encryptedRepo.AbortRekeyFunc = func(_ context.Context, _ uint64) error {
 				return tt.abortErr
 			}
 
-			handler := app.NewRekeyKey(folderRepo, objectRepo, asymmetricRepo, symmetricRepo, newUnlockedLocker())
+			handler := app.NewRekeyKey(folderRepo, encryptedRepo, asymmetricRepo, symmetricRepo, newUnlockedLocker())
 			events, err := handler.Handle(t.Context(), app.RekeyKeyCommand{
 				RepositoryPath: tt.args.repositoryPath,
 				PrivateKeyPath: tt.args.privateKeyPath,
 				PublicKeyPath:  tt.args.publicKeyPath,
 			})
-			require.Len(t, objectRepo.AbortRekeyCalls(), tt.abortCalls)
+			require.Len(t, encryptedRepo.AbortRekeyCalls(), tt.abortCalls)
 			if tt.expectedErr != nil {
 				require.ErrorIs(t, err, tt.expectedErr)
 				require.Empty(t, events)

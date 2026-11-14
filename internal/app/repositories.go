@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 )
 
-//go:generate go tool moq -out repositories_mock.go . FolderRepository SourceRepository ManifestRepository ObjectRepository AsymmetricKeyPairRepository SymmetricKeyRepository LockRepository
+//go:generate go tool moq -out repositories_mock.go . FolderRepository SourceRepository ManifestRepository ObjectRepository EncryptedObjectRepository AsymmetricKeyPairRepository SymmetricKeyRepository LockRepository KeyGenerator
 type FolderRepository interface {
 	Exists(ctx context.Context, path string) (bool, error)
 	CreateFolder(ctx context.Context, path string) error
@@ -41,6 +41,10 @@ type ObjectRepository interface {
 	SaveChunk(ctx context.Context, filePath string, hash string, offset int64, size int64, comp *repository.Compression, key []byte, generation uint64) error
 	ListObjects(ctx context.Context, encrypted bool, generation uint64) ([]string, error)
 	DeleteObject(ctx context.Context, hash string, encrypted bool, generation uint64) error
+	DeleteTemporaryObjects(ctx context.Context) (int, error)
+}
+
+type EncryptedObjectRepository interface {
 	ListEncryptedObjects(ctx context.Context, generation uint64) ([]string, error)
 	ListEncryptedGenerations(ctx context.Context) ([]uint64, error)
 	ReadEncryptedObject(ctx context.Context, hash string, generation uint64, key []byte) (io.ReadCloser, error)
@@ -55,6 +59,10 @@ type AsymmetricKeyPairRepository interface {
 	ReadRSAPublicKey(ctx context.Context, filePath string) (*rsa.PublicKey, error)
 	ReadRSAPrivateKey(ctx context.Context, filePath string) (*rsa.PrivateKey, error)
 	PublicKeyFingerPrint(ctx context.Context, publicKey *rsa.PublicKey) (string, error)
+}
+
+type KeyGenerator interface {
+	GenerateRSAKey(ctx context.Context) (*rsa.PrivateKey, error)
 }
 
 type SymmetricKeyRepository interface {

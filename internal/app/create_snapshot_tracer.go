@@ -28,6 +28,7 @@ func (c CreateSnapshotTracer) Trace(span trace.Span, ev event.Event) {
 		attribute.String("snapshot.id", createEv.SnapshotID()),
 		attribute.Int("snapshot.file_count", createEv.FileCount()),
 		attribute.Int64("snapshot.total_size", createEv.TotalSize()),
+		attribute.Int("snapshot.skipped_files", len(createEv.SkippedFiles())),
 	)
 }
 

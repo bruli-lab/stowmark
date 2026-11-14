@@ -188,4 +188,21 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) blob.Store) {
 		require.NoError(t, err)
 		require.False(t, exists)
 	})
+
+	t.Run(`Given a store that cleans temporary files and has only complete blobs,
+	when DeleteTemporaries is called,
+	then it removes nothing and keeps every blob`, func(t *testing.T) {
+		cleaner, ok := newStore(t).(blob.TemporaryCleaner)
+		if !ok {
+			t.Skip("the store does not leave temporary files")
+		}
+		store, _ := cleaner.(blob.Store)
+		putString(t, store, "objects/ab/cdef", "content")
+
+		removed, err := cleaner.DeleteTemporaries(context.Background(), "objects")
+
+		require.NoError(t, err)
+		require.Zero(t, removed)
+		require.Equal(t, "content", getString(t, store, "objects/ab/cdef"))
+	})
 }

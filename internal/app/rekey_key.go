@@ -31,10 +31,10 @@ func (r RekeyKeyCommand) Name() string {
 }
 
 type RekeyKey struct {
-	folderRepo FolderRepository
-	objectRepo ObjectRepository
-	keys       keyring
-	locker     *RepositoryLocker
+	folderRepo    FolderRepository
+	encryptedRepo EncryptedObjectRepository
+	keys          keyring
+	locker        *RepositoryLocker
 }
 
 func (r *RekeyKey) Handle(ctx context.Context, cmd cqs.Command) ([]event.Event, error) {
@@ -76,7 +76,7 @@ func (r *RekeyKey) rekey(ctx context.Context, co RekeyKeyCommand) (rotated *encr
 		return nil, err
 	}
 
-	hashes, err := r.objectRepo.ListEncryptedObjects(ctx, currentGeneration)
+	hashes, err := r.encryptedRepo.ListEncryptedObjects(ctx, currentGeneration)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +91,7 @@ func (r *RekeyKey) rekey(ctx context.Context, co RekeyKeyCommand) (rotated *encr
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), rekeyCleanupTimeout)
 		defer cancel()
 
-		if cleanupErr := r.objectRepo.AbortRekey(cleanupCtx, newGeneration); cleanupErr != nil {
+		if cleanupErr := r.encryptedRepo.AbortRekey(cleanupCtx, newGeneration); cleanupErr != nil {
 			resultErr = errors.Join(resultErr, cleanupErr)
 		}
 	}()
@@ -110,7 +110,7 @@ func (r *RekeyKey) rekey(ctx context.Context, co RekeyKeyCommand) (rotated *encr
 
 	committed = true
 
-	if err := r.objectRepo.DeleteEncryptedGeneration(ctx, currentGeneration); err != nil {
+	if err := r.encryptedRepo.DeleteEncryptedGeneration(ctx, currentGeneration); err != nil {
 		return nil, err
 	}
 
@@ -151,12 +151,12 @@ func (r *RekeyKey) rekeyObject(
 	currentGeneration, newGeneration uint64,
 	oldSymmetricKey, newSymmetricKey []byte,
 ) error {
-	reader, err := r.objectRepo.ReadEncryptedObject(ctx, hash, currentGeneration, oldSymmetricKey)
+	reader, err := r.encryptedRepo.ReadEncryptedObject(ctx, hash, currentGeneration, oldSymmetricKey)
 	if err != nil {
 		return err
 	}
 
-	saveErr := r.objectRepo.SaveRekeyedObject(ctx, hash, reader, newGeneration, newSymmetricKey)
+	saveErr := r.encryptedRepo.SaveRekeyedObject(ctx, hash, reader, newGeneration, newSymmetricKey)
 	closeErr := reader.Close()
 
 	return errors.Join(saveErr, closeErr)
@@ -164,15 +164,15 @@ func (r *RekeyKey) rekeyObject(
 
 func NewRekeyKey(
 	folderRepo FolderRepository,
-	objectRepo ObjectRepository,
+	encryptedRepo EncryptedObjectRepository,
 	asymmetricRepo AsymmetricKeyPairRepository,
 	symmetricRepo SymmetricKeyRepository,
 	locker *RepositoryLocker,
 ) *RekeyKey {
 	return &RekeyKey{
-		folderRepo: folderRepo,
-		objectRepo: objectRepo,
-		keys:       newKeyring(folderRepo, asymmetricRepo, symmetricRepo),
-		locker:     locker,
+		folderRepo:    folderRepo,
+		encryptedRepo: encryptedRepo,
+		keys:          newKeyring(folderRepo, asymmetricRepo, symmetricRepo),
+		locker:        locker,
 	}
 }

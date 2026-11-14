@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
-	"slices"
 	"sync"
 	"time"
 
@@ -36,14 +35,15 @@ func (c CheckRepositoryQuery) readsData() bool {
 }
 
 type CheckRepository struct {
-	folderRepo   FolderRepository
-	manifestRepo ManifestRepository
-	objectRepo   ObjectRepository
-	lockRepo     LockRepository
-	keys         keyring
-	verifier     objectVerifier
-	locker       *RepositoryLocker
-	workers      int
+	folderRepo    FolderRepository
+	manifestRepo  ManifestRepository
+	objectRepo    ObjectRepository
+	encryptedRepo EncryptedObjectRepository
+	lockRepo      LockRepository
+	keys          keyring
+	verifier      objectVerifier
+	locker        *RepositoryLocker
+	workers       int
 }
 
 func (c *CheckRepository) Handle(ctx context.Context, query cqs.Query) (any, error) {
@@ -89,7 +89,7 @@ func (c *CheckRepository) check(ctx context.Context, q CheckRepositoryQuery) (*s
 	if err := c.checkLocks(ctx, report); err != nil {
 		return nil, err
 	}
-	if err := c.checkGenerations(ctx, report, encrypted, generation); err != nil {
+	if err := c.checkGenerations(ctx, report, conf); err != nil {
 		return nil, err
 	}
 	if !q.readsData() {
@@ -107,7 +107,7 @@ func (c *CheckRepository) check(ctx context.Context, q CheckRepositoryQuery) (*s
 	if q.Subset != nil {
 		hashes = q.Subset.Select(hashes, rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64())))
 	}
-	problems, err := c.readData(ctx, hashes, key)
+	problems, err := c.readData(ctx, report, hashes, key)
 	if err != nil {
 		return nil, err
 	}
@@ -153,18 +153,16 @@ func (c *CheckRepository) checkLocks(ctx context.Context, report *snapshot.Check
 	return nil
 }
 
-func (c *CheckRepository) checkGenerations(ctx context.Context, report *snapshot.CheckReport, encrypted bool, current uint64) error {
-	generations, err := c.objectRepo.ListEncryptedGenerations(ctx)
+func (c *CheckRepository) checkGenerations(ctx context.Context, report *snapshot.CheckReport, conf *repository.Config) error {
+	generations, err := c.encryptedRepo.ListEncryptedGenerations(ctx)
 	if err != nil {
 		return err
 	}
-	report.RecordOrphanGenerations(slices.DeleteFunc(generations, func(generation uint64) bool {
-		return encrypted && generation == current
-	}))
+	report.RecordOrphanGenerations(conf.OrphanGenerations(generations))
 	return nil
 }
 
-func (c *CheckRepository) readData(ctx context.Context, hashes []string, key objectKey) ([]snapshot.ObjectProblem, error) {
+func (c *CheckRepository) readData(ctx context.Context, report *snapshot.CheckReport, hashes []string, key objectKey) ([]snapshot.ObjectProblem, error) {
 	var (
 		mu       sync.Mutex
 		problems = make([]snapshot.ObjectProblem, 0)
@@ -182,7 +180,7 @@ func (c *CheckRepository) readData(ctx context.Context, hashes []string, key obj
 		}
 
 		group.Go(func() error {
-			reason, err := c.verifier.verify(groupCtx, hash, key)
+			reason, err := c.verifier.verify(groupCtx, hash, report.ObjectSize(hash), key)
 			if err != nil {
 				return err
 			}
@@ -206,18 +204,20 @@ func NewCheckRepository(
 	folderRepo FolderRepository,
 	manifestRepo ManifestRepository,
 	objectRepo ObjectRepository,
+	encryptedRepo EncryptedObjectRepository,
 	lockRepo LockRepository,
 	asymmetricRepo AsymmetricKeyPairRepository,
 	symmetricRepo SymmetricKeyRepository,
 	locker *RepositoryLocker,
 ) *CheckRepository {
-	return NewCheckRepositoryWithWorkers(folderRepo, manifestRepo, objectRepo, lockRepo, asymmetricRepo, symmetricRepo, locker, defaultVerifyWorkers)
+	return NewCheckRepositoryWithWorkers(folderRepo, manifestRepo, objectRepo, encryptedRepo, lockRepo, asymmetricRepo, symmetricRepo, locker, defaultVerifyWorkers)
 }
 
 func NewCheckRepositoryWithWorkers(
 	folderRepo FolderRepository,
 	manifestRepo ManifestRepository,
 	objectRepo ObjectRepository,
+	encryptedRepo EncryptedObjectRepository,
 	lockRepo LockRepository,
 	asymmetricRepo AsymmetricKeyPairRepository,
 	symmetricRepo SymmetricKeyRepository,
@@ -228,13 +228,14 @@ func NewCheckRepositoryWithWorkers(
 		workers = defaultVerifyWorkers
 	}
 	return &CheckRepository{
-		folderRepo:   folderRepo,
-		manifestRepo: manifestRepo,
-		objectRepo:   objectRepo,
-		lockRepo:     lockRepo,
-		keys:         newKeyring(folderRepo, asymmetricRepo, symmetricRepo),
-		verifier:     objectVerifier{objectRepo: objectRepo},
-		locker:       locker,
-		workers:      workers,
+		folderRepo:    folderRepo,
+		manifestRepo:  manifestRepo,
+		objectRepo:    objectRepo,
+		encryptedRepo: encryptedRepo,
+		lockRepo:      lockRepo,
+		keys:          newKeyring(folderRepo, asymmetricRepo, symmetricRepo),
+		verifier:      newObjectVerifier(objectRepo),
+		locker:        locker,
+		workers:       workers,
 	}
 }

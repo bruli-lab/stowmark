@@ -69,6 +69,10 @@ func newCheckCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			encryptedRepo, err := repoHandler.EncryptedObjectRepository()
+			if err != nil {
+				return err
+			}
 			lockRepo, err := repoHandler.LockRepository()
 			if err != nil {
 				return err
@@ -82,7 +86,7 @@ func newCheckCommand() *cobra.Command {
 				return err
 			}
 			handler := queryMdw(app.NewCheckRepository(
-				repoHandler.FolderRepository(), manifestRepo, objectRepo, lockRepo,
+				repoHandler.FolderRepository(), manifestRepo, objectRepo, encryptedRepo, lockRepo,
 				disk.NewAsymmetricKeyPairRepository(), encrypt.NewSymmetricRepository(), locker,
 			))
 			result, err := handler.Handle(cmd.Context(), app.CheckRepositoryQuery{
@@ -162,11 +166,7 @@ func printCheckReport(output io.Writer, report *snapshot.CheckReport) error {
 		lines = append(lines, fmt.Sprintf("WARNING: %d stale lock(s); run unlock to remove them", report.StaleLocks()))
 	}
 	if generations := report.OrphanGenerations(); len(generations) > 0 {
-		names := make([]string, len(generations))
-		for i, generation := range generations {
-			names[i] = strconv.FormatUint(generation, 10)
-		}
-		lines = append(lines, fmt.Sprintf("WARNING: objects of old key generation(s) %s remain, probably from an interrupted key rekey", strings.Join(names, ", ")))
+		lines = append(lines, fmt.Sprintf("WARNING: objects of old key generation(s) %s remain, probably from an interrupted key rekey; run prune to remove them", formatGenerations(generations)))
 	}
 	status := "Repository OK"
 	if report.HasErrors() {

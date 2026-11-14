@@ -28,6 +28,26 @@ func TestManifest_ReferencedHashes(t *testing.T) {
 	})
 }
 
+func TestManifest_ObjectSizes(t *testing.T) {
+	t.Parallel()
+
+	t.Run(`Given a manifest with a small file and a chunked file,
+	when ObjectSizes method is called,
+	then it returns the size of the small file and of every chunk`, func(t *testing.T) {
+		t.Parallel()
+
+		manifest := fixtures.ManifestBuilder{Files: []snapshot.File{
+			fixtures.FileBuilder{Hash: new("aa01"), Size: new(int64(10))}.Build(),
+			fixtures.FileBuilder{Hash: new("bb02"), Size: new(int64(7)), Chunks: []snapshot.Chunk{
+				*snapshot.NewChunk("cc03", 0, 4),
+				*snapshot.NewChunk("dd04", 4, 3),
+			}}.Build(),
+		}}.Build()
+
+		require.Equal(t, map[string]int64{"aa01": 10, "cc03": 4, "dd04": 3}, manifest.ObjectSizes())
+	})
+}
+
 func TestNewPrunePlan(t *testing.T) {
 	t.Parallel()
 

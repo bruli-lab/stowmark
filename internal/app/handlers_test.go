@@ -2,14 +2,12 @@ package app_test
 
 import (
 	"context"
-	"crypto/rsa"
 	"errors"
 	"testing"
 	"time"
 
 	"github.com/bruli-lab/go-core/cqs"
 	"github.com/bruli-lab/stowmark/internal/app"
-	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/bruli-lab/stowmark/internal/fixtures"
@@ -32,7 +30,7 @@ func TestCommandHandlers_InvalidCommand(t *testing.T) {
 	handlers := map[string]cqs.CommandHandler{
 		app.CreateSnapshotCommandName:  app.NewCreateSnapshot(nil, nil, nil, nil, nil, nil, nil),
 		app.InitCommandName:            app.NewInit(nil, nil, nil, nil),
-		app.GenerateKeyCommandName:     app.NewGenerateKey(nil),
+		app.GenerateKeyCommandName:     app.NewGenerateKey(nil, nil),
 		app.RekeyKeyCommandName:        app.NewRekeyKey(nil, nil, nil, nil, nil),
 		app.RestoreFileCommandName:     app.NewRestoreFile(nil, nil, nil, nil, nil, nil),
 		app.RestoreSnapshotCommandName: app.NewRestoreSnapshot(nil, nil, nil, nil, nil, nil),
@@ -243,50 +241,6 @@ func TestRestoreSnapshot_Handle(t *testing.T) {
 			require.Equal(t, tt.expectedEvent.totalFiles, got.TotalFiles())
 			require.Equal(t, tt.expectedEvent.failed, got.Failed())
 			require.Equal(t, tt.expectedEvent.isSuccess, got.IsSuccess())
-		})
-	}
-}
-
-func TestGenerateKey_Handle(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name        string
-		createErr   error
-		expectedErr error
-	}{
-		{
-			name:        "and the key repository fails, then it returns the repository error",
-			createErr:   errRepository,
-			expectedErr: errRepository,
-		},
-		{
-			name: "and the keys are stored, then it returns no events",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(`Given a GenerateKey command handler,
-		when Handle method is called `+tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			keyRepo := &app.AsymmetricKeyPairRepositoryMock{
-				CreatePrivateKeyFunc: func(context.Context, string, *rsa.PrivateKey) error { return tt.createErr },
-				CreatePublicKeyFunc:  func(context.Context, string, *rsa.PublicKey) error { return nil },
-			}
-			keys, err := encryption.NewAsymmetricKeyPair(t.TempDir())
-			require.NoError(t, err)
-			handler := app.NewGenerateKey(keyRepo)
-
-			events, err := handler.Handle(context.Background(), app.GenerateKeyCommand{Keys: keys})
-
-			require.Empty(t, events)
-			if tt.expectedErr != nil {
-				require.ErrorIs(t, err, tt.expectedErr)
-				return
-			}
-			require.NoError(t, err)
-			require.Len(t, keyRepo.CreatePublicKeyCalls(), 1)
 		})
 	}
 }

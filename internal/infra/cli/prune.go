@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strconv"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/bruli-lab/stowmark/internal/app"
@@ -23,7 +25,8 @@ func newPruneCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "prune",
 		Short: "Remove objects that no snapshot references",
-		Long: "Remove the stored objects that are not referenced by any snapshot manifest. " +
+		Long: "Remove the stored objects that are not referenced by any snapshot manifest, the objects of old key " +
+			"generations left by an interrupted key rekey and the temporary files left by interrupted writes. " +
 			"It takes an exclusive repository lock, so no other command can use the repository while it runs.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -54,10 +57,11 @@ func newPruneCommand() *cobra.Command {
 }
 
 type pruneDependencies struct {
-	folderRepo   app.FolderRepository
-	manifestRepo app.ManifestRepository
-	objectRepo   app.ObjectRepository
-	locker       *app.RepositoryLocker
+	folderRepo    app.FolderRepository
+	manifestRepo  app.ManifestRepository
+	objectRepo    app.ObjectRepository
+	encryptedRepo app.EncryptedObjectRepository
+	locker        *app.RepositoryLocker
 }
 
 func newPruneDependencies(repoHandler repositories.Repositories) (*pruneDependencies, error) {
@@ -69,15 +73,20 @@ func newPruneDependencies(repoHandler repositories.Repositories) (*pruneDependen
 	if err != nil {
 		return nil, err
 	}
+	encryptedRepo, err := repoHandler.EncryptedObjectRepository()
+	if err != nil {
+		return nil, err
+	}
 	locker, err := newRepositoryLocker(repoHandler)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create repository locker: %w", err)
 	}
 	return &pruneDependencies{
-		folderRepo:   repoHandler.FolderRepository(),
-		manifestRepo: manifestRepo,
-		objectRepo:   objectRepo,
-		locker:       locker,
+		folderRepo:    repoHandler.FolderRepository(),
+		manifestRepo:  manifestRepo,
+		objectRepo:    objectRepo,
+		encryptedRepo: encryptedRepo,
+		locker:        locker,
 	}, nil
 }
 
@@ -90,7 +99,7 @@ func runPrunePlan(ctx context.Context, output io.Writer, obsv *observabilityinfr
 	if err != nil {
 		return err
 	}
-	handler := queryMdw(app.NewPrunePlan(deps.folderRepo, deps.manifestRepo, deps.objectRepo, deps.locker))
+	handler := queryMdw(app.NewPrunePlan(deps.folderRepo, deps.manifestRepo, deps.objectRepo, deps.encryptedRepo, deps.locker))
 	result, err := handler.Handle(ctx, app.PrunePlanQuery{RepositoryPath: repoHandler.RepositoryPath()})
 	if err != nil {
 		return fmt.Errorf("failed to plan prune: %w", err)
@@ -102,8 +111,8 @@ func runPrunePlan(ctx context.Context, output io.Writer, obsv *observabilityinfr
 
 	writer := tabwriter.NewWriter(output, 0, 4, 2, ' ', 0)
 	if _, err := fmt.Fprintf(writer,
-		"STORED OBJECTS:\t%d\nREFERENCED OBJECTS:\t%d\nWOULD REMOVE:\t%d\n",
-		plan.StoredObjects(), plan.ReferencedObjects(), len(plan.Unreferenced()),
+		"STORED OBJECTS:\t%d\nREFERENCED OBJECTS:\t%d\nWOULD REMOVE:\t%d\nOLD KEY GENERATIONS:\t%s\n",
+		plan.StoredObjects(), plan.ReferencedObjects(), len(plan.Unreferenced()), formatGenerations(plan.OrphanGenerations()),
 	); err != nil {
 		return err
 	}
@@ -122,7 +131,7 @@ func runPrune(ctx context.Context, output io.Writer, obsv *observabilityinfra.OT
 	if err != nil {
 		return err
 	}
-	handler := multiMdw(app.NewPruneRepository(deps.folderRepo, deps.manifestRepo, deps.objectRepo, deps.locker))
+	handler := multiMdw(app.NewPruneRepository(deps.folderRepo, deps.manifestRepo, deps.objectRepo, deps.encryptedRepo, deps.locker))
 	events, err := handler.Handle(ctx, app.PruneRepositoryCommand{RepositoryPath: repoHandler.RepositoryPath()})
 	if err != nil {
 		return fmt.Errorf("failed to prune repository: %w", err)
@@ -135,6 +144,16 @@ func runPrune(ctx context.Context, output io.Writer, obsv *observabilityinfra.OT
 	if _, err := fmt.Fprintf(output, "Removed %d unreferenced object(s)\n", removed); err != nil {
 		return err
 	}
+	for _, generations := range app.EventsOf[*snapshot.GenerationsRemoved](events) {
+		if _, err := fmt.Fprintf(output, "Removed old key generation(s): %s\n", formatGenerations(generations.Generations())); err != nil {
+			return err
+		}
+	}
+	for _, temporaries := range app.EventsOf[*snapshot.TemporariesRemoved](events) {
+		if _, err := fmt.Fprintf(output, "Removed %d temporary file(s) left by interrupted writes\n", temporaries.Removed()); err != nil {
+			return err
+		}
+	}
 	missing := 0
 	for _, detected := range app.EventsOf[*snapshot.MissingObjectsDetected](events) {
 		missing += len(detected.Hashes())
@@ -142,12 +161,23 @@ func runPrune(ctx context.Context, output io.Writer, obsv *observabilityinfra.OT
 	return printMissingObjects(output, missing)
 }
 
+func formatGenerations(generations []uint64) string {
+	if len(generations) == 0 {
+		return "none"
+	}
+	names := make([]string, len(generations))
+	for i, generation := range generations {
+		names[i] = strconv.FormatUint(generation, 10)
+	}
+	return strings.Join(names, ", ")
+}
+
 func printMissingObjects(output io.Writer, missing int) error {
 	if missing == 0 {
 		return nil
 	}
 	_, err := fmt.Fprintf(output,
-		"WARNING: %d referenced object(s) are missing from the repository; run snapshot verify to find the affected snapshots\n",
+		"WARNING: %d referenced object(s) are missing from the repository; run check to find the affected snapshots\n",
 		missing,
 	)
 	return err

@@ -165,3 +165,49 @@ func (s BlobStore) path(ctx context.Context, key string) (string, error) {
 func NewBlobStore(share *smb2.Share, repositoryPath string) *BlobStore {
 	return &BlobStore{share: share, root: repositoryPath}
 }
+
+func (s BlobStore) DeleteTemporaries(ctx context.Context, prefix string) (int, error) {
+	prefixPath, err := s.path(ctx, prefix)
+	if err != nil {
+		return 0, err
+	}
+
+	removed := 0
+	if err := s.deleteTemporaries(ctx, s.share.WithContext(ctx), prefixPath, &removed); err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return removed, nil
+		}
+		return removed, err
+	}
+
+	return removed, nil
+}
+
+func (s BlobStore) deleteTemporaries(ctx context.Context, share *smb2.Share, directory string, removed *int) error {
+	entries, err := share.ReadDir(directory)
+	if err != nil {
+		return fmt.Errorf("list SMB directory %q: %w", directory, err)
+	}
+
+	for _, entry := range entries {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		entryPath := path.Join(directory, entry.Name())
+		if entry.IsDir() {
+			if err := s.deleteTemporaries(ctx, share, entryPath, removed); err != nil {
+				return err
+			}
+			continue
+		}
+		if !isTemporaryFile(entry.Name()) {
+			continue
+		}
+		if err := share.Remove(entryPath); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("delete SMB temporary file %q: %w", entryPath, err)
+		}
+		*removed++
+	}
+
+	return nil
+}

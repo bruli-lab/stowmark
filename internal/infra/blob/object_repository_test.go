@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -402,4 +403,50 @@ func TestObjectRepository_ReadObject_Tampered(t *testing.T) {
 
 		require.ErrorIs(t, err, snapshot.ErrCorruptObject)
 	})
+}
+
+type cleaningStore struct {
+	*blobtest.MemoryStore
+	prefixes []string
+	removed  int
+	err      error
+}
+
+func (c *cleaningStore) DeleteTemporaries(_ context.Context, prefix string) (int, error) {
+	c.prefixes = append(c.prefixes, prefix)
+	return c.removed, c.err
+}
+
+func TestObjectRepository_DeleteTemporaryObjects(t *testing.T) {
+	t.Parallel()
+
+	errStore := errors.New("store failed")
+	tests := []struct {
+		name     string
+		store    blob.Store
+		expected int
+		err      error
+	}{
+		{name: "on a store without temporary files, then it removes nothing", store: blobtest.NewMemoryStore()},
+		{name: "on a store that cleans temporary files, then it returns how many it removed", store: &cleaningStore{MemoryStore: blobtest.NewMemoryStore(), removed: 3}, expected: 3},
+		{name: "on a store that fails to clean temporary files, then it returns the error", store: &cleaningStore{MemoryStore: blobtest.NewMemoryStore(), err: errStore}, err: errStore},
+	}
+	for _, tt := range tests {
+		t.Run(`Given a blob ObjectRepository,
+		when DeleteTemporaryObjects is called `+tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			removed, err := blob.NewObjectRepository(tt.store).DeleteTemporaryObjects(context.Background())
+
+			if tt.err != nil {
+				require.ErrorIs(t, err, tt.err)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.expected, removed)
+			if cleaner, ok := tt.store.(*cleaningStore); ok {
+				require.Equal(t, []string{"objects"}, cleaner.prefixes)
+			}
+		})
+	}
 }

@@ -105,10 +105,10 @@ func (v *VerifySnapshot) verify(ctx context.Context, q VerifySnapshotQuery) (*sn
 func (v *VerifySnapshot) verifyFile(ctx context.Context, file *snapshot.File, key objectKey) (string, error) {
 	chunks := file.Chunks()
 	if len(chunks) == 0 {
-		return v.verifier.verify(ctx, file.Hash(), key)
+		return v.verifier.verify(ctx, file.Hash(), file.Size(), key)
 	}
 	for index, chunk := range chunks {
-		reason, err := v.verifier.verify(ctx, chunk.Hash(), key)
+		reason, err := v.verifier.verify(ctx, chunk.Hash(), chunk.Size(), key)
 		if err != nil {
 			return "", err
 		}
@@ -145,7 +145,7 @@ func NewVerifySnapshotWithWorkers(
 	}
 	return &VerifySnapshot{
 		manifestRepo: manifestRepo,
-		verifier:     objectVerifier{objectRepo: objectRepo},
+		verifier:     newObjectVerifier(objectRepo),
 		keys:         newKeyring(folderRepo, asymmetricRepo, symmetricRepo),
 		locker:       locker,
 		workers:      workers,

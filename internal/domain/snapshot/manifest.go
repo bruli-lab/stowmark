@@ -66,6 +66,21 @@ func (m *Manifest) ReferencedHashes() []string {
 	return hashes
 }
 
+func (m *Manifest) ObjectSizes() map[string]int64 {
+	sizes := make(map[string]int64, len(m.files))
+	for i := range m.files {
+		chunks := m.files[i].Chunks()
+		if len(chunks) == 0 {
+			sizes[m.files[i].Hash()] = m.files[i].Size()
+			continue
+		}
+		for _, chunk := range chunks {
+			sizes[chunk.Hash()] = chunk.Size()
+		}
+	}
+	return sizes
+}
+
 func (m *Manifest) Resume() *ManifestResume {
 	var size int64
 	for _, f := range m.files {

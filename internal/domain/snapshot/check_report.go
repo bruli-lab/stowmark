@@ -1,6 +1,7 @@
 package snapshot
 
 import (
+	"maps"
 	"slices"
 	"strings"
 )
@@ -60,6 +61,7 @@ type CheckReport struct {
 	unreferenced      int
 	missing           []MissingObject
 	readable          []string
+	sizes             map[string]int64
 	staleLocks        int
 	orphanGenerations []uint64
 	readData          bool
@@ -89,6 +91,11 @@ func NewCheckReport(manifests []Manifest, corruptManifests []ManifestProblem, st
 		missing = append(missing, MissingObject{hash: hash, snapshots: snapshots})
 	}
 
+	sizes := make(map[string]int64)
+	for i := range manifests {
+		maps.Copy(sizes, manifests[i].ObjectSizes())
+	}
+
 	unreferenced := plan.Unreferenced()
 	readable := make([]string, 0, plan.StoredObjects()-len(unreferenced))
 	for _, hash := range slices.Compact(slices.Sorted(slices.Values(stored))) {
@@ -105,6 +112,7 @@ func NewCheckReport(manifests []Manifest, corruptManifests []ManifestProblem, st
 		unreferenced:      len(unreferenced),
 		missing:           missing,
 		readable:          readable,
+		sizes:             sizes,
 	}
 }
 
@@ -126,6 +134,10 @@ func (c *CheckReport) RecordData(readObjects int, corrupt []ObjectProblem) {
 
 func (c *CheckReport) ReadableObjects() []string {
 	return c.readable
+}
+
+func (c *CheckReport) ObjectSize(hash string) int64 {
+	return c.sizes[hash]
 }
 
 func (c *CheckReport) Snapshots() int {
