@@ -469,6 +469,7 @@ and remove files and collections under the repository path.
 | `stowmark snapshot get --id <id> --repo <repository>`     | Display a snapshot manifest.          |
 | `stowmark snapshot verify --id <id> --repo <repository>`  | Verify snapshot integrity.            |
 | `stowmark snapshot restore --id <id> --repo <repository>` | Restore snapshot.                     |
+| `stowmark unlock --repo <repository> [--all]`             | Remove stale (or all) repository locks. |
 
 Run the built-in help for the complete set of options:
 
@@ -702,6 +703,17 @@ command refreshes its lock every 5 minutes and removes it when it finishes, incl
 Ctrl+C. A lock that has not been refreshed for 30 minutes, for example after a crash, is considered stale and is
 removed by the next command. Staleness is calculated with the local clock, so machines that share a repository should
 keep their clocks synchronised. `snapshot list` and `snapshot get` do not take a lock.
+
+If a command was killed and you do not want to wait for its lock to become stale, remove locks by hand:
+
+```bash
+stowmark unlock --repo /backups/stowmark        # removes only stale locks
+stowmark unlock --repo /backups/stowmark --all  # removes every lock
+```
+
+Use `--all` only when you are sure no other Stowmark command is running against the repository: removing the lock of a
+running command lets conflicting commands start, and that running command stops with `repository lock lost` at its
+next refresh.
 
 ### Snapshot manifests
 

@@ -143,6 +143,22 @@ func mainFlow(t *testing.T, ctx context.Context, folders Folders, formatVersion 
 	require.NoError(t, err)
 	require.Empty(t, remainingLocks, "every operation must release its repository lock")
 
+	staleLock, err := repository.NewLock(repository.ExclusiveLock, repository.NewLockOwner("crashed-host", 2), time.Now().Add(-repository.LockStaleAfter-time.Minute))
+	require.NoError(t, err)
+	activeLock, err := repository.NewLock(repository.SharedLock, repository.NewLockOwner("other-host", 3), time.Now())
+	require.NoError(t, err)
+	require.NoError(t, lockRepo.Save(ctx, staleLock))
+	require.NoError(t, lockRepo.Save(ctx, activeLock))
+	unlocked, err := handler.Unlock(ctx, false)
+	require.NoError(t, err)
+	require.Equal(t, stowmark.UnlockResult{RemovedLocks: 1, ActiveLocks: 1}, *unlocked)
+	unlocked, err = handler.Unlock(ctx, true)
+	require.NoError(t, err)
+	require.Equal(t, stowmark.UnlockResult{RemovedLocks: 1, ActiveLocks: 0}, *unlocked)
+	remainingLocks, err = store.List(ctx, repository.LocksFolder)
+	require.NoError(t, err)
+	require.Empty(t, remainingLocks)
+
 	var contractRepositories atomic.Int64
 	t.Run("blob store contract", func(t *testing.T) {
 		blobtest.RunStoreContract(t, func(t *testing.T) blob.Store {

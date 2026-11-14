@@ -37,6 +37,7 @@ func TestCommandHandlers_InvalidCommand(t *testing.T) {
 		app.RestoreFileCommandName:     app.NewRestoreFile(nil, nil, nil, nil, nil, nil),
 		app.RestoreSnapshotCommandName: app.NewRestoreSnapshot(nil, nil, nil, nil, nil, nil),
 		app.RewrapKeyCommandName:       app.NewRewrapKey(nil, nil, nil, nil),
+		app.UnlockCommandName:          app.NewUnlock(nil),
 	}
 
 	for name, handler := range handlers {

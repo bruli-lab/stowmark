@@ -18,6 +18,7 @@ type Handler struct {
 	repositoriesHandler        repositories.Repositories
 	asymmetricKeyPaiRepository app.AsymmetricKeyPairRepository
 	symmetricKeyRepository     app.SymmetricKeyRepository
+	lockRepository             app.LockRepository
 	locker                     *app.RepositoryLocker
 }
 
@@ -55,6 +56,7 @@ func NewHandler(ctx context.Context, repositoryPath string) (*Handler, error) {
 		repositoriesHandler:        repoHandler,
 		asymmetricKeyPaiRepository: disk.NewAsymmetricKeyPairRepository(),
 		symmetricKeyRepository:     encrypt.NewSymmetricRepository(),
+		lockRepository:             lockRepo,
 		locker:                     app.NewRepositoryLocker(lockRepo),
 	}, nil
 }
