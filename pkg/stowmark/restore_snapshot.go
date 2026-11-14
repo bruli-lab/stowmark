@@ -9,7 +9,7 @@ import (
 )
 
 func (h *Handler) RestoreSnapshot(ctx context.Context, snapshotID string, destinationPath, privateKey *string) (*Result, error) {
-	obsv, err := builtObservability(ctx)
+	obsv, err := buildObservability(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -23,7 +23,7 @@ func (h *Handler) RestoreSnapshot(ctx context.Context, snapshotID string, destin
 	if err != nil {
 		return nil, err
 	}
-	handler := mdw(app.NewRestoreSnapshot(h.manifestRepository, h.objectRepository, h.folderRepository, h.asymmetricKeyPaiRepository, h.symmetricKeyRepository, h.locker))
+	handler := mdw(app.NewRestoreSnapshot(h.manifestRepository, h.objectRepository, h.folderRepository, h.asymmetricKeyPairRepository, h.symmetricKeyRepository, h.locker))
 	events, err := handler.Handle(ctx, app.RestoreSnapshotCommand{
 		SnapshotID:      snapshotID,
 		RepositoryPath:  h.repositoryPath,

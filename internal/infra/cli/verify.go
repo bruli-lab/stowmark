@@ -33,7 +33,7 @@ func newSnapshotVerifyCommand() *cobra.Command {
 				return errors.New("--id is required")
 			}
 
-			obsv, err := builtObservability(cmd.Context())
+			obsv, err := buildObservability(cmd.Context())
 			if err != nil {
 				return err
 			}

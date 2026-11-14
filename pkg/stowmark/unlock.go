@@ -15,7 +15,7 @@ type UnlockResult struct {
 }
 
 func (h *Handler) Unlock(ctx context.Context, all bool) (*UnlockResult, error) {
-	obsv, err := builtObservability(ctx)
+	obsv, err := buildObservability(ctx)
 	if err != nil {
 		return nil, err
 	}

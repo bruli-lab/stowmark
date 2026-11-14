@@ -53,7 +53,7 @@ func (c *CreateSnapshot) Handle(ctx context.Context, cmd cqs.Command) ([]event.E
 		return nil, err
 	}
 	return []event.Event{
-		NewCreateSnapshotEvent(result.Id(), result.FileCount(), result.TotalSize()),
+		NewCreateSnapshotEvent(result.ID(), result.FileCount(), result.TotalSize()),
 	}, nil
 }
 
@@ -125,7 +125,7 @@ func (c *CreateSnapshot) create(ctx context.Context, co CreateSnapshotCommand) (
 	if err := c.manifestRepo.Save(ctx, manifest); err != nil {
 		return nil, err
 	}
-	return snapshot.NewCreateResult(manifest.Id(), int(savedFiles.Load()), totalSize.Load()), nil
+	return snapshot.NewCreateResult(manifest.ID(), int(savedFiles.Load()), totalSize.Load()), nil
 }
 
 func (c *CreateSnapshot) saveFileObjects(ctx context.Context, file *snapshot.File, comp *repository.Compression, key objectKey) (int64, error) {

@@ -126,7 +126,7 @@ func TestSnapshotList_Handle(t *testing.T) {
 			manifestRepo := &app.ManifestRepositoryMock{ListFunc: tt.list}
 			handler := app.NewSnapshotList(manifestRepo)
 
-			result, err := handler.Handle(context.Background(), app.SnaphotListQuery{})
+			result, err := handler.Handle(context.Background(), app.SnapshotListQuery{})
 
 			if tt.expectedErr != nil {
 				require.ErrorIs(t, err, tt.expectedErr)
@@ -154,12 +154,12 @@ func TestManifestGet_Handle(t *testing.T) {
 		}
 		handler := app.NewManifestGet(manifestRepo)
 
-		result, err := handler.Handle(context.Background(), app.ManifestGetQuery{SnapshotID: manifest.Id()})
+		result, err := handler.Handle(context.Background(), app.ManifestGetQuery{SnapshotID: manifest.ID()})
 
 		require.NoError(t, err)
 		require.Equal(t, &manifest, result)
 		require.Len(t, manifestRepo.GetCalls(), 1)
-		require.Equal(t, manifest.Id(), manifestRepo.GetCalls()[0].SnapshotID)
+		require.Equal(t, manifest.ID(), manifestRepo.GetCalls()[0].SnapshotID)
 	})
 }
 

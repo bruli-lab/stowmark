@@ -30,7 +30,7 @@ type Manifest struct {
 }
 
 func (h *Handler) GetManifest(ctx context.Context, id string) (*Manifest, error) {
-	obsv, err := builtObservability(ctx)
+	obsv, err := buildObservability(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +72,7 @@ func (h *Handler) GetManifest(ctx context.Context, id string) (*Manifest, error)
 	}
 
 	return &Manifest{
-		ID:        manifest.Id(),
+		ID:        manifest.ID(),
 		CreatedAt: manifest.CreatedAt(),
 		Source:    manifest.Source(),
 		Files:     files,

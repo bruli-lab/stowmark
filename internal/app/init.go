@@ -55,7 +55,7 @@ func (i *Init) Handle(ctx context.Context, cmd cqs.Command) ([]event.Event, erro
 		if err != nil {
 			return err
 		}
-		repositoryID = conf.Id().String()
+		repositoryID = conf.ID().String()
 		warnings = initWarnings
 		return nil
 	})

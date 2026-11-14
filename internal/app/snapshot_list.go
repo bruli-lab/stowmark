@@ -9,9 +9,9 @@ import (
 
 const ListQueryName = "snapshot-list"
 
-type SnaphotListQuery struct{}
+type SnapshotListQuery struct{}
 
-func (l SnaphotListQuery) Name() string {
+func (l SnapshotListQuery) Name() string {
 	return ListQueryName
 }
 
@@ -20,7 +20,7 @@ type SnapshotList struct {
 }
 
 func (l *SnapshotList) Handle(ctx context.Context, query cqs.Query) (any, error) {
-	if _, ok := query.(SnaphotListQuery); !ok {
+	if _, ok := query.(SnapshotListQuery); !ok {
 		return nil, cqs.NewInvalidQueryError(ListQueryName, query.Name())
 	}
 	manifests, err := l.manifestRepo.List(ctx)

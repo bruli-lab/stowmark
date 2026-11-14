@@ -9,7 +9,7 @@ import (
 )
 
 func (h *Handler) KeyGenerate(ctx context.Context, folder string) (*encryption.AsymmetricKeyPair, error) {
-	obsv, err := builtObservability(ctx)
+	obsv, err := buildObservability(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -25,7 +25,7 @@ func (h *Handler) KeyGenerate(ctx context.Context, folder string) (*encryption.A
 	if err != nil {
 		return nil, err
 	}
-	handler := mdw(app.NewGenerateKey(h.asymmetricKeyPaiRepository))
+	handler := mdw(app.NewGenerateKey(h.asymmetricKeyPairRepository))
 	_, err = handler.Handle(ctx, app.GenerateKeyCommand{Keys: keys})
 	if err != nil {
 		return nil, err

@@ -22,7 +22,7 @@ func newKeyReKeyCommand() *cobra.Command {
 		Short: "Rotate symmetric key and rewrap all objects",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			obsv, err := builtObservability(cmd.Context())
+			obsv, err := buildObservability(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("create observability: %w", err)
 			}

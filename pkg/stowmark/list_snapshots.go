@@ -19,7 +19,7 @@ type SnapshotSummary struct {
 }
 
 func (h *Handler) ListSnapshots(ctx context.Context) ([]SnapshotSummary, error) {
-	obsv, err := builtObservability(ctx)
+	obsv, err := buildObservability(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -31,7 +31,7 @@ func (h *Handler) ListSnapshots(ctx context.Context) ([]SnapshotSummary, error) 
 		return nil, err
 	}
 	handler := mdw(app.NewSnapshotList(h.manifestRepository))
-	resultQuery, err := handler.Handle(ctx, app.SnaphotListQuery{})
+	resultQuery, err := handler.Handle(ctx, app.SnapshotListQuery{})
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +43,7 @@ func (h *Handler) ListSnapshots(ctx context.Context) ([]SnapshotSummary, error) 
 	result := make([]SnapshotSummary, len(items))
 	for i, item := range items {
 		result[i] = SnapshotSummary{
-			ID:        item.Id(),
+			ID:        item.ID(),
 			CreatedAt: item.CreatedAt(),
 			FileCount: item.Files(),
 			TotalSize: item.Size(),

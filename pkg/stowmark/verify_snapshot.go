@@ -21,7 +21,7 @@ type Result struct {
 }
 
 func (h *Handler) VerifySnapshot(ctx context.Context, id string, privateKey *string) (*Result, error) {
-	obsv, err := builtObservability(ctx)
+	obsv, err := buildObservability(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -32,7 +32,7 @@ func (h *Handler) VerifySnapshot(ctx context.Context, id string, privateKey *str
 	if err != nil {
 		return nil, err
 	}
-	handler := mdw(app.NewVerifySnapshot(h.manifestRepository, h.objectRepository, h.folderRepository, h.asymmetricKeyPaiRepository, h.symmetricKeyRepository, h.locker))
+	handler := mdw(app.NewVerifySnapshot(h.manifestRepository, h.objectRepository, h.folderRepository, h.asymmetricKeyPairRepository, h.symmetricKeyRepository, h.locker))
 	resultQuery, err := handler.Handle(ctx, app.VerifySnapshotQuery{
 		SnapshotID:     id,
 		RepositoryPath: h.repositoryPath,

@@ -46,7 +46,7 @@ func newSnapshotCreateCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			obsv, err := builtObservability(cmd.Context())
+			obsv, err := buildObservability(cmd.Context())
 			if err != nil {
 				return err
 			}

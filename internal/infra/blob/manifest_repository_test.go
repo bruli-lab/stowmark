@@ -45,16 +45,16 @@ func TestManifestRepository(t *testing.T) {
 			return err
 		}))
 
-		got, err := repo.Get(ctx, older.Id())
+		got, err := repo.Get(ctx, older.ID())
 		require.NoError(t, err)
-		require.Equal(t, older.Id(), got.Id())
+		require.Equal(t, older.ID(), got.ID())
 		require.Equal(t, older.Files(), got.Files())
 
 		listed, err := repo.List(ctx)
 		require.NoError(t, err)
 		require.Len(t, listed, 2)
-		require.Equal(t, newer.Id(), listed[0].Id())
-		require.Equal(t, older.Id(), listed[1].Id())
+		require.Equal(t, newer.ID(), listed[0].ID())
+		require.Equal(t, older.ID(), listed[1].ID())
 	})
 
 	t.Run(`Given an empty blob ManifestRepository,

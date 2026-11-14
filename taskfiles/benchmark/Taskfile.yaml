@@ -1,7 +1,7 @@
 version: '3'
 
 vars:
-  SCRIPT: '{{.BENCHMARK_SCRIPT | default "./benchmark-stowmark.sh"}}'
+  SCRIPT: '{{.BENCHMARK_SCRIPT | default "./scripts/benchmark-stowmark.sh"}}'
 
 tasks:
   local:
@@ -26,7 +26,7 @@ tasks:
         {{.SCRIPT}}
 
   smb:
-    desc: Executing benchmark ovr SMB
+    desc: Executing benchmark over SMB
     env:
       STOWMARK_SMB_PASSWORD: stowmark
     deps:
@@ -58,7 +58,7 @@ tasks:
     env:
       STOWMARK_S3_ENDPOINT: 'http://localhost:5000'
       STOWMARK_S3_PATH_STYLE: 'true'
-      AWS_ACCESS_KEY: 'stowmark'
+      AWS_ACCESS_KEY_ID: 'stowmark'
       AWS_SECRET_ACCESS_KEY: 'stowmark-secret'
       AWS_REGION: 'us-east-1'
     cmds:

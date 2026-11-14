@@ -35,7 +35,7 @@ func newSnapshotRestoreCommand() *cobra.Command {
 			if privateKeyPath != "" {
 				privateKey = &privateKeyPath
 			}
-			obsv, err := builtObservability(cmd.Context())
+			obsv, err := buildObservability(cmd.Context())
 			if err != nil {
 				return err
 			}

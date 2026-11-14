@@ -6,7 +6,7 @@ type CreateResult struct {
 	totalSize int64
 }
 
-func (r CreateResult) Id() string {
+func (r CreateResult) ID() string {
 	return r.id
 }
 

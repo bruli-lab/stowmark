@@ -30,7 +30,7 @@ func TestFolderRepositoryRepository_CreateConfig(t *testing.T) {
 		require.NoError(t, repo.CreateConfig(ctx, repositoryPath, &previous))
 
 		updated := fixtures.ConfigBuilder{
-			ID:               new(previous.Id()),
+			ID:               new(previous.ID()),
 			EncryptionConfig: encryption.NewEncryptionConfig("encrypted-key", "fingerprint", 2),
 		}.Build(t)
 
@@ -43,7 +43,7 @@ func TestFolderRepositoryRepository_CreateConfig(t *testing.T) {
 
 		stored, err := repo.GetConfig(ctx, repositoryPath)
 		require.NoError(t, err)
-		require.Equal(t, previous.Id(), stored.Id())
+		require.Equal(t, previous.ID(), stored.ID())
 		require.NotNil(t, stored.Encryption())
 		require.Equal(t, "encrypted-key", stored.Encryption().EncryptedKey())
 		require.Equal(t, uint64(2), stored.Encryption().Generation())
@@ -59,7 +59,7 @@ func TestFolderRepositoryRepository_CreateConfig(t *testing.T) {
 		repo := disk.NewFolderRepositoryRepository()
 		createdAt := time.Date(2025, time.March, 1, 10, 0, 0, 0, time.UTC)
 		base := fixtures.ConfigBuilder{}.Build(t)
-		original := repository.HydrateConfig(base.Id(), base.FormatVersion(), createdAt, base.Compression(), nil)
+		original := repository.HydrateConfig(base.ID(), base.FormatVersion(), createdAt, base.Compression(), nil)
 		require.NoError(t, repo.CreateConfig(ctx, repositoryPath, original))
 
 		stored, err := repo.GetConfig(ctx, repositoryPath)

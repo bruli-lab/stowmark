@@ -23,7 +23,7 @@ func (c Config) Compression() *Compression {
 	return c.compression
 }
 
-func (c Config) Id() uuid.UUID {
+func (c Config) ID() uuid.UUID {
 	return c.id
 }
 

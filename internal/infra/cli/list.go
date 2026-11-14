@@ -20,7 +20,7 @@ func newSnapshotListCommand() *cobra.Command {
 		Short: "List repository snapshots",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			obsv, err := builtObservability(cmd.Context())
+			obsv, err := buildObservability(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("create observability: %w", err)
 			}
@@ -44,7 +44,7 @@ func newSnapshotListCommand() *cobra.Command {
 			}
 			handler := multiMdw(app.NewSnapshotList(manifestRepo))
 
-			result, err := handler.Handle(cmd.Context(), app.SnaphotListQuery{})
+			result, err := handler.Handle(cmd.Context(), app.SnapshotListQuery{})
 			snapshots, ok := result.([]snapshot.ManifestResume)
 			if !ok {
 				panic("unexpected result type")
@@ -84,7 +84,7 @@ func newSnapshotListCommand() *cobra.Command {
 				_, err = fmt.Fprintf(
 					writer,
 					"%s\t%s\t%d\t%s\t%s\n",
-					item.Id(),
+					item.ID(),
 					created.Format("2006-01-02 15:04:05"),
 					item.Files(),
 					formatBytes(item.Size()),

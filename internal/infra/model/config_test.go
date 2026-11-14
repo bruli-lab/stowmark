@@ -96,7 +96,7 @@ func TestBuildConfigDomain(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			require.Equal(t, conf.ID, got.Id().String())
+			require.Equal(t, conf.ID, got.ID().String())
 			require.Equal(t, conf.FormatVersion, got.FormatVersion().Int())
 			require.Equal(t, conf.CreatedAt, got.CreatedAt().Format("2006-01-02T15:04:05-07:00"))
 			require.Equal(t, conf.Compression.Type, got.Compression().CompType().String())

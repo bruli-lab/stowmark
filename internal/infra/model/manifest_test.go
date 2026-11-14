@@ -45,7 +45,7 @@ func TestManifest_RoundTrip(t *testing.T) {
 		got, err := model.BuildManifestDomain(data, "snapshots/manifest.json")
 
 		require.NoError(t, err)
-		require.Equal(t, original.Id(), got.Id())
+		require.Equal(t, original.ID(), got.ID())
 		require.Equal(t, original.Source(), got.Source())
 		require.True(t, original.CreatedAt().Equal(got.CreatedAt()))
 		require.Equal(t, original.Compression(), got.Compression())

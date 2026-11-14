@@ -14,10 +14,11 @@ func NewS3Client(
 	ctx context.Context,
 	cfg *config.S3Config,
 ) (*s3.Client, error) {
-	awsCfg, err := awsconfig.LoadDefaultConfig(
-		ctx,
-		awsconfig.WithRegion(cfg.Region),
-	)
+	var options []func(*awsconfig.LoadOptions) error
+	if cfg.Region != nil && *cfg.Region != "" {
+		options = append(options, awsconfig.WithRegion(*cfg.Region))
+	}
+	awsCfg, err := awsconfig.LoadDefaultConfig(ctx, options...)
 	if err != nil {
 		return nil, fmt.Errorf("load AWS configuration: %w", err)
 	}

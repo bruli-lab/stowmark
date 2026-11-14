@@ -13,8 +13,8 @@ const (
 )
 
 var (
-	ErrInvalidRepositoryName    = errors.New("invalid repository name")
-	ErrMissingCRepositoryConfig = errors.New("missing repository configuration")
+	ErrInvalidRepositoryName   = errors.New("invalid repository name")
+	ErrMissingRepositoryConfig = errors.New("missing repository configuration")
 )
 
 type Repository struct {
@@ -43,7 +43,7 @@ func (r Repository) validate() error {
 	case r.path == "":
 		return ErrInvalidRepositoryName
 	case r.config == nil:
-		return ErrMissingCRepositoryConfig
+		return ErrMissingRepositoryConfig
 	default:
 	}
 	return nil

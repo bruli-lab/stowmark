@@ -104,13 +104,13 @@ func TestInit_Handle(t *testing.T) {
 			name:                 "for an existing repository, then it keeps the previous repository id",
 			exists:               true,
 			previous:             &previous,
-			expectedRepositoryID: previous.Id().String(),
+			expectedRepositoryID: previous.ID().String(),
 		},
 		{
 			name:                 "for an existing encrypted repository without public key, then it keeps the encryption and warns",
 			exists:               true,
 			previous:             &encryptedPrevious,
-			expectedRepositoryID: encryptedPrevious.Id().String(),
+			expectedRepositoryID: encryptedPrevious.ID().String(),
 			expectedEncryption:   encryptedPrevious.Encryption(),
 			expectedWarnings:     []string{repository.EncryptionPreservedWarning},
 		},
@@ -119,7 +119,7 @@ func TestInit_Handle(t *testing.T) {
 			exists:               true,
 			force:                true,
 			previous:             &encryptedPrevious,
-			expectedRepositoryID: encryptedPrevious.Id().String(),
+			expectedRepositoryID: encryptedPrevious.ID().String(),
 			expectedWarnings:     []string{repository.EncryptionRemovedWarning},
 		},
 	}
@@ -188,7 +188,7 @@ func TestInit_Handle(t *testing.T) {
 
 			require.Len(t, folderRepo.CreateConfigCalls(), 1)
 			stored := folderRepo.CreateConfigCalls()[0].C
-			require.Equal(t, stored.Id().String(), got.RepositoryID)
+			require.Equal(t, stored.ID().String(), got.RepositoryID)
 			if tt.expectedRepositoryID != "" {
 				require.Equal(t, tt.expectedRepositoryID, got.RepositoryID)
 			}

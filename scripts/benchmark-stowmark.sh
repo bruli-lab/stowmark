@@ -6,10 +6,10 @@ export LC_ALL=C
 
 # Benchmark end-to-end de Stowmark.
 # Configuracio per variables d'entorn; exemples:
-#   STOWMARK_BIN="$PWD/stowmark" ./benchmark-stowmark.sh
-#   REPOSITORY='webdav://localhost:18080/backups/benchmark' ./benchmark-stowmark.sh
-#   SMALL_FILES=10000 SMALL_SIZE_KIB=16 LARGE_FILES=10 LARGE_SIZE_MIB=1024 ./benchmark-stowmark.sh
-#   ENCRYPTION=0 COMPRESSION=none ./benchmark-stowmark.sh
+#   STOWMARK_BIN="$PWD/stowmark" ./scripts/benchmark-stowmark.sh
+#   REPOSITORY='webdav://localhost:18080/backups/benchmark' ./scripts/benchmark-stowmark.sh
+#   SMALL_FILES=10000 SMALL_SIZE_KIB=16 LARGE_FILES=10 LARGE_SIZE_MIB=1024 ./scripts/benchmark-stowmark.sh
+#   ENCRYPTION=0 COMPRESSION=none ./scripts/benchmark-stowmark.sh
 
 STOWMARK_BIN="${STOWMARK_BIN:-./stowmark}"
 RESULTS_ROOT="${RESULTS_ROOT:-./benchmark-results}"

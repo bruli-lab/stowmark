@@ -39,6 +39,6 @@ func TestManifestRepository_SaveAndList(t *testing.T) {
 
 		require.NoError(t, err)
 		require.Len(t, manifests, 1)
-		require.Equal(t, manifest.Id(), manifests[0].Id())
+		require.Equal(t, manifest.ID(), manifests[0].ID())
 	})
 }

@@ -7,7 +7,7 @@ import (
 	observabilityinfra "github.com/bruli-lab/stowmark/internal/infra/observability"
 )
 
-func builtObservability(ctx context.Context) (*observabilityinfra.OTLPObservability, error) {
+func buildObservability(ctx context.Context) (*observabilityinfra.OTLPObservability, error) {
 	conf, err := config.NewObservabilityConfig()
 	if err != nil {
 		return nil, err

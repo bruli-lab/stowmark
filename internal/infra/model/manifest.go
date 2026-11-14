@@ -89,7 +89,7 @@ func NewManifest(m *snapshot.Manifest) Manifest {
 		}
 	}
 	man := Manifest{
-		ID:        m.Id(),
+		ID:        m.ID(),
 		Files:     files,
 		CreatedAt: m.CreatedAt().In(time.Local),
 		Source:    m.Source(),

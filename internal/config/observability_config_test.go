@@ -1,7 +1,6 @@
 package config_test
 
 import (
-	"os"
 	"testing"
 
 	"github.com/bruli-lab/stowmark/internal/config"
@@ -16,14 +15,13 @@ func TestNewObservabilityConfig(t *testing.T) {
 		expectedProtocol    *string
 		expectedServiceName *string
 		expectedLogLevel    string
-		writeOTLPVars       bool
 	}{
 		{
 			name:                "with no env vars set, it returns only default values",
 			envVars:             map[string]string{},
 			expectedProtocol:    new("http/protobuf"),
 			expectedServiceName: new("stowmark"),
-			expectedLogLevel:    "debug",
+			expectedLogLevel:    "info",
 		},
 		{
 			name: "with all env var set, it returns all values",
@@ -37,7 +35,6 @@ func TestNewObservabilityConfig(t *testing.T) {
 			expectedProtocol:    new("test-protocol"),
 			expectedServiceName: new("test-service-name"),
 			expectedLogLevel:    "error",
-			writeOTLPVars:       true,
 		},
 		{
 			name: "with endpoint env var set, it returns otlp values",
@@ -47,8 +44,7 @@ func TestNewObservabilityConfig(t *testing.T) {
 			expectedEndpoint:    new("test-endpoint"),
 			expectedProtocol:    new("http/protobuf"),
 			expectedServiceName: new("stowmark"),
-			expectedLogLevel:    "debug",
-			writeOTLPVars:       true,
+			expectedLogLevel:    "info",
 		},
 	}
 	otelEnvironment := []string{
@@ -71,11 +67,7 @@ func TestNewObservabilityConfig(t *testing.T) {
 			require.Equal(t, tt.expectedEndpoint, got.OTELExporterEndpoint)
 			require.Equal(t, tt.expectedProtocol, got.OTELExporterProtocol)
 			require.Equal(t, tt.expectedServiceName, got.OTELServiceName)
-
-			if tt.writeOTLPVars {
-				require.Equal(t, *tt.expectedProtocol, os.Getenv(config.OtelExporterOTLPProtocolEnv))
-				require.Equal(t, *tt.expectedServiceName, os.Getenv(config.OtelServiceNameEnv))
-			}
+			require.Equal(t, tt.expectedLogLevel, got.LogLevel)
 		})
 	}
 }

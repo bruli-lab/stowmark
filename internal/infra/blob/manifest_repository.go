@@ -22,14 +22,14 @@ func (m ManifestRepository) Save(ctx context.Context, manifest *snapshot.Manifes
 		return err
 	}
 
-	key, err := manifestKey(manifest.Id())
+	key, err := manifestKey(manifest.ID())
 	if err != nil {
 		return err
 	}
 
 	data, err := json.MarshalIndent(model.NewManifest(manifest), "", " ")
 	if err != nil {
-		return fmt.Errorf("marshal manifest %q: %w", manifest.Id(), err)
+		return fmt.Errorf("marshal manifest %q: %w", manifest.ID(), err)
 	}
 	data = append(data, '\n')
 

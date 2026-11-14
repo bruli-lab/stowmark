@@ -22,7 +22,7 @@ func newSnapshotGetCommand() *cobra.Command {
 		Short: "Show a snapshot manifest",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			obsv, err := builtObservability(cmd.Context())
+			obsv, err := buildObservability(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("create observability: %w", err)
 			}
@@ -97,7 +97,7 @@ func printManifest(
 		"ID:\t%s\n"+
 			"CREATED AT:\t%s\n"+
 			"SOURCE:\t%s\n",
-		manifest.Id(),
+		manifest.ID(),
 		createdAt.Format("2006-01-02 15:04:05"),
 		manifest.Source(),
 	)

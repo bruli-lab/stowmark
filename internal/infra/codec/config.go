@@ -26,7 +26,7 @@ func MarshalConfig(ctx context.Context, c *repository.Config) ([]byte, error) {
 	}
 
 	co := model.Config{
-		ID:            c.Id().String(),
+		ID:            c.ID().String(),
 		FormatVersion: c.FormatVersion().Int(),
 		CreatedAt:     c.CreatedAt().In(time.Local).Format(time.RFC3339),
 		Compression: model.Compression{

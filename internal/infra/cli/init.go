@@ -27,7 +27,7 @@ func newInitCommand() *cobra.Command {
 		Short: "Initialize a new Stowmark repository",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			obsv, err := builtObservability(cmd.Context())
+			obsv, err := buildObservability(cmd.Context())
 			if err != nil {
 				return fmt.Errorf("create observability: %w", err)
 			}
@@ -158,7 +158,6 @@ func newInitCommand() *cobra.Command {
 	)
 
 	_ = cmd.MarkFlagRequired("repo")
-	_ = cmd.MarkFlagRequired("compression")
 
 	return cmd
 }

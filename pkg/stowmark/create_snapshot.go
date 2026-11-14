@@ -15,7 +15,7 @@ type CreateResult struct {
 }
 
 func (h *Handler) CreateSnapshot(ctx context.Context, source string, privateKey *string) (*CreateResult, error) {
-	obsv, err := builtObservability(ctx)
+	obsv, err := buildObservability(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -33,7 +33,7 @@ func (h *Handler) CreateSnapshot(ctx context.Context, source string, privateKey 
 		h.manifestRepository,
 		h.objectRepository,
 		h.folderRepository,
-		h.asymmetricKeyPaiRepository,
+		h.asymmetricKeyPairRepository,
 		h.symmetricKeyRepository,
 		h.locker,
 	))

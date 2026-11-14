@@ -20,7 +20,7 @@ func (m *Manifest) Compression() *repository.Compression {
 	return m.compression
 }
 
-func (m *Manifest) Id() string {
+func (m *Manifest) ID() string {
 	return m.id
 }
 

@@ -146,7 +146,7 @@ func TestConfig_ReinitializeKeepsCreatedAt(t *testing.T) {
 		got, warnings := previous.Reinitialize(newConfig, false)
 
 		require.Equal(t, createdAt, got.CreatedAt())
-		require.Equal(t, previous.Id(), got.Id())
+		require.Equal(t, previous.ID(), got.ID())
 		require.Equal(t, ZstdCompressionType, got.Compression().CompType())
 		require.Empty(t, warnings)
 	})

@@ -10,16 +10,16 @@ import (
 )
 
 type Handler struct {
-	folderRepository           app.FolderRepository
-	sourceRepository           app.SourceRepository
-	manifestRepository         app.ManifestRepository
-	objectRepository           app.ObjectRepository
-	repositoryPath             string
-	repositoriesHandler        repositories.Repositories
-	asymmetricKeyPaiRepository app.AsymmetricKeyPairRepository
-	symmetricKeyRepository     app.SymmetricKeyRepository
-	lockRepository             app.LockRepository
-	locker                     *app.RepositoryLocker
+	folderRepository            app.FolderRepository
+	sourceRepository            app.SourceRepository
+	manifestRepository          app.ManifestRepository
+	objectRepository            app.ObjectRepository
+	repositoryPath              string
+	repositoriesHandler         repositories.Repositories
+	asymmetricKeyPairRepository app.AsymmetricKeyPairRepository
+	symmetricKeyRepository      app.SymmetricKeyRepository
+	lockRepository              app.LockRepository
+	locker                      *app.RepositoryLocker
 }
 
 func (h *Handler) Close() error {
@@ -48,15 +48,15 @@ func NewHandler(ctx context.Context, repositoryPath string) (*Handler, error) {
 	}
 
 	return &Handler{
-		folderRepository:           folderRepo,
-		sourceRepository:           sourceRepo,
-		manifestRepository:         manifestRepo,
-		objectRepository:           objectRepo,
-		repositoryPath:             repoHandler.RepositoryPath(),
-		repositoriesHandler:        repoHandler,
-		asymmetricKeyPaiRepository: disk.NewAsymmetricKeyPairRepository(),
-		symmetricKeyRepository:     encrypt.NewSymmetricRepository(),
-		lockRepository:             lockRepo,
-		locker:                     app.NewRepositoryLocker(lockRepo),
+		folderRepository:            folderRepo,
+		sourceRepository:            sourceRepo,
+		manifestRepository:          manifestRepo,
+		objectRepository:            objectRepo,
+		repositoryPath:              repoHandler.RepositoryPath(),
+		repositoriesHandler:         repoHandler,
+		asymmetricKeyPairRepository: disk.NewAsymmetricKeyPairRepository(),
+		symmetricKeyRepository:      encrypt.NewSymmetricRepository(),
+		lockRepository:              lockRepo,
+		locker:                      app.NewRepositoryLocker(lockRepo),
 	}, nil
 }

@@ -4,7 +4,6 @@
 
 [![CI](https://github.com/bruli-lab/stowmark/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/bruli-lab/stowmark/actions/workflows/release.yml)
 [![Codecov](https://codecov.io/gh/bruli-lab/stowmark/branch/main/graph/badge.svg)](https://codecov.io/gh/bruli-lab/stowmark)
-[![Check and release](https://github.com/bruli-lab/stowmark/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/bruli-lab/stowmark/actions/workflows/release.yml)
 [![Latest release](https://img.shields.io/github/v/release/bruli-lab/stowmark?display_name=tag)](https://github.com/bruli-lab/stowmark/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/bruli-lab/stowmark/total)](https://github.com/bruli-lab/stowmark/releases)
 [![License](https://img.shields.io/github/license/bruli-lab/stowmark)](https://github.com/bruli-lab/stowmark/blob/main/LICENSE)
@@ -83,7 +82,7 @@ and run `stowmark.exe` directly:
 
 Requirements:
 
-- Go 1.26 or newer.
+- Go 1.27.4 or newer (see `go.mod`).
 - Git.
 
 ```bash
@@ -105,13 +104,13 @@ stowmark --help
 Create a new Stowmark repository:
 
 ```bash
-stowmark init /srv/backups/stowmark
+stowmark init --repo /srv/backups/stowmark
 ```
 
 Create a repository using compression:
 
 ```bash
-stowmark init /srv/backups/stowmark \
+stowmark init --repo /srv/backups/stowmark \
   --compression zstd \
   --level 3
 ```
@@ -146,13 +145,13 @@ stowmark snapshot verify \
   --repo /srv/backups/stowmark
 ```
 
-Restore a snapshot:
+Restore a snapshot. Without `--destination`, files are restored to their original paths:
 
 ```bash
 stowmark snapshot restore \
   --id <snapshot-id> \
-  --repo /srv/backups/stowmark
-  --destination /srv/backups/stowmark-restore //optional
+  --repo /srv/backups/stowmark \
+  --destination /srv/backups/stowmark-restore
 ```
 
 Restore a file from snapshot:
@@ -161,8 +160,8 @@ Restore a file from snapshot:
 stowmark snapshot restore \
   --id <snapshot-id> \
   --file <path> \
-  --repo /srv/backups/stowmark
-  --destination /srv/backups/stowmark-restore //optional
+  --repo /srv/backups/stowmark \
+  --destination /srv/backups/stowmark-restore
 ```
 
 ## SSH repositories
@@ -185,7 +184,7 @@ ssh://<user>@<host>[:<port>]/<absolute-path>
 Initialize a remote repository:
 
 ```bash
-stowmark init ssh://backup@example.com/srv/backups/stowmark
+stowmark init --repo ssh://backup@example.com/srv/backups/stowmark
 ```
 
 Create and list snapshots:
@@ -233,7 +232,7 @@ smb://<user>@<host>[:<port>]/<share>[/<path>]
 Initialize a repository on an SMB share:
 
 ```bash
-stowmark init smb://backup@example.com/backups/stowmark
+stowmark init --repo smb://backup@example.com/backups/stowmark
 ```
 
 Create and list snapshots:
@@ -268,12 +267,19 @@ Stowmark can store a repository in Amazon S3 or an S3-compatible object storage 
 restored files remain on the local machine; repository configuration, objects and snapshot manifests are stored as
 objects in the selected bucket.
 
-Set the credentials and region used to connect to S3:
+Credentials and region are resolved by the standard AWS SDK chain: environment variables, shared config and
+credentials files (`AWS_PROFILE`, SSO), web identity, and ECS/EC2 instance roles. For example, with static keys:
 
 ```bash
-export AWS_ACCESS_KEY="<access-key>"
+export AWS_ACCESS_KEY_ID="<access-key>"
 export AWS_SECRET_ACCESS_KEY="<secret-key>"
 export AWS_REGION="<region>"
+```
+
+Or with a named profile:
+
+```bash
+export AWS_PROFILE="backups"
 ```
 
 Use an S3 repository URL anywhere that `--repo` or the repository argument is accepted:
@@ -461,15 +467,18 @@ and remove files and collections under the repository path.
 
 ## Commands
 
-| Command                                                   | Description                           |
-|-----------------------------------------------------------|---------------------------------------|
-| `stowmark init <repository>`                              | Initialize a new repository.          |
-| `stowmark snapshot create <source> --repo <repository>`   | Create a snapshot of a directory.     |
-| `stowmark snapshot list --repo <repository>`              | List snapshots from newest to oldest. |
-| `stowmark snapshot get --id <id> --repo <repository>`     | Display a snapshot manifest.          |
-| `stowmark snapshot verify --id <id> --repo <repository>`  | Verify snapshot integrity.            |
-| `stowmark snapshot restore --id <id> --repo <repository>` | Restore snapshot.                     |
-| `stowmark unlock --repo <repository> [--all]`             | Remove stale (or all) repository locks. |
+| Command                                                                 | Description                              |
+|-------------------------------------------------------------------------|------------------------------------------|
+| `stowmark init --repo <repository>`                                     | Initialize a new repository.             |
+| `stowmark snapshot create <source> --repo <repository>`                 | Create a snapshot of a directory.        |
+| `stowmark snapshot list --repo <repository>`                            | List snapshots from newest to oldest.    |
+| `stowmark snapshot get --id <id> --repo <repository>`                   | Display a snapshot manifest.             |
+| `stowmark snapshot verify --id <id> --repo <repository>`                | Verify snapshot integrity.               |
+| `stowmark snapshot restore --id <id> --repo <repository>`               | Restore a snapshot or, with `--file`, one file. |
+| `stowmark key generate --folder <folder>`                               | Generate an RSA key pair.                |
+| `stowmark key rewrap --repo <repository> --old-private-key <key> --new-public-key <key>` | Re-encrypt the repository key with a new RSA key pair. |
+| `stowmark key rekey --repo <repository> --private-key <key> --public-key <key>` | Rotate the symmetric key and re-encrypt every object. |
+| `stowmark unlock --repo <repository> [--all]`                           | Remove stale (or all) repository locks.  |
 
 Run the built-in help for the complete set of options:
 
@@ -546,7 +555,7 @@ Restore an encrypted snapshot:
 stowmark snapshot restore \
   --id <snapshot-id> \
   --repo /srv/backups/stowmark \
-  --destination /srv/restores/stowmark \ optional
+  --destination /srv/restores/stowmark \
   --private-key keys/stowmark-private.pem
 ```
 
@@ -623,10 +632,10 @@ Compression is selected when the repository is initialized. Stowmark currently s
 For example:
 
 ```bash
-stowmark init /srv/backups/stowmark-gzip --compression gzip --level 6
-stowmark init /srv/backups/stowmark-zstd --compression zstd --level 3
-stowmark init /srv/backups/stowmark-lz4 --compression lz4 --level 0
-stowmark init /srv/backups/stowmark-xz --compression xz
+stowmark init --repo /srv/backups/stowmark-gzip --compression gzip --level 6
+stowmark init --repo /srv/backups/stowmark-zstd --compression zstd --level 3
+stowmark init --repo /srv/backups/stowmark-lz4 --compression lz4 --level 0
+stowmark init --repo /srv/backups/stowmark-xz --compression xz
 ```
 
 The selected compression is applied to every object in the snapshot and recorded in its manifest. Compression is
@@ -817,6 +826,33 @@ A successful release produces:
 
 See all published versions on the
 [GitHub Releases page](https://github.com/bruli-lab/stowmark/releases).
+
+## Security model and limitations
+
+What encryption protects, when a repository is created with `--public-key`:
+
+- File contents: every object is encrypted with AES-256-GCM before it leaves the machine, so the storage provider and
+  anyone with access to the backend cannot read your data.
+- The repository key: the AES key is stored in `config.json` only wrapped with your RSA public key. Without the
+  private key, objects cannot be decrypted.
+- Integrity: GCM authenticates every object, and restore and `snapshot verify` check the SHA-256 of every object
+  against the manifest.
+
+What it does **not** protect yet:
+
+- Snapshot manifests are stored in plain JSON. Anyone with access to the backend can see file paths, sizes, snapshot
+  dates and the source directory.
+- Object names are the SHA-256 of the stored data, so someone who already has a file can check whether the same file
+  (with the same compression settings) is in the repository.
+- "Immutable-style" means objects and manifests are never overwritten by Stowmark. It is not enforced by the storage:
+  anyone with write access to the backend can still delete or replace them. Use bucket versioning, object lock or
+  backend snapshots if you need protection against that.
+
+What is not backed up:
+
+- Only regular files are stored. Symbolic links, device files, sockets and named pipes are skipped.
+- Empty directories are not recorded.
+- File permissions, ownership and modification times are not stored; restored files are created with mode `0644`.
 
 ## Roadmap
 

@@ -43,7 +43,7 @@ func TestMarshalConfig(t *testing.T) {
 			require.NoError(t, json.Unmarshal(data, &conf))
 			got, err := model.BuildConfigDomain(conf)
 			require.NoError(t, err)
-			require.Equal(t, original.Id(), got.Id())
+			require.Equal(t, original.ID(), got.ID())
 			require.Equal(t, original.FormatVersion(), got.FormatVersion())
 			require.True(t, original.CreatedAt().Truncate(1e9).Equal(got.CreatedAt()))
 			require.Equal(t, original.Compression(), got.Compression())
