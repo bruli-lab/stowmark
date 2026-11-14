@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path"
 	"slices"
+	"strings"
 
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
@@ -80,6 +82,27 @@ func (m ManifestRepository) List(ctx context.Context) ([]snapshot.Manifest, erro
 	})
 
 	return manifests, nil
+}
+
+func (m ManifestRepository) ListIDs(ctx context.Context) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	keys, err := m.store.List(ctx, repository.SnapshotsFolder)
+	if err != nil {
+		return nil, fmt.Errorf("list manifests: %w", err)
+	}
+
+	ids := make([]string, 0, len(keys))
+	for _, key := range keys {
+		if isManifestKey(key) {
+			ids = append(ids, strings.TrimSuffix(path.Base(key), manifestExtension))
+		}
+	}
+	slices.Sort(ids)
+
+	return ids, nil
 }
 
 func (m ManifestRepository) Delete(ctx context.Context, snapshotID string) error {

@@ -28,6 +28,7 @@ type SourceRepository interface {
 type ManifestRepository interface {
 	Save(ctx context.Context, m *snapshot.Manifest) error
 	List(ctx context.Context) ([]snapshot.Manifest, error)
+	ListIDs(ctx context.Context) ([]string, error)
 	Get(ctx context.Context, snapshotID string) (*snapshot.Manifest, error)
 	Delete(ctx context.Context, snapshotID string) error
 }
@@ -41,6 +42,7 @@ type ObjectRepository interface {
 	ListObjects(ctx context.Context, encrypted bool, generation uint64) ([]string, error)
 	DeleteObject(ctx context.Context, hash string, encrypted bool, generation uint64) error
 	ListEncryptedObjects(ctx context.Context, generation uint64) ([]string, error)
+	ListEncryptedGenerations(ctx context.Context) ([]uint64, error)
 	ReadEncryptedObject(ctx context.Context, hash string, generation uint64, key []byte) (io.ReadCloser, error)
 	SaveRekeyedObject(ctx context.Context, hash string, source io.Reader, generation uint64, key []byte) error
 	DeleteEncryptedGeneration(ctx context.Context, generation uint64) error

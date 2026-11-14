@@ -40,6 +40,7 @@ the source path, creation time and references to its files.
 - Inspection of a snapshot and all its files.
 - Integrity verification using SHA-256 hashes.
 - Retention policies (`forget`) and garbage collection of unreferenced objects (`prune`).
+- Whole repository integrity checks (`check`), optionally reading all or part of the data.
 - Local repositories with no external service required.
 - Remote repositories over SSH/SFTP using public-key authentication.
 - Remote repositories over SMB using password authentication.
@@ -483,6 +484,7 @@ and remove files and collections under the repository path.
 | `stowmark unlock --repo <repository> [--all]`                           | Remove stale (or all) repository locks.  |
 | `stowmark forget --repo <repository> --keep-<rule> <n> [--prune]`       | Forget the snapshots a retention policy does not keep. |
 | `stowmark prune --repo <repository>`                                    | Delete objects that no snapshot references. |
+| `stowmark check --repo <repository> [--read-data \| --read-data-subset <subset>]` | Check the integrity of the whole repository. |
 
 Run the built-in help for the complete set of options:
 
@@ -746,7 +748,7 @@ different machines cannot corrupt each other:
 
 | Lock | Commands | Compatible with |
 |---|---|---|
-| Shared | `snapshot create`, `snapshot restore`, `snapshot verify`, `forget --dry-run`, `prune --dry-run` | Other shared locks |
+| Shared | `snapshot create`, `snapshot restore`, `snapshot verify`, `check`, `forget --dry-run`, `prune --dry-run` | Other shared locks |
 | Exclusive | `init`, `key rekey`, `key rewrap`, `forget`, `prune` | Nothing |
 
 A command fails with `repository is locked` and shows the host and process that hold a conflicting lock. A running
@@ -789,7 +791,36 @@ The `snapshot verify` command reads each object referenced by the manifest and c
 3. Its calculated SHA-256 hash matches the manifest.
 
 The command exits with an error when any referenced file fails verification, making it suitable for scripts and
-scheduled checks.
+scheduled checks. An object that cannot be authenticated or decrypted is reported as a failed file, not as an error of
+the command.
+
+### Repository check
+
+`snapshot verify` checks one snapshot. `check` checks the whole repository:
+
+```bash
+stowmark check --repo /backups/stowmark
+stowmark check --repo /backups/stowmark --read-data --private-key ./keys/private.pem
+stowmark check --repo /backups/stowmark --read-data-subset 10% --private-key ./keys/private.pem
+stowmark check --repo /backups/stowmark --read-data-subset 2/7 --private-key ./keys/private.pem
+```
+
+Without flags it only reads the structure, so it is fast and does not need the private key:
+
+- Every manifest can be read and parsed.
+- Every object referenced by a manifest exists. A missing object is reported with the snapshots that use it.
+- Warnings, which do not make the check fail: objects no snapshot references (run `prune`), stale locks (run
+  `unlock`) and objects of old key generations left by an interrupted `key rekey`.
+
+`--read-data` also downloads every referenced object once, even if several snapshots share it, and verifies it as
+`snapshot verify` does. `--read-data-subset` verifies only part of the objects:
+
+- A percentage such as `10%` picks a random subset on every run.
+- A part such as `2/7` splits the objects in 7 stable groups and verifies the second one. Running `1/7` to `7/7` on
+  consecutive days verifies the whole repository in a week.
+
+Reading the data of an encrypted repository needs `--private-key`. `check` takes a shared lock and exits with an error
+when it finds a corrupt manifest, a missing object or a corrupt object.
 
 ## Observability
 
@@ -899,8 +930,8 @@ stowmark prune --repo /backups/stowmark --dry-run
 - `forget` and `prune` take an exclusive lock, so they never run while a snapshot is being created or restored.
 - Manifests are deleted before objects. If `prune` is interrupted, the only effect is that some unreferenced objects
   remain until the next `prune`.
-- `prune` warns when a manifest references an object that is missing from the repository. Run `snapshot verify` to
-  find the affected snapshots.
+- `prune` warns when a manifest references an object that is missing from the repository. Run `check` to find the
+  affected snapshots.
 - In encrypted repositories, `prune` works on the objects of the current key generation and does not need the
   private key.
 - `prune` lists every object of the repository, which can take a while on large S3 or GCS repositories.
@@ -913,7 +944,7 @@ What encryption protects, when a repository is created with `--public-key`:
   anyone with access to the backend cannot read your data.
 - The repository key: the AES key is stored in `config.json` only wrapped with your RSA public key. Without the
   private key, objects cannot be decrypted.
-- Integrity: GCM authenticates every object, and restore and `snapshot verify` check the SHA-256 of every object
+- Integrity: GCM authenticates every object, and restore, `snapshot verify` and `check --read-data` check the SHA-256 of every object
   against the manifest.
 
 What it does **not** protect yet:

@@ -506,6 +506,9 @@ var _ ManifestRepository = &ManifestRepositoryMock{}
 //			ListFunc: func(ctx context.Context) ([]snapshot.Manifest, error) {
 //				panic("mock out the List method")
 //			},
+//			ListIDsFunc: func(ctx context.Context) ([]string, error) {
+//				panic("mock out the ListIDs method")
+//			},
 //			SaveFunc: func(ctx context.Context, m *snapshot.Manifest) error {
 //				panic("mock out the Save method")
 //			},
@@ -524,6 +527,9 @@ type ManifestRepositoryMock struct {
 
 	// ListFunc mocks the List method.
 	ListFunc func(ctx context.Context) ([]snapshot.Manifest, error)
+
+	// ListIDsFunc mocks the ListIDs method.
+	ListIDsFunc func(ctx context.Context) ([]string, error)
 
 	// SaveFunc mocks the Save method.
 	SaveFunc func(ctx context.Context, m *snapshot.Manifest) error
@@ -549,6 +555,11 @@ type ManifestRepositoryMock struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 		}
+		// ListIDs holds details about calls to the ListIDs method.
+		ListIDs []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+		}
 		// Save holds details about calls to the Save method.
 		Save []struct {
 			// Ctx is the ctx argument value.
@@ -557,10 +568,11 @@ type ManifestRepositoryMock struct {
 			M *snapshot.Manifest
 		}
 	}
-	lockDelete sync.RWMutex
-	lockGet    sync.RWMutex
-	lockList   sync.RWMutex
-	lockSave   sync.RWMutex
+	lockDelete  sync.RWMutex
+	lockGet     sync.RWMutex
+	lockList    sync.RWMutex
+	lockListIDs sync.RWMutex
+	lockSave    sync.RWMutex
 }
 
 // Delete calls DeleteFunc.
@@ -667,6 +679,38 @@ func (mock *ManifestRepositoryMock) ListCalls() []struct {
 	return calls
 }
 
+// ListIDs calls ListIDsFunc.
+func (mock *ManifestRepositoryMock) ListIDs(ctx context.Context) ([]string, error) {
+	if mock.ListIDsFunc == nil {
+		panic("ManifestRepositoryMock.ListIDsFunc: method is nil but ManifestRepository.ListIDs was just called")
+	}
+	callInfo := struct {
+		Ctx context.Context
+	}{
+		Ctx: ctx,
+	}
+	mock.lockListIDs.Lock()
+	mock.calls.ListIDs = append(mock.calls.ListIDs, callInfo)
+	mock.lockListIDs.Unlock()
+	return mock.ListIDsFunc(ctx)
+}
+
+// ListIDsCalls gets all the calls that were made to ListIDs.
+// Check the length with:
+//
+//	len(mockedManifestRepository.ListIDsCalls())
+func (mock *ManifestRepositoryMock) ListIDsCalls() []struct {
+	Ctx context.Context
+} {
+	var calls []struct {
+		Ctx context.Context
+	}
+	mock.lockListIDs.RLock()
+	calls = mock.calls.ListIDs
+	mock.lockListIDs.RUnlock()
+	return calls
+}
+
 // Save calls SaveFunc.
 func (mock *ManifestRepositoryMock) Save(ctx context.Context, m *snapshot.Manifest) error {
 	if mock.SaveFunc == nil {
@@ -725,6 +769,9 @@ var _ ObjectRepository = &ObjectRepositoryMock{}
 //			DeleteObjectFunc: func(ctx context.Context, hash string, encrypted bool, generation uint64) error {
 //				panic("mock out the DeleteObject method")
 //			},
+//			ListEncryptedGenerationsFunc: func(ctx context.Context) ([]uint64, error) {
+//				panic("mock out the ListEncryptedGenerations method")
+//			},
 //			ListEncryptedObjectsFunc: func(ctx context.Context, generation uint64) ([]string, error) {
 //				panic("mock out the ListEncryptedObjects method")
 //			},
@@ -767,6 +814,9 @@ type ObjectRepositoryMock struct {
 
 	// DeleteObjectFunc mocks the DeleteObject method.
 	DeleteObjectFunc func(ctx context.Context, hash string, encrypted bool, generation uint64) error
+
+	// ListEncryptedGenerationsFunc mocks the ListEncryptedGenerations method.
+	ListEncryptedGenerationsFunc func(ctx context.Context) ([]uint64, error)
 
 	// ListEncryptedObjectsFunc mocks the ListEncryptedObjects method.
 	ListEncryptedObjectsFunc func(ctx context.Context, generation uint64) ([]string, error)
@@ -829,6 +879,11 @@ type ObjectRepositoryMock struct {
 			Encrypted bool
 			// Generation is the generation argument value.
 			Generation uint64
+		}
+		// ListEncryptedGenerations holds details about calls to the ListEncryptedGenerations method.
+		ListEncryptedGenerations []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
 		}
 		// ListEncryptedObjects holds details about calls to the ListEncryptedObjects method.
 		ListEncryptedObjects []struct {
@@ -933,6 +988,7 @@ type ObjectRepositoryMock struct {
 	lockAlreadyExists             sync.RWMutex
 	lockDeleteEncryptedGeneration sync.RWMutex
 	lockDeleteObject              sync.RWMutex
+	lockListEncryptedGenerations  sync.RWMutex
 	lockListEncryptedObjects      sync.RWMutex
 	lockListObjects               sync.RWMutex
 	lockReadEncryptedObject       sync.RWMutex
@@ -1100,6 +1156,38 @@ func (mock *ObjectRepositoryMock) DeleteObjectCalls() []struct {
 	mock.lockDeleteObject.RLock()
 	calls = mock.calls.DeleteObject
 	mock.lockDeleteObject.RUnlock()
+	return calls
+}
+
+// ListEncryptedGenerations calls ListEncryptedGenerationsFunc.
+func (mock *ObjectRepositoryMock) ListEncryptedGenerations(ctx context.Context) ([]uint64, error) {
+	if mock.ListEncryptedGenerationsFunc == nil {
+		panic("ObjectRepositoryMock.ListEncryptedGenerationsFunc: method is nil but ObjectRepository.ListEncryptedGenerations was just called")
+	}
+	callInfo := struct {
+		Ctx context.Context
+	}{
+		Ctx: ctx,
+	}
+	mock.lockListEncryptedGenerations.Lock()
+	mock.calls.ListEncryptedGenerations = append(mock.calls.ListEncryptedGenerations, callInfo)
+	mock.lockListEncryptedGenerations.Unlock()
+	return mock.ListEncryptedGenerationsFunc(ctx)
+}
+
+// ListEncryptedGenerationsCalls gets all the calls that were made to ListEncryptedGenerations.
+// Check the length with:
+//
+//	len(mockedObjectRepository.ListEncryptedGenerationsCalls())
+func (mock *ObjectRepositoryMock) ListEncryptedGenerationsCalls() []struct {
+	Ctx context.Context
+} {
+	var calls []struct {
+		Ctx context.Context
+	}
+	mock.lockListEncryptedGenerations.RLock()
+	calls = mock.calls.ListEncryptedGenerations
+	mock.lockListEncryptedGenerations.RUnlock()
 	return calls
 }
 

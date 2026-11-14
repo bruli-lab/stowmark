@@ -177,13 +177,18 @@ func currentHostname() string {
 	return hostname
 }
 
-func withLockedEvent[T event.Event](ctx context.Context, locker *RepositoryLocker, kind repository.LockKind, operation func(context.Context) (T, error)) ([]event.Event, error) {
+func withLockedResult[T any](ctx context.Context, locker *RepositoryLocker, kind repository.LockKind, operation func(context.Context) (T, error)) (T, error) {
 	var produced T
 	err := locker.WithLock(ctx, kind, func(ctx context.Context) error {
 		result, err := operation(ctx)
 		produced = result
 		return err
 	})
+	return produced, err
+}
+
+func withLockedEvent[T event.Event](ctx context.Context, locker *RepositoryLocker, kind repository.LockKind, operation func(context.Context) (T, error)) ([]event.Event, error) {
+	produced, err := withLockedResult(ctx, locker, kind, operation)
 	if err != nil {
 		return nil, err
 	}

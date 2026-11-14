@@ -5,6 +5,7 @@ package stowmark_test
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -223,6 +224,38 @@ func mainFlow(t *testing.T, ctx context.Context, folders Folders, formatVersion 
 	require.True(t, restored.IsSuccess)
 	requireDirectoriesEqual(t, folders.Source, prunedRestore)
 
+	checked, err := handler.Check(ctx, stowmark.CheckOptions{})
+	require.NoError(t, err)
+	require.False(t, checked.HasErrors)
+	require.False(t, checked.ReadData)
+	require.Equal(t, 1, checked.Snapshots)
+	require.Zero(t, checked.UnreferencedObjects)
+
+	checked, err = handler.Check(ctx, stowmark.CheckOptions{ReadData: true, PrivateKey: new(newKeys.PrivateKey())})
+	require.NoError(t, err)
+	require.False(t, checked.HasErrors)
+	require.Equal(t, checked.ReferencedObjects, checked.ReadObjects)
+	require.Empty(t, checked.CorruptObjects)
+
+	objectKeys, err := store.List(ctx, "objects/encrypted")
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(objectKeys), 2)
+	missingKey, corruptKey := objectKeys[0], objectKeys[1]
+	require.NoError(t, store.Delete(ctx, missingKey))
+	require.NoError(t, store.Delete(ctx, corruptKey))
+	require.NoError(t, store.Put(ctx, corruptKey, func(w io.Writer) error {
+		_, err := w.Write([]byte("this is not an encrypted object"))
+		return err
+	}))
+
+	checked, err = handler.Check(ctx, stowmark.CheckOptions{ReadData: true, PrivateKey: new(newKeys.PrivateKey())})
+	require.NoError(t, err)
+	require.True(t, checked.HasErrors)
+	require.Len(t, checked.MissingObjects, 1)
+	require.Equal(t, objectHash(missingKey), checked.MissingObjects[0].Hash)
+	require.Len(t, checked.CorruptObjects, 1)
+	require.Equal(t, objectHash(corruptKey), checked.CorruptObjects[0].ID)
+
 	remainingLocks, err = store.List(ctx, repository.LocksFolder)
 	require.NoError(t, err)
 	require.Empty(t, remainingLocks)
@@ -247,4 +280,9 @@ func blobStore(t *testing.T, ctx context.Context, repositoryURL string) blob.Sto
 	require.NoError(t, err)
 
 	return store
+}
+
+func objectHash(key string) string {
+	segments := strings.Split(key, "/")
+	return segments[len(segments)-2] + segments[len(segments)-1]
 }

@@ -1,12 +1,9 @@
+//nolint:dupl // CQS query handlers intentionally share the same adapter structure.
 package app
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"errors"
 	"fmt"
-	"io"
 	"runtime"
 	"sync"
 
@@ -32,7 +29,7 @@ func (v VerifySnapshotQuery) Name() string {
 
 type VerifySnapshot struct {
 	manifestRepo ManifestRepository
-	objectRepo   ObjectRepository
+	verifier     objectVerifier
 	keys         keyring
 	locker       *RepositoryLocker
 	workers      int
@@ -43,11 +40,8 @@ func (v *VerifySnapshot) Handle(ctx context.Context, query cqs.Query) (any, erro
 	if !ok {
 		return nil, cqs.NewInvalidQueryError(VerifySnapshotQueryName, query.Name())
 	}
-	var result *snapshot.Result
-	err := v.locker.WithLock(ctx, repository.SharedLock, func(ctx context.Context) error {
-		verified, err := v.verify(ctx, q)
-		result = verified
-		return err
+	result, err := withLockedResult(ctx, v.locker, repository.SharedLock, func(ctx context.Context) (*snapshot.Result, error) {
+		return v.verify(ctx, q)
 	})
 	if err != nil {
 		return nil, err
@@ -111,48 +105,16 @@ func (v *VerifySnapshot) verify(ctx context.Context, q VerifySnapshotQuery) (*sn
 func (v *VerifySnapshot) verifyFile(ctx context.Context, file *snapshot.File, key objectKey) (string, error) {
 	chunks := file.Chunks()
 	if len(chunks) == 0 {
-		return v.verifyObject(ctx, file.Hash(), key)
+		return v.verifier.verify(ctx, file.Hash(), key)
 	}
 	for index, chunk := range chunks {
-		reason, err := v.verifyObject(ctx, chunk.Hash(), key)
+		reason, err := v.verifier.verify(ctx, chunk.Hash(), key)
 		if err != nil {
 			return "", err
 		}
 		if reason != "" {
 			return fmt.Sprintf("chunk %d/%d: %s", index+1, len(chunks), reason), nil
 		}
-	}
-
-	return "", nil
-}
-
-func (v *VerifySnapshot) verifyObject(ctx context.Context, expectedHash string, key objectKey) (string, error) {
-	if expectedHash == "" {
-		return "object hash is empty", nil
-	}
-	reader, err := v.objectRepo.ReadObject(ctx, expectedHash, key.symmetricKey, key.generation)
-	if err != nil {
-		if errors.As(err, &snapshot.NotFoundError{}) {
-			return err.Error(), nil
-		}
-		return "", err
-	}
-
-	hasher := sha256.New()
-	_, copyErr := io.Copy(hasher, &contextReader{ctx: ctx, reader: reader})
-	closeErr := reader.Close()
-
-	if copyErr != nil {
-		return "", fmt.Errorf("read object %q: %w", expectedHash, copyErr)
-	}
-
-	if closeErr != nil {
-		return "", fmt.Errorf("close object %q: %w", expectedHash, closeErr)
-	}
-
-	calculatedHash := hex.EncodeToString(hasher.Sum(nil))
-	if calculatedHash != expectedHash {
-		return fmt.Sprintf("hash mismatch: expected %s, calculated %s", expectedHash, calculatedHash), nil
 	}
 
 	return "", nil
@@ -183,7 +145,7 @@ func NewVerifySnapshotWithWorkers(
 	}
 	return &VerifySnapshot{
 		manifestRepo: manifestRepo,
-		objectRepo:   objectRepo,
+		verifier:     objectVerifier{objectRepo: objectRepo},
 		keys:         newKeyring(folderRepo, asymmetricRepo, symmetricRepo),
 		locker:       locker,
 		workers:      workers,

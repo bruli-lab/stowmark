@@ -14,6 +14,7 @@ import (
 var (
 	ErrDestinationRequired = errors.New("encryption destination is required")
 	ErrInvalidKeySize      = errors.New("invalid AES-256 key size")
+	ErrDecryptionFailed    = errors.New("decryption failed")
 )
 
 type Encoder struct {
@@ -40,6 +41,9 @@ func (h AESGCMHandler) Decode(source io.Reader, key []byte) (io.Reader, error) {
 
 	nonce := make([]byte, gcm.NonceSize())
 	if _, err := io.ReadFull(source, nonce); err != nil {
+		if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+			return nil, fmt.Errorf("%w: data is shorter than the nonce", ErrDecryptionFailed)
+		}
 		return nil, fmt.Errorf("read nonce: %w", err)
 	}
 
@@ -49,7 +53,7 @@ func (h AESGCMHandler) Decode(source io.Reader, key []byte) (io.Reader, error) {
 	}
 	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
 	if err != nil {
-		return nil, fmt.Errorf("decrypt data: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrDecryptionFailed, err)
 	}
 
 	return bytes.NewReader(plaintext), nil

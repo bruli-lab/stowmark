@@ -191,3 +191,29 @@ func TestAESGCMHandler_Encode_Errors(t *testing.T) {
 		})
 	}
 }
+
+func TestAESGCMHandler_Decode_Tampered(t *testing.T) {
+	t.Parallel()
+
+	key := bytes.Repeat([]byte{7}, encrypt.AES256KeySize)
+	var encrypted bytes.Buffer
+	encoder, err := encrypt.NewAESGCMHandler().Encode(&encrypted, key)
+	require.NoError(t, err)
+	_, err = encoder.Writer.Write([]byte("secret data"))
+	require.NoError(t, err)
+	require.NoError(t, encoder.Closer())
+	tampered := bytes.Clone(encrypted.Bytes())
+	tampered[len(tampered)-1] ^= 0xff
+
+	for name, data := range map[string][]byte{"tampered": tampered, "truncated": encrypted.Bytes()[:4]} {
+		t.Run(`Given `+name+` encrypted data,
+		when Decode is called,
+		then it returns a decryption failed error`, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := encrypt.NewAESGCMHandler().Decode(bytes.NewReader(data), key)
+
+			require.ErrorIs(t, err, encrypt.ErrDecryptionFailed)
+		})
+	}
+}

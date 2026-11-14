@@ -29,6 +29,7 @@ func Execute() error {
 	rootCmd.AddCommand(newUnlockCommand())
 	rootCmd.AddCommand(newForgetCommand())
 	rootCmd.AddCommand(newPruneCommand())
+	rootCmd.AddCommand(newCheckCommand())
 
 	return rootCmd.ExecuteContext(ctx)
 }

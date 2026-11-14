@@ -8,7 +8,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
+	"slices"
 	"sort"
+	"strconv"
+	"strings"
 
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
@@ -178,6 +182,38 @@ func (o ObjectRepository) ListEncryptedObjects(ctx context.Context, generation u
 	return hashes, nil
 }
 
+func (o ObjectRepository) ListEncryptedGenerations(ctx context.Context) ([]uint64, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	prefix := path.Join(repository.ObjectsFolder, repository.EncryptedFolder)
+	keys, err := o.store.List(ctx, prefix)
+	if err != nil {
+		return nil, fmt.Errorf("list encrypted generations: %w", err)
+	}
+
+	generations := make([]uint64, 0)
+	for _, key := range keys {
+		relative, ok := strings.CutPrefix(key, prefix+"/")
+		if !ok {
+			continue
+		}
+		segment, _, ok := strings.Cut(relative, "/")
+		if !ok {
+			continue
+		}
+		generation, err := strconv.ParseUint(segment, 10, 64)
+		if err != nil || slices.Contains(generations, generation) {
+			continue
+		}
+		generations = append(generations, generation)
+	}
+	slices.Sort(generations)
+
+	return generations, nil
+}
+
 func (o ObjectRepository) ReadEncryptedObject(ctx context.Context, hash string, generation uint64, symmetricKey []byte) (io.ReadCloser, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -278,6 +314,9 @@ func (o ObjectRepository) decrypt(reader io.ReadCloser, hash string, symmetricKe
 	decoded, err := o.encryptionHandler.Decode(reader, symmetricKey)
 	if err != nil {
 		_ = reader.Close()
+		if errors.Is(err, encrypt.ErrDecryptionFailed) {
+			return nil, fmt.Errorf("%w: decrypt object %q: %w", snapshot.ErrCorruptObject, hash, err)
+		}
 		return nil, fmt.Errorf("decrypt object %q: %w", hash, err)
 	}
 

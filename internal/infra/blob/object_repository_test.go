@@ -350,3 +350,56 @@ func TestObjectRepository_ListAndDeleteObjects(t *testing.T) {
 		require.ErrorIs(t, repo.DeleteObject(ctx, "../x", false, 0), blob.ErrInvalidHash)
 	})
 }
+
+func TestObjectRepository_ListEncryptedGenerations(t *testing.T) {
+	t.Parallel()
+
+	t.Run(`Given a blob ObjectRepository with objects in several encrypted generations and plain objects,
+	when ListEncryptedGenerations is called,
+	then it returns each generation once, sorted`, func(t *testing.T) {
+		t.Parallel()
+
+		ctx := context.Background()
+		store := blobtest.NewMemoryStore()
+		repo := blob.NewObjectRepository(store)
+		comp := zstdCompression(t)
+		key := newKey(t)
+		for i, generation := range []uint64{3, 1, 3} {
+			data := []byte{byte(i)}
+			require.NoError(t, repo.Save(ctx, writeSource(t, data), compressedHash(t, comp, data), comp, key, generation))
+		}
+		plain := []byte("plain")
+		require.NoError(t, repo.Save(ctx, writeSource(t, plain), compressedHash(t, comp, plain), comp, nil, 0))
+		require.NoError(t, store.Put(ctx, "objects/encrypted/notes.txt", func(io.Writer) error { return nil }))
+		require.NoError(t, store.Put(ctx, "objects/encrypted/x/ab/cd", func(io.Writer) error { return nil }))
+
+		generations, err := repo.ListEncryptedGenerations(ctx)
+
+		require.NoError(t, err)
+		require.Equal(t, []uint64{1, 3}, generations)
+	})
+}
+
+func TestObjectRepository_ReadObject_Tampered(t *testing.T) {
+	t.Parallel()
+
+	t.Run(`Given a blob ObjectRepository with an encrypted object whose bytes were replaced,
+	when ReadObject is called,
+	then it returns a corrupt object error`, func(t *testing.T) {
+		t.Parallel()
+
+		ctx := context.Background()
+		store := blobtest.NewMemoryStore()
+		repo := blob.NewObjectRepository(store)
+		comp := zstdCompression(t)
+		data := []byte("object that will be tampered")
+		hash := compressedHash(t, comp, data)
+		key := newKey(t)
+		require.NoError(t, repo.Save(ctx, writeSource(t, data), hash, comp, key, 1))
+		store.Corrupt("objects/encrypted/1/"+hash[:2]+"/"+hash[2:], bytes.Repeat([]byte("x"), 64))
+
+		_, err := repo.ReadObject(ctx, hash, key, 1)
+
+		require.ErrorIs(t, err, snapshot.ErrCorruptObject)
+	})
+}

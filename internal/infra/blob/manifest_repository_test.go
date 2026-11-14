@@ -113,6 +113,24 @@ func TestManifestRepository(t *testing.T) {
 		require.ErrorIs(t, repo.Delete(ctx, "../config"), blob.ErrInvalidKey)
 	})
 
+	t.Run(`Given a blob ManifestRepository with a valid manifest, a corrupted one and unrelated blobs,
+	when ListIDs is called,
+	then it returns the sorted ids of every manifest without reading them`, func(t *testing.T) {
+		t.Parallel()
+
+		ctx := context.Background()
+		store := blobtest.NewMemoryStore()
+		repo := blob.NewManifestRepository(store)
+		require.NoError(t, repo.Save(ctx, manifestAt(t, "20261113T000000Z-bbbbbbbb", time.Date(2026, 11, 13, 0, 0, 0, 0, time.UTC))))
+		store.Corrupt("snapshots/20261101T000000Z-aaaaaaaa.json", []byte("{"))
+		require.NoError(t, store.Put(ctx, "snapshots/notes.txt", func(io.Writer) error { return nil }))
+
+		ids, err := repo.ListIDs(ctx)
+
+		require.NoError(t, err)
+		require.Equal(t, []string{"20261101T000000Z-aaaaaaaa", "20261113T000000Z-bbbbbbbb"}, ids)
+	})
+
 	t.Run(`Given a blob ManifestRepository with a corrupted manifest,
 	when List is called,
 	then it returns an error`, func(t *testing.T) {
