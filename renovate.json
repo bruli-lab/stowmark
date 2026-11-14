@@ -58,6 +58,18 @@
   "customManagers": [
     {
       "customType": "regex",
+      "description": "golangci-lint version shared by the Taskfile and the CI lint action",
+      "managerFilePatterns": [
+        "/^\\.golangci-lint-version$/"
+      ],
+      "matchStrings": [
+        "^(?<currentValue>v\\S+)"
+      ],
+      "depNameTemplate": "golangci/golangci-lint",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
       "description": "Task version installed by the setup-go-task action",
       "managerFilePatterns": [
         "/^\\.github/actions/setup-go-task/action\\.yml$/"

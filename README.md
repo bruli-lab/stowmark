@@ -83,6 +83,36 @@ and run `stowmark.exe` directly:
 .\stowmark.exe --help
 ```
 
+### Verify a release
+
+Every release publishes a `checksums.txt` with the SHA-256 of each archive, package and SBOM, signed with
+[Sigstore cosign](https://docs.sigstore.dev/) by the release workflow (keyless, no long-lived key). Download
+`checksums.txt`, `checksums.txt.sigstore.json` and the files you want into the same directory, check the signature
+and then the files:
+
+```bash
+cosign verify-blob \
+  --certificate-identity 'https://github.com/bruli-lab/stowmark/.github/workflows/release.yml@refs/heads/main' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+  --bundle checksums.txt.sigstore.json \
+  checksums.txt
+
+sha256sum --check --ignore-missing checksums.txt
+```
+
+The Windows installer is built in a separate job and has its own signature,
+`stowmark_<version>_windows_amd64_setup.exe.sigstore.json`:
+
+```bash
+cosign verify-blob \
+  --certificate-identity 'https://github.com/bruli-lab/stowmark/.github/workflows/release.yml@refs/heads/main' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+  --bundle stowmark_<version>_windows_amd64_setup.exe.sigstore.json \
+  stowmark_<version>_windows_amd64_setup.exe
+```
+
+Each archive and Debian package also has an SPDX SBOM (`<file>.sbom.json`) listing the Go modules it was built with.
+
 ### Build from source
 
 Requirements:

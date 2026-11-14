@@ -1,7 +1,8 @@
 version: '3'
 
 vars:
-  GOLANGCI_LINT_VERSION: 'v2.15.0'
+  GOLANGCI_LINT_VERSION:
+    sh: tr -d '[:space:]' < .golangci-lint-version
 
 includes:
     ssh:
