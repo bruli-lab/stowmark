@@ -1,6 +1,11 @@
 package snapshot
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
+
+var ErrCorruptObject = errors.New("corrupt object")
 
 type NotFoundError struct {
 	msg string

@@ -3,15 +3,9 @@ package cli
 import (
 	"fmt"
 
-	"github.com/bruli-lab/go-core/cqs"
 	"github.com/bruli-lab/stowmark/internal/app"
-	"github.com/bruli-lab/stowmark/internal/domain/encryption"
-	"github.com/bruli-lab/stowmark/internal/domain/repository"
+	"github.com/bruli-lab/stowmark/internal/bootstrap"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
-	"github.com/bruli-lab/stowmark/internal/infra/disk"
-	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
-	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
-	"github.com/bruli-lab/stowmark/internal/infra/repositories"
 	"github.com/spf13/cobra"
 )
 
@@ -29,74 +23,14 @@ func newSnapshotRestoreCommand() *cobra.Command {
 		Short: "Restore snapshot",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			var destination *string
-
-			if destinationPath != "" {
-				destination = &destinationPath
-			}
-			var privateKey *string
-			if privateKeyPath != "" {
-				privateKey = &privateKeyPath
-			}
-			obsv, err := builtObservability(cmd.Context())
-			if err != nil {
-				return err
-			}
-			repoHandler, err := repositories.NewHandler(cmd.Context(), repositoryPath)
-			if err != nil {
-				return err
-			}
-			defer func() {
-				_ = obsv.Shutdown(cmd.Context())
-				_ = repoHandler.Close()
-			}()
-
-			manifestRepo, err := repoHandler.ManifestRepository()
-			if err != nil {
-				return err
-			}
-
-			objectRepo, err := repoHandler.ObjectRepository()
-			if err != nil {
-				return err
-			}
-			restSnapshotTracer := app.NewRestoreSnapshotTracer(obsv.Logger)
-			evtr := app.NewEventsTracing()
-			evtr.Add(app.RestoreSnapshotCommandName, restSnapshotTracer)
-			multiMdw, err := middlewares.BuildCommandMiddlewares(obsv, evtr)
-			if err != nil {
-				return err
-			}
-			decryptKeySvc := encryption.NewDecryptSymmetricKey(encrypt.NewSymmetricRepository(), disk.NewAsymmetricKeyPairRepository())
-			switch filePath {
-			case "":
-				return executeRestore(
-					cmd,
-					multiMdw,
-					manifestRepo,
-					objectRepo,
-					repoHandler.FolderRepository(),
-					decryptKeySvc,
-					repoHandler.RepositoryPath(),
-					snapshotID,
-					destination,
-					privateKey,
-				)
-			default:
-				return executeRestoreFile(
-					cmd,
-					multiMdw,
-					manifestRepo,
-					objectRepo,
-					repoHandler.FolderRepository(),
-					decryptKeySvc,
-					snapshotID,
-					filePath,
-					repoHandler.RepositoryPath(),
-					destination,
-					privateKey,
-				)
-			}
+			destination := optionalPath(destinationPath)
+			privateKey := optionalPath(privateKeyPath)
+			return withRepository(cmd, repositoryPath, func(repo *bootstrap.Repository) error {
+				if filePath != "" {
+					return executeRestoreFile(cmd, repo, snapshotID, filePath, destination, privateKey)
+				}
+				return executeRestore(cmd, repo, snapshotID, destination, privateKey)
+			})
 		},
 	}
 
@@ -139,70 +73,39 @@ func newSnapshotRestoreCommand() *cobra.Command {
 	return cmd
 }
 
-func executeRestoreFile(cmd *cobra.Command, mdw cqs.CommandHandlerMiddleware, manifestRepo snapshot.ManifestRepository, objectRepo snapshot.ObjectRepository, folderRepository repository.FolderRepository, decryptKeySvc *encryption.DecryptSymmetricKey, snapshotID, filePath, repositoryPath string, destinationPath, privateKey *string) error {
-	svc := snapshot.NewRestoreFile(manifestRepo, objectRepo, folderRepository, decryptKeySvc)
-	handler := mdw(app.NewRestoreFile(svc))
-
-	if _, err := handler.Handle(cmd.Context(), app.RestoreFileCommand{
+func executeRestoreFile(cmd *cobra.Command, repo *bootstrap.Repository, snapshotID, filePath string, destination, privateKey *string) error {
+	if _, err := repo.RestoreFile().Handle(cmd.Context(), app.RestoreFileCommand{
 		SnapshotID:      snapshotID,
 		FilePath:        filePath,
-		RepositoryPath:  repositoryPath,
-		DestinationPath: destinationPath,
+		RepositoryPath:  repo.Path(),
+		DestinationPath: destination,
 		PrivateKeyPath:  privateKey,
 	}); err != nil {
 		return err
 	}
-	_, err := fmt.Fprintf(
-		cmd.OutOrStdout(),
-		"Restored file %q from snapshot %q\n",
-		filePath,
-		snapshotID,
-	)
+	_, err := fmt.Fprintf(cmd.OutOrStdout(), "Restored file %q from snapshot %q\n", filePath, snapshotID)
 	return err
 }
 
-func executeRestore(cmd *cobra.Command, mdw cqs.CommandHandlerMiddleware, manifestRepo snapshot.ManifestRepository, objectRepo snapshot.ObjectRepository, folderRepo repository.FolderRepository, decryptKeySvc *encryption.DecryptSymmetricKey, repositoryPath, snapshotID string, destination, privateKey *string) error {
-	svc := snapshot.NewRestore(
-		manifestRepo,
-		objectRepo,
-		folderRepo,
-		decryptKeySvc,
-	)
-	handler := mdw(app.NewRestoreSnapshot(svc))
-	events, err := handler.Handle(cmd.Context(), app.RestoreSnapshotCommand{
+func executeRestore(cmd *cobra.Command, repo *bootstrap.Repository, snapshotID string, destination, privateKey *string) error {
+	events, err := repo.RestoreSnapshot().Handle(cmd.Context(), app.RestoreSnapshotCommand{
 		SnapshotID:      snapshotID,
-		RepositoryPath:  repositoryPath,
+		RepositoryPath:  repo.Path(),
 		PrivateKeyPath:  privateKey,
 		DestinationPath: destination,
 	})
 	if err != nil {
 		return err
 	}
-
-	if len(events) != 1 {
-		return fmt.Errorf("unexpected number of events")
-	}
-	result, ok := events[0].(*app.RestoreSnapshotEvent)
-	if !ok {
-		return fmt.Errorf("unexpected event type")
-	}
-	failed := make([]Failed, len(result.FailedFiles))
-	for i, f := range result.FailedFiles {
-		failed[i] = Failed{
-			Path:   f.Path,
-			Reason: f.Reason,
-		}
-	}
-	if err := printResult(cmd.OutOrStdout(), result.SnapshotID, result.TotalFiles, failed, result.IsSuccess); err != nil {
+	result, err := app.SingleEvent[*snapshot.SnapshotRestored](events)
+	if err != nil {
 		return err
 	}
-
-	if !result.IsSuccess {
-		return fmt.Errorf(
-			"snapshot %q failed restoration",
-			snapshotID,
-		)
+	if err := printResult(cmd.OutOrStdout(), result.SnapshotID(), result.TotalFiles(), failedResults(result.Failed()), result.IsSuccess()); err != nil {
+		return err
 	}
-
+	if !result.IsSuccess() {
+		return fmt.Errorf("snapshot %q failed restoration", snapshotID)
+	}
 	return nil
 }

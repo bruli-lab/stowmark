@@ -15,7 +15,7 @@ func TestS3RepositoryFlow(t *testing.T) {
 			s3Container := startS3Container(t, ctx)
 			endpoint := s3ContainerEndpoint(t, ctx, s3Container)
 
-			t.Setenv("AWS_ACCESS_KEY", "stowmark")
+			t.Setenv("AWS_ACCESS_KEY_ID", "stowmark")
 			t.Setenv("AWS_SECRET_ACCESS_KEY", "stowmark-secret")
 			t.Setenv("AWS_REGION", "us-east-1")
 			t.Setenv("STOWMARK_S3_ENDPOINT", endpoint)

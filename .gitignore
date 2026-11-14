@@ -40,3 +40,8 @@ go.work.sum
 /stowmark
 /.otlp-source
 /coverage.out
+/coverage-integration.out
+
+# Local AI context and review notes
+/CLAUDE.md
+/docs/REVIEW.md

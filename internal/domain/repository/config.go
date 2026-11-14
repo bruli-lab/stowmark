@@ -23,7 +23,7 @@ func (c Config) Compression() *Compression {
 	return c.compression
 }
 
-func (c Config) Id() uuid.UUID {
+func (c Config) ID() uuid.UUID {
 	return c.id
 }
 
@@ -41,11 +41,32 @@ func NewConfig(
 	comp *Compression,
 	encryptionConfig *encryption.EncryptionConfig,
 ) *Config {
+	return HydrateConfig(id, version, time.Now().UTC(), comp, encryptionConfig)
+}
+
+func HydrateConfig(
+	id uuid.UUID,
+	version FormatVersion,
+	createdAt time.Time,
+	comp *Compression,
+	encryptionConfig *encryption.EncryptionConfig,
+) *Config {
 	return &Config{
 		id:            id,
 		formatVersion: version,
-		createdAt:     time.Now().UTC(),
+		createdAt:     createdAt,
 		compression:   comp,
 		encryption:    encryptionConfig,
 	}
+}
+
+func (c Config) OrphanGenerations(stored []uint64) []uint64 {
+	orphans := make([]uint64, 0, len(stored))
+	for _, generation := range stored {
+		if c.encryption != nil && generation == c.encryption.Generation() {
+			continue
+		}
+		orphans = append(orphans, generation)
+	}
+	return orphans
 }

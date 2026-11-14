@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
@@ -157,7 +158,22 @@ func (s SourceExplorer) CalculateHash(ctx context.Context, filePath string, comp
 	return s.calculateReaderHash(ctx, fi, comp)
 }
 
-func (s SourceExplorer) Explore(ctx context.Context, sourcePath string) (*snapshot.Source, error) {
+func (s SourceExplorer) IgnorePatterns(ctx context.Context, sourcePath string) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	ignoreFile := filepath.Join(sourcePath, snapshot.IgnoreFileName)
+	data, err := os.ReadFile(ignoreFile)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read ignore file %q: %w", ignoreFile, err)
+	}
+	return strings.Split(string(data), "\n"), nil
+}
+
+func (s SourceExplorer) Explore(ctx context.Context, sourcePath string, rules *snapshot.ExcludeRules) (*snapshot.Source, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -174,17 +190,17 @@ func (s SourceExplorer) Explore(ctx context.Context, sourcePath string) (*snapsh
 	if !info.IsDir() {
 		return nil, fmt.Errorf("source path is not a directory: %s", absolutePath)
 	}
-	files, err := s.readFiles(absolutePath)
+	files, skipped, err := s.readFiles(ctx, absolutePath, rules)
 	if err != nil {
 		return nil, fmt.Errorf("read files: %w", err)
 	}
-	return snapshot.NewSource(absolutePath, files), nil
+	return snapshot.NewSource(absolutePath, files, skipped), nil
 }
 
-func (s SourceExplorer) readFiles(root string) ([]snapshot.File, error) {
-	files := make([]snapshot.File, 0)
+func (s SourceExplorer) readFiles(ctx context.Context, root string, rules *snapshot.ExcludeRules) (files []snapshot.File, skipped []snapshot.SkippedFile, err error) {
+	files = make([]snapshot.File, 0)
 
-	err := filepath.WalkDir(root, func(
+	err = filepath.WalkDir(root, func(
 		path string,
 		entry fs.DirEntry,
 		walkErr error,
@@ -192,12 +208,29 @@ func (s SourceExplorer) readFiles(root string) ([]snapshot.File, error) {
 		if walkErr != nil {
 			return walkErr
 		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if path == root {
+			return nil
+		}
+
+		relative, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		if rules != nil && rules.Excludes(filepath.ToSlash(relative), entry.IsDir()) {
+			if entry.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
 
 		if entry.IsDir() {
 			return nil
 		}
-
 		if !entry.Type().IsRegular() {
+			skipped = append(skipped, snapshot.NewSkippedFile(filepath.ToSlash(relative), skippedKind(entry.Type())))
 			return nil
 		}
 		info, err := entry.Info()
@@ -205,15 +238,29 @@ func (s SourceExplorer) readFiles(root string) ([]snapshot.File, error) {
 			return err
 		}
 
-		file := snapshot.NewFile(path, info.Size())
-		files = append(files, *file)
+		files = append(files, *snapshot.NewFile(path, info.Size()))
 
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("walk directory %q: %w", root, err)
+		return nil, nil, fmt.Errorf("walk directory %q: %w", root, err)
 	}
-	return files, nil
+	return files, skipped, nil
+}
+
+func skippedKind(mode fs.FileMode) string {
+	switch {
+	case mode&fs.ModeSymlink != 0:
+		return snapshot.SymlinkKind
+	case mode&fs.ModeDevice != 0:
+		return snapshot.DeviceKind
+	case mode&fs.ModeSocket != 0:
+		return snapshot.SocketKind
+	case mode&fs.ModeNamedPipe != 0:
+		return snapshot.NamedPipeKind
+	default:
+		return snapshot.IrregularKind
+	}
 }
 
 func NewSourceRepository() *SourceExplorer {

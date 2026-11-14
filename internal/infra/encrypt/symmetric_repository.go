@@ -6,10 +6,13 @@ import (
 	"crypto/rsa"
 	"crypto/sha256"
 	"encoding/base64"
+	"errors"
 	"fmt"
 )
 
 const AES256KeySize = 32
+
+var ErrPrivateKeyRequired = errors.New("private key is required")
 
 type SymmetricRepository struct{}
 
@@ -18,7 +21,7 @@ func (s SymmetricRepository) DecodeAndDecryptSymmetricKey(ctx context.Context, p
 		return nil, ctx.Err()
 	}
 	if privateKey == nil {
-		return nil, fmt.Errorf("private key is required")
+		return nil, ErrPrivateKeyRequired
 	}
 
 	encryptedKey, err := base64.StdEncoding.DecodeString(encodedKey)
@@ -38,7 +41,7 @@ func (s SymmetricRepository) DecodeAndDecryptSymmetricKey(ctx context.Context, p
 	}
 
 	if len(symmetricKey) != AES256KeySize {
-		return nil, fmt.Errorf("invalid symmetric key size: got %d bytes, expected %d", len(symmetricKey), AES256KeySize)
+		return nil, fmt.Errorf("%w: got %d bytes, expected %d", ErrInvalidKeySize, len(symmetricKey), AES256KeySize)
 	}
 
 	return symmetricKey, nil

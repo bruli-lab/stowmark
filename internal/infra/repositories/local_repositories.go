@@ -1,8 +1,8 @@
 package repositories
 
 import (
-	"github.com/bruli-lab/stowmark/internal/domain/repository"
-	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
+	"github.com/bruli-lab/stowmark/internal/app"
+	"github.com/bruli-lab/stowmark/internal/infra/blob"
 	"github.com/bruli-lab/stowmark/internal/infra/disk"
 )
 
@@ -14,20 +14,16 @@ func (l LocalRepositories) Close() error {
 	return nil
 }
 
-func (l LocalRepositories) ManifestRepository() (snapshot.ManifestRepository, error) {
-	return disk.NewManifestRepository(l.repositoryPath)
-}
-
-func (l LocalRepositories) ObjectRepository() (snapshot.ObjectRepository, error) {
-	return disk.NewObjectRepository(l.repositoryPath)
-}
-
 func (l LocalRepositories) RepositoryPath() string {
 	return l.repositoryPath
 }
 
-func (l LocalRepositories) FolderRepository() repository.FolderRepository {
+func (l LocalRepositories) FolderRepository() app.FolderRepository {
 	return disk.NewFolderRepositoryRepository()
+}
+
+func (l LocalRepositories) BlobStore() (blob.Store, error) {
+	return disk.NewBlobStore(l.repositoryPath)
 }
 
 func NewLocalRepositories(value string) *LocalRepositories {

@@ -68,7 +68,7 @@ func (f FolderRepositoryRepository) CreateConfig(ctx context.Context, path strin
 	}
 
 	configPath := filepath.Join(path, model.ConfigFile)
-	if err := os.WriteFile(configPath, data, 0o644); err != nil {
+	if err := writeBytesAtomically(configPath, 0o644, data); err != nil {
 		return fmt.Errorf("write config %q: %w", configPath, err)
 	}
 

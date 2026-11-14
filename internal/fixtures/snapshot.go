@@ -12,11 +12,12 @@ import (
 type SourceBuilder struct {
 	AbsolutePath *string
 	Files        []snapshot.File
+	Skipped      []snapshot.SkippedFile
 }
 
 func (b SourceBuilder) Build() snapshot.Source {
 	path := fixtures.SetData("path", b.AbsolutePath)
-	so := snapshot.NewSource(path, b.Files)
+	so := snapshot.NewSource(path, b.Files, b.Skipped)
 	return *so
 }
 
@@ -28,12 +29,10 @@ type FileBuilder struct {
 }
 
 func (b FileBuilder) Build() snapshot.File {
-	path := fixtures.SetData("path", b.Path)
+	path := fixtures.SetData("source/path", b.Path)
 	size := fixtures.SetData(20, b.Size)
 	hash := fixtures.SetData(uuid.NewString(), b.Hash)
-	fi := snapshot.File{}
-	fi.Hydrate(path, hash, size, b.Chunks)
-	return fi
+	return *snapshot.HydrateFile(path, hash, size, b.Chunks)
 }
 
 type ManifestBuilder struct {

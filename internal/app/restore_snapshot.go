@@ -1,3 +1,4 @@
+//nolint:dupl // CQS command handlers intentionally share the same adapter structure.
 package app
 
 import (
@@ -5,8 +6,8 @@ import (
 
 	"github.com/bruli-lab/go-core/cqs"
 	"github.com/bruli-lab/go-core/event"
+	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
-	"github.com/google/uuid"
 )
 
 const RestoreSnapshotCommandName = "restore-snapshot"
@@ -23,52 +24,65 @@ func (r RestoreSnapshotCommand) Name() string {
 }
 
 type RestoreSnapshot struct {
-	svc *snapshot.Restore
+	manifestRepo ManifestRepository
+	objectRepo   ObjectRepository
+	keys         keyring
+	locker       *RepositoryLocker
 }
 
-func (r RestoreSnapshot) Handle(ctx context.Context, cmd cqs.Command) ([]event.Event, error) {
+func (r *RestoreSnapshot) Handle(ctx context.Context, cmd cqs.Command) ([]event.Event, error) {
 	co, ok := cmd.(RestoreSnapshotCommand)
 	if !ok {
 		return nil, cqs.NewInvalidCommandError(RestoreSnapshotCommandName, cmd.Name())
 	}
-	result, err := r.svc.Restore(ctx, co.SnapshotID, co.RepositoryPath, co.DestinationPath, co.PrivateKeyPath)
+	return withLockedEvent(ctx, r.locker, repository.SharedLock, func(ctx context.Context) (*snapshot.SnapshotRestored, error) {
+		return r.restore(ctx, co)
+	})
+}
+
+func (r *RestoreSnapshot) restore(ctx context.Context, co RestoreSnapshotCommand) (*snapshot.SnapshotRestored, error) {
+	key, err := r.keys.forRepository(ctx, co.RepositoryPath, co.PrivateKeyPath)
 	if err != nil {
 		return nil, err
 	}
-	failed := make([]Failed, len(result.Failed()))
-	for i, f := range result.Failed() {
-		failed[i] = Failed{
-			Path:   f.Path(),
-			Reason: f.Reason(),
-		}
+	man, err := r.manifestRepo.Get(ctx, co.SnapshotID)
+	if err != nil {
+		return nil, err
 	}
-	return []event.Event{
-		NewRestoreSnapshotEvent(result.SnapshotID(), result.TotalFiles(), failed, result.IsSuccess()),
-	}, nil
+	result := snapshot.NewResult(co.SnapshotID)
+	for _, f := range man.Files() {
+		if err := restoreFile(ctx, r.objectRepo, man, f, co.DestinationPath, key); err != nil {
+			result.AddFailed(*snapshot.NewFailedResult(f.Path(), err.Error()))
+			continue
+		}
+		result.AddSuccess()
+	}
+	return result.Restored(), nil
 }
 
-func NewRestoreSnapshot(svc *snapshot.Restore) *RestoreSnapshot {
-	return &RestoreSnapshot{svc: svc}
+func restoreFile(ctx context.Context, objectRepo ObjectRepository, man *snapshot.Manifest, file snapshot.File, destinationPath *string, key objectKey) error {
+	if destinationPath != nil {
+		relocated, err := file.RelocatedTo(man.Source(), *destinationPath)
+		if err != nil {
+			return err
+		}
+		file = relocated
+	}
+	return objectRepo.RestoreObject(ctx, man.Compression(), &file, key.symmetricKey, key.generation)
 }
 
-type Failed struct {
-	Path, Reason string
-}
-
-type RestoreSnapshotEvent struct {
-	event.BasicEvent
-	SnapshotID  string
-	TotalFiles  int
-	FailedFiles []Failed
-	IsSuccess   bool
-}
-
-func NewRestoreSnapshotEvent(snapshotID string, totalFiles int, failed []Failed, isSuccess bool) *RestoreSnapshotEvent {
-	return &RestoreSnapshotEvent{
-		BasicEvent:  event.NewBasicEvent(RestoreSnapshotCommandName, uuid.New(), snapshotID),
-		SnapshotID:  snapshotID,
-		TotalFiles:  totalFiles,
-		FailedFiles: failed,
-		IsSuccess:   isSuccess,
+func NewRestoreSnapshot(
+	manifestRepo ManifestRepository,
+	objectRepo ObjectRepository,
+	folderRepo FolderRepository,
+	asymmetricRepo AsymmetricKeyPairRepository,
+	symmetricRepo SymmetricKeyRepository,
+	locker *RepositoryLocker,
+) *RestoreSnapshot {
+	return &RestoreSnapshot{
+		manifestRepo: manifestRepo,
+		objectRepo:   objectRepo,
+		keys:         newKeyring(folderRepo, asymmetricRepo, symmetricRepo),
+		locker:       locker,
 	}
 }

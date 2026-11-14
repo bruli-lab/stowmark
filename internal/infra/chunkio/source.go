@@ -14,7 +14,7 @@ func OpenSource(filePath, hash string, offset, size int64, comp *repository.Comp
 	}
 
 	if len(hash) < 3 {
-		return nil, fmt.Errorf("invalid o bject hash %q", hash)
+		return nil, fmt.Errorf("invalid object hash %q", hash)
 	}
 
 	if offset < 0 {

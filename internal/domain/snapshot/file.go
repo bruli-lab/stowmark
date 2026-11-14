@@ -1,6 +1,13 @@
 package snapshot
 
-import "strings"
+import (
+	"errors"
+	"fmt"
+	"path/filepath"
+	"slices"
+)
+
+var ErrPathOutsideSource = errors.New("file path is outside the snapshot source")
 
 type File struct {
 	path   string
@@ -9,41 +16,45 @@ type File struct {
 	chunks []Chunk
 }
 
-func (f *File) Path() string {
+func (f File) Path() string {
 	return f.path
 }
 
-func (f *File) Size() int64 {
+func (f File) Size() int64 {
 	return f.size
 }
 
-func (f *File) Hash() string {
+func (f File) Hash() string {
 	return f.hash
 }
 
-func (f *File) AddHash(hash string) {
-	f.hash = hash
-}
-
-func (f *File) Chunks() []Chunk {
+func (f File) Chunks() []Chunk {
 	return f.chunks
 }
 
-func (f *File) AddChunks(c []Chunk) {
-	f.chunks = c
-}
-
-func (f *File) ChangeSourcePath(source, destination string) {
-	f.path = strings.ReplaceAll(f.path, source, destination)
-}
-
-func (f *File) Hydrate(path, hash string, size int64, chunks []Chunk) {
-	f.size = size
-	f.path = path
+func (f File) WithHash(hash string) File {
 	f.hash = hash
-	f.chunks = chunks
+	return f
+}
+
+func (f File) WithChunks(chunks []Chunk) File {
+	f.chunks = slices.Clone(chunks)
+	return f
+}
+
+func (f File) RelocatedTo(source, destination string) (File, error) {
+	relativePath, err := filepath.Rel(source, f.path)
+	if err != nil || !filepath.IsLocal(relativePath) {
+		return File{}, fmt.Errorf("%w: %q is not inside %q", ErrPathOutsideSource, f.path, source)
+	}
+	f.path = filepath.Join(destination, relativePath)
+	return f, nil
 }
 
 func NewFile(path string, size int64) *File {
 	return &File{path: path, size: size}
+}
+
+func HydrateFile(path, hash string, size int64, chunks []Chunk) *File {
+	return &File{path: path, size: size, hash: hash, chunks: slices.Clone(chunks)}
 }

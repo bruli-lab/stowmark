@@ -4,7 +4,6 @@
 
 [![CI](https://github.com/bruli-lab/stowmark/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/bruli-lab/stowmark/actions/workflows/release.yml)
 [![Codecov](https://codecov.io/gh/bruli-lab/stowmark/branch/main/graph/badge.svg)](https://codecov.io/gh/bruli-lab/stowmark)
-[![Check and release](https://github.com/bruli-lab/stowmark/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/bruli-lab/stowmark/actions/workflows/release.yml)
 [![Latest release](https://img.shields.io/github/v/release/bruli-lab/stowmark?display_name=tag)](https://github.com/bruli-lab/stowmark/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/bruli-lab/stowmark/total)](https://github.com/bruli-lab/stowmark/releases)
 [![License](https://img.shields.io/github/license/bruli-lab/stowmark)](https://github.com/bruli-lab/stowmark/blob/main/LICENSE)
@@ -32,6 +31,7 @@ the source path, creation time and references to its files.
 - Content-addressed object storage using SHA-256.
 - Deduplication of unchanged files between snapshots.
 - Automatic chunking for files larger than 8 MiB.
+- Exclusion of files and directories with a `.stowmarkignore` file or `--exclude` patterns.
 - Optional `gzip`, `zstd`, `lz4` and `xz` compression.
 - Optional client-side encryption using AES-256-GCM and RSA-OAEP-SHA256.
 - Encryption key rotation without exposing plaintext data to remote storage.
@@ -39,6 +39,8 @@ the source path, creation time and references to its files.
 - Snapshot listing ordered from newest to oldest.
 - Inspection of a snapshot and all its files.
 - Integrity verification using SHA-256 hashes.
+- Retention policies (`forget`) and garbage collection of unreferenced objects (`prune`).
+- Whole repository integrity checks (`check`), optionally reading all or part of the data.
 - Local repositories with no external service required.
 - Remote repositories over SSH/SFTP using public-key authentication.
 - Remote repositories over SMB using password authentication.
@@ -83,7 +85,7 @@ and run `stowmark.exe` directly:
 
 Requirements:
 
-- Go 1.26 or newer.
+- Go 1.27.4 or newer (see `go.mod`).
 - Git.
 
 ```bash
@@ -105,13 +107,13 @@ stowmark --help
 Create a new Stowmark repository:
 
 ```bash
-stowmark init /srv/backups/stowmark
+stowmark init --repo /srv/backups/stowmark
 ```
 
 Create a repository using compression:
 
 ```bash
-stowmark init /srv/backups/stowmark \
+stowmark init --repo /srv/backups/stowmark \
   --compression zstd \
   --level 3
 ```
@@ -146,13 +148,13 @@ stowmark snapshot verify \
   --repo /srv/backups/stowmark
 ```
 
-Restore a snapshot:
+Restore a snapshot. Without `--destination`, files are restored to their original paths:
 
 ```bash
 stowmark snapshot restore \
   --id <snapshot-id> \
-  --repo /srv/backups/stowmark
-  --destination /srv/backups/stowmark-restore //optional
+  --repo /srv/backups/stowmark \
+  --destination /srv/backups/stowmark-restore
 ```
 
 Restore a file from snapshot:
@@ -161,8 +163,8 @@ Restore a file from snapshot:
 stowmark snapshot restore \
   --id <snapshot-id> \
   --file <path> \
-  --repo /srv/backups/stowmark
-  --destination /srv/backups/stowmark-restore //optional
+  --repo /srv/backups/stowmark \
+  --destination /srv/backups/stowmark-restore
 ```
 
 ## SSH repositories
@@ -185,7 +187,7 @@ ssh://<user>@<host>[:<port>]/<absolute-path>
 Initialize a remote repository:
 
 ```bash
-stowmark init ssh://backup@example.com/srv/backups/stowmark
+stowmark init --repo ssh://backup@example.com/srv/backups/stowmark
 ```
 
 Create and list snapshots:
@@ -233,7 +235,7 @@ smb://<user>@<host>[:<port>]/<share>[/<path>]
 Initialize a repository on an SMB share:
 
 ```bash
-stowmark init smb://backup@example.com/backups/stowmark
+stowmark init --repo smb://backup@example.com/backups/stowmark
 ```
 
 Create and list snapshots:
@@ -268,12 +270,19 @@ Stowmark can store a repository in Amazon S3 or an S3-compatible object storage 
 restored files remain on the local machine; repository configuration, objects and snapshot manifests are stored as
 objects in the selected bucket.
 
-Set the credentials and region used to connect to S3:
+Credentials and region are resolved by the standard AWS SDK chain: environment variables, shared config and
+credentials files (`AWS_PROFILE`, SSO), web identity, and ECS/EC2 instance roles. For example, with static keys:
 
 ```bash
-export AWS_ACCESS_KEY="<access-key>"
+export AWS_ACCESS_KEY_ID="<access-key>"
 export AWS_SECRET_ACCESS_KEY="<secret-key>"
 export AWS_REGION="<region>"
+```
+
+Or with a named profile:
+
+```bash
+export AWS_PROFILE="backups"
 ```
 
 Use an S3 repository URL anywhere that `--repo` or the repository argument is accepted:
@@ -461,14 +470,21 @@ and remove files and collections under the repository path.
 
 ## Commands
 
-| Command                                                   | Description                           |
-|-----------------------------------------------------------|---------------------------------------|
-| `stowmark init <repository>`                              | Initialize a new repository.          |
-| `stowmark snapshot create <source> --repo <repository>`   | Create a snapshot of a directory.     |
-| `stowmark snapshot list --repo <repository>`              | List snapshots from newest to oldest. |
-| `stowmark snapshot get --id <id> --repo <repository>`     | Display a snapshot manifest.          |
-| `stowmark snapshot verify --id <id> --repo <repository>`  | Verify snapshot integrity.            |
-| `stowmark snapshot restore --id <id> --repo <repository>` | Restore snapshot.                     |
+| Command                                                                 | Description                              |
+|-------------------------------------------------------------------------|------------------------------------------|
+| `stowmark init --repo <repository>`                                     | Initialize a new repository.             |
+| `stowmark snapshot create <source> --repo <repository> [--exclude <pattern>]` | Create a snapshot of a directory.  |
+| `stowmark snapshot list --repo <repository>`                            | List snapshots from newest to oldest.    |
+| `stowmark snapshot get --id <id> --repo <repository>`                   | Display a snapshot manifest.             |
+| `stowmark snapshot verify --id <id> --repo <repository>`                | Verify snapshot integrity.               |
+| `stowmark snapshot restore --id <id> --repo <repository>`               | Restore a snapshot or, with `--file`, one file. |
+| `stowmark key generate --folder <folder>`                               | Generate an RSA key pair.                |
+| `stowmark key rewrap --repo <repository> --old-private-key <key> --new-public-key <key>` | Re-encrypt the repository key with a new RSA key pair. |
+| `stowmark key rekey --repo <repository> --private-key <key> --public-key <key>` | Rotate the symmetric key and re-encrypt every object. |
+| `stowmark unlock --repo <repository> [--all]`                           | Remove stale (or all) repository locks.  |
+| `stowmark forget --repo <repository> --keep-<rule> <n> [--prune]`       | Forget the snapshots a retention policy does not keep. |
+| `stowmark prune --repo <repository>`                                    | Delete objects that no snapshot references. |
+| `stowmark check --repo <repository> [--read-data \| --read-data-subset <subset>]` | Check the integrity of the whole repository. |
 
 Run the built-in help for the complete set of options:
 
@@ -545,7 +561,7 @@ Restore an encrypted snapshot:
 stowmark snapshot restore \
   --id <snapshot-id> \
   --repo /srv/backups/stowmark \
-  --destination /srv/restores/stowmark \ optional
+  --destination /srv/restores/stowmark \
   --private-key keys/stowmark-private.pem
 ```
 
@@ -622,14 +638,52 @@ Compression is selected when the repository is initialized. Stowmark currently s
 For example:
 
 ```bash
-stowmark init /srv/backups/stowmark-gzip --compression gzip --level 6
-stowmark init /srv/backups/stowmark-zstd --compression zstd --level 3
-stowmark init /srv/backups/stowmark-lz4 --compression lz4 --level 0
-stowmark init /srv/backups/stowmark-xz --compression xz
+stowmark init --repo /srv/backups/stowmark-gzip --compression gzip --level 6
+stowmark init --repo /srv/backups/stowmark-zstd --compression zstd --level 3
+stowmark init --repo /srv/backups/stowmark-lz4 --compression lz4 --level 0
+stowmark init --repo /srv/backups/stowmark-xz --compression xz
 ```
 
 The selected compression is applied to every object in the snapshot and recorded in its manifest. Compression is
 transparent during restoration: Stowmark decodes each stored object before writing the original file.
+
+## Excluding files
+
+Put a `.stowmarkignore` file at the root of the source directory to skip files and directories, and use
+`--exclude` (repeatable) for one-off patterns:
+
+```text
+# .stowmarkignore
+node_modules/
+*.log
+!important.log
+/build
+.cache/**
+```
+
+```bash
+stowmark snapshot create ~/projects --repo /backups/stowmark --exclude 'target/' --exclude '*.iso'
+```
+
+The syntax is a subset of `.gitignore`:
+
+| Pattern | Matches |
+|---|---|
+| `*.log` | Any file or directory named `*.log` at any depth. `*`, `?` and `[abc]` work inside one path segment. |
+| `node_modules/` | Directories only. |
+| `/build` or `docs/*.md` | A pattern with a `/` is relative to the source root. |
+| `docs/**/*.md` | `**` matches any number of directories, including none. |
+| `logs/**` | Everything inside `logs`, but not `logs` itself. |
+| `!important.log` | Negation: the last matching pattern wins. |
+| `# comment` | Comment. Use `\#` for a name that starts with `#`. |
+
+- Only the `.stowmarkignore` at the root of the source is read; files with that name in subdirectories are ordinary
+  files. The ignore file itself is backed up.
+- `--exclude` patterns are applied after the ignore file, so `--exclude '!keep.log'` overrides it.
+- An excluded directory is not explored, so a negation cannot bring back a file inside it. Use `logs/**` together with
+  `!logs/keep.txt` instead of `logs/` when you need that.
+- Paths are matched with `/` on every platform and are case-sensitive.
+- An invalid pattern stops the snapshot before anything is written.
 
 ## Chunking
 
@@ -660,6 +714,8 @@ repository/
 │           ├── 00/
 │           ├── 01/
 │           └── ...
+├── locks/
+│   └── <lock-id>.json
 └── snapshots/
     ├── <snapshot-id>.json
     └── ...
@@ -685,6 +741,33 @@ The active generation is recorded in `config.json`. A rekey writes a complete ne
 configuration to it, so an interrupted rotation cannot leave the repository pointing to a partially
 rewritten object set.
 
+### Locks
+
+Commands that read or write repository data take a lock stored under `locks/`, so concurrent processes on the same or
+different machines cannot corrupt each other:
+
+| Lock | Commands | Compatible with |
+|---|---|---|
+| Shared | `snapshot create`, `snapshot restore`, `snapshot verify`, `check`, `forget --dry-run`, `prune --dry-run` | Other shared locks |
+| Exclusive | `init`, `key rekey`, `key rewrap`, `forget`, `prune` | Nothing |
+
+A command fails with `repository is locked` and shows the host and process that hold a conflicting lock. A running
+command refreshes its lock every 5 minutes and removes it when it finishes, including when it is interrupted with
+Ctrl+C. A lock that has not been refreshed for 30 minutes, for example after a crash, is considered stale and is
+removed by the next command. Staleness is calculated with the local clock, so machines that share a repository should
+keep their clocks synchronised. `snapshot list` and `snapshot get` do not take a lock.
+
+If a command was killed and you do not want to wait for its lock to become stale, remove locks by hand:
+
+```bash
+stowmark unlock --repo /backups/stowmark        # removes only stale locks
+stowmark unlock --repo /backups/stowmark --all  # removes every lock
+```
+
+Use `--all` only when you are sure no other Stowmark command is running against the repository: removing the lock of a
+running command lets conflicting commands start, and that running command stops with `repository lock lost` at its
+next refresh.
+
 ### Snapshot manifests
 
 Each snapshot is stored as a JSON manifest containing:
@@ -708,7 +791,36 @@ The `snapshot verify` command reads each object referenced by the manifest and c
 3. Its calculated SHA-256 hash matches the manifest.
 
 The command exits with an error when any referenced file fails verification, making it suitable for scripts and
-scheduled checks.
+scheduled checks. An object that cannot be authenticated or decrypted is reported as a failed file, not as an error of
+the command.
+
+### Repository check
+
+`snapshot verify` checks one snapshot. `check` checks the whole repository:
+
+```bash
+stowmark check --repo /backups/stowmark
+stowmark check --repo /backups/stowmark --read-data --private-key ./keys/private.pem
+stowmark check --repo /backups/stowmark --read-data-subset 10% --private-key ./keys/private.pem
+stowmark check --repo /backups/stowmark --read-data-subset 2/7 --private-key ./keys/private.pem
+```
+
+Without flags it only reads the structure, so it is fast and does not need the private key:
+
+- Every manifest can be read and parsed.
+- Every object referenced by a manifest exists. A missing object is reported with the snapshots that use it.
+- Warnings, which do not make the check fail: objects no snapshot references (run `prune`), stale locks (run
+  `unlock`) and objects of old key generations left by an interrupted `key rekey` (run `prune`).
+
+`--read-data` also downloads every referenced object once, even if several snapshots share it, and verifies it as
+`snapshot verify` does. `--read-data-subset` verifies only part of the objects:
+
+- A percentage such as `10%` picks a random subset on every run.
+- A part such as `2/7` splits the objects in 7 stable groups and verifies the second one. Running `1/7` to `7/7` on
+  consecutive days verifies the whole repository in a week.
+
+Reading the data of an encrypted repository needs `--private-key`. `check` takes a shared lock and exits with an error
+when it finds a corrupt manifest, a missing object or a corrupt object.
 
 ## Observability
 
@@ -734,7 +846,16 @@ When observability is enabled, Stowmark exports:
 
 - Traces for command and query execution, including duration and recorded errors.
 - Structured application logs correlated with active traces when a context is available.
-- Metrics for operation executions, duration, status and command events.
+- Metrics for operation executions, duration and status, and a `stowmark.events.dispatched` counter per domain
+  event name (`snapshot.created`, `objects.pruned`…).
+- One span event per domain event on the command span, and snapshot attributes (files, sizes, failures) on the
+  create and restore spans.
+
+Every command publishes its domain events on an internal event bus. Logging, tracing and metrics are subscribers of
+that bus, so a failing subscriber is logged as a warning and never fails the command.
+
+`STOWMARK_LOG_LEVEL` (`debug`, `info`, `warn`, `error`; default `info`) sets the log level with or without an OTLP
+endpoint. Without one, logs are written to stderr.
 
 `OTEL_EXPORTER_OTLP_PROTOCOL` defaults to `http/protobuf` and `OTEL_SERVICE_NAME` defaults to `stowmark`, so the
 endpoint is the only variable required to enable telemetry:
@@ -788,12 +909,78 @@ A successful release produces:
 See all published versions on the
 [GitHub Releases page](https://github.com/bruli-lab/stowmark/releases).
 
+## Retention and pruning
+
+Snapshots are never removed automatically. Removing old backups takes two steps:
+
+1. `forget` applies a retention policy and deletes the manifests of the snapshots it does not keep.
+2. `prune` deletes the objects that no remaining manifest references. Objects are deduplicated, so forgetting a
+   snapshot does not free space by itself: an object is deleted only when no snapshot uses it any more.
+
+```bash
+stowmark forget --repo /backups/stowmark --keep-last 3 --keep-daily 7 --keep-weekly 4 --keep-monthly 12 --dry-run
+stowmark forget --repo /backups/stowmark --keep-last 3 --keep-daily 7 --keep-weekly 4 --keep-monthly 12 --prune
+stowmark prune --repo /backups/stowmark --dry-run
+```
+
+| Flag | Keeps |
+|---|---|
+| `--keep-last N` | The N most recent snapshots. |
+| `--keep-daily N` | The most recent snapshot of each of the last N days that have snapshots. |
+| `--keep-weekly N` | The most recent snapshot of each of the last N ISO weeks that have snapshots. |
+| `--keep-monthly N` | The most recent snapshot of each of the last N months that have snapshots. |
+| `--keep-yearly N` | The most recent snapshot of each of the last N years that have snapshots. |
+| `--keep-within D` | Every snapshot newer than `D` (`30d`, `2w`, `36h`…). |
+
+- At least one rule is required. A snapshot is kept if any rule keeps it, and the output shows which rules did.
+- The policy is applied separately to the snapshots of each source directory.
+- Days, weeks, months and years are calculated in UTC.
+- `--dry-run` shows what would happen without changing the repository. It cannot be combined with `--prune`.
+- `forget` and `prune` take an exclusive lock, so they never run while a snapshot is being created or restored.
+- Manifests are deleted before objects. If `prune` is interrupted, the only effect is that some unreferenced objects
+  remain until the next `prune`.
+- `prune` warns when a manifest references an object that is missing from the repository. Run `check` to find the
+  affected snapshots.
+- In encrypted repositories, `prune` works on the objects of the current key generation and does not need the
+  private key.
+- `prune` also deletes the objects of old key generations left by an interrupted `key rekey`, and the temporary files
+  (names starting with `.`) left by interrupted writes on local, SSH and SMB repositories. `--dry-run` lists the old
+  key generations too.
+- `prune` lists every object of the repository, which can take a while on large S3 or GCS repositories.
+
+## Security model and limitations
+
+What encryption protects, when a repository is created with `--public-key`:
+
+- File contents: every object is encrypted with AES-256-GCM before it leaves the machine, so the storage provider and
+  anyone with access to the backend cannot read your data.
+- The repository key: the AES key is stored in `config.json` only wrapped with your RSA public key. Without the
+  private key, objects cannot be decrypted.
+- Integrity: GCM authenticates every object, and restore, `snapshot verify` and `check --read-data` check the SHA-256 of every object
+  against the manifest.
+
+What it does **not** protect yet:
+
+- Snapshot manifests are stored in plain JSON. Anyone with access to the backend can see file paths, sizes, snapshot
+  dates and the source directory.
+- Object names are the SHA-256 of the stored data, so someone who already has a file can check whether the same file
+  (with the same compression settings) is in the repository.
+- "Immutable-style" means objects and manifests are never overwritten by Stowmark. It is not enforced by the storage:
+  anyone with write access to the backend can still delete or replace them. Use bucket versioning, object lock or
+  backend snapshots if you need protection against that.
+
+What is not backed up:
+
+- Only regular files are stored. Symbolic links, device files, sockets and named pipes are skipped, and
+  `snapshot create` prints a warning for each one.
+- Empty directories are not recorded.
+- File permissions, ownership and modification times are not stored; restored files are created with mode `0644`.
+
 ## Roadmap
 
 Planned areas of development include:
 
 - Remote storage drivers.
-- Repository maintenance and garbage collection.
 - More installation formats and platforms.
 
 ## Contributing

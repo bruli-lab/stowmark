@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
@@ -45,11 +46,24 @@ func BuildConfigDomain(conf Config) (*repository.Config, error) {
 	}
 	var encryptionConfig *encryption.EncryptionConfig
 	if conf.Encryption != nil {
-		encryptionConfig = encryption.NewEncryptionConfig(
+		encryptionConfig, err = encryption.HydrateEncryptionConfig(
+			conf.Encryption.Type,
+			conf.Encryption.KeyEncryption,
 			conf.Encryption.EncryptedKey,
 			conf.Encryption.PublicKeyFingerprint,
 			conf.Encryption.Generation,
 		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse config encryption %q/%q: %w", conf.Encryption.Type, conf.Encryption.KeyEncryption, err)
+		}
 	}
-	return repository.NewConfig(id, repository.FormatVersion(conf.FormatVersion), comp, encryptionConfig), nil
+	formatVersion, err := repository.ParseFormatVersion(conf.FormatVersion)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse config format version: %w", err)
+	}
+	createdAt, err := time.Parse(time.RFC3339, conf.CreatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse config created_at: %w", err)
+	}
+	return repository.HydrateConfig(id, formatVersion, createdAt, comp, encryptionConfig), nil
 }

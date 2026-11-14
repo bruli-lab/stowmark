@@ -4,11 +4,21 @@ import (
 	"fmt"
 	"io"
 	"text/tabwriter"
+
+	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 )
 
 type Failed struct {
 	Path   string
 	Reason string
+}
+
+func failedResults(results []snapshot.FailedResult) []Failed {
+	failed := make([]Failed, len(results))
+	for i, result := range results {
+		failed[i] = Failed{Path: result.Path(), Reason: result.Reason()}
+	}
+	return failed
 }
 
 func printResult(output io.Writer, snapshotID string, totalFiles int, failed []Failed, isSuccess bool) error {

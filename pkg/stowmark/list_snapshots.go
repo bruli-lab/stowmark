@@ -2,12 +2,10 @@ package stowmark
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
-	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 )
 
 type SnapshotSummary struct {
@@ -19,32 +17,15 @@ type SnapshotSummary struct {
 }
 
 func (h *Handler) ListSnapshots(ctx context.Context) ([]SnapshotSummary, error) {
-	obsv, err := builtObservability(ctx)
+	items, err := app.QueryResult[[]snapshot.ManifestResume](h.repository.SnapshotList().Handle(ctx, app.SnapshotListQuery{}))
 	if err != nil {
 		return nil, err
-	}
-	defer func() {
-		_ = obsv.Shutdown(ctx)
-	}()
-	svc := snapshot.NewListing(h.manifestRepository)
-	mdw, err := middlewares.BuildQueryMiddlewares(obsv)
-	if err != nil {
-		return nil, err
-	}
-	handler := mdw(app.NewSnapshotList(svc))
-	resultQuery, err := handler.Handle(ctx, app.SnaphotListQuery{})
-	if err != nil {
-		return nil, err
-	}
-	items, ok := resultQuery.([]snapshot.ManifestResume)
-	if !ok {
-		return nil, fmt.Errorf("unexpected result type: %T", resultQuery)
 	}
 
 	result := make([]SnapshotSummary, len(items))
 	for i, item := range items {
 		result[i] = SnapshotSummary{
-			ID:        item.Id(),
+			ID:        item.ID(),
 			CreatedAt: item.CreatedAt(),
 			FileCount: item.Files(),
 			TotalSize: item.Size(),

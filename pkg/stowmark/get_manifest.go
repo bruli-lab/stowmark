@@ -2,12 +2,10 @@ package stowmark
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
-	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 )
 
 type Chunk struct {
@@ -30,28 +28,9 @@ type Manifest struct {
 }
 
 func (h *Handler) GetManifest(ctx context.Context, id string) (*Manifest, error) {
-	obsv, err := builtObservability(ctx)
+	manifest, err := app.QueryResult[*snapshot.Manifest](h.repository.ManifestGet().Handle(ctx, app.ManifestGetQuery{SnapshotID: id}))
 	if err != nil {
 		return nil, err
-	}
-	defer func() {
-		_ = obsv.Shutdown(ctx)
-	}()
-	svc := snapshot.NewGetManifest(h.manifestRepository)
-	mdw, err := middlewares.BuildQueryMiddlewares(obsv)
-	if err != nil {
-		return nil, err
-	}
-	handler := mdw(app.NewManifestGet(svc))
-	result, err := handler.Handle(ctx, app.ManifestGetQuery{
-		SnapshotID: id,
-	})
-	if err != nil {
-		return nil, err
-	}
-	manifest, ok := result.(*snapshot.Manifest)
-	if !ok {
-		return nil, fmt.Errorf("unexpected result type: %T", result)
 	}
 
 	files := make([]ManifestFile, len(manifest.Files()))
@@ -73,7 +52,7 @@ func (h *Handler) GetManifest(ctx context.Context, id string) (*Manifest, error)
 	}
 
 	return &Manifest{
-		ID:        manifest.Id(),
+		ID:        manifest.ID(),
 		CreatedAt: manifest.CreatedAt(),
 		Source:    manifest.Source(),
 		Files:     files,

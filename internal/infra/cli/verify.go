@@ -5,12 +5,8 @@ import (
 	"fmt"
 
 	"github.com/bruli-lab/stowmark/internal/app"
-	"github.com/bruli-lab/stowmark/internal/domain/encryption"
+	"github.com/bruli-lab/stowmark/internal/bootstrap"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
-	"github.com/bruli-lab/stowmark/internal/infra/disk"
-	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
-	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
-	"github.com/bruli-lab/stowmark/internal/infra/repositories"
 	"github.com/spf13/cobra"
 )
 
@@ -29,86 +25,26 @@ func newSnapshotVerifyCommand() *cobra.Command {
 			if repositoryPath == "" {
 				return errors.New("--repo is required")
 			}
-
 			if snapshotID == "" {
 				return errors.New("--id is required")
 			}
-
-			obsv, err := builtObservability(cmd.Context())
-			if err != nil {
-				return err
-			}
-
-			repoHand, err := repositories.NewHandler(cmd.Context(), repositoryPath)
-			if err != nil {
-				return err
-			}
-			defer func() {
-				_ = obsv.Shutdown(cmd.Context())
-				_ = repoHand.Close()
-			}()
-
-			manifestRepo, err := repoHand.ManifestRepository()
-			if err != nil {
-				return err
-			}
-
-			objectRepo, err := repoHand.ObjectRepository()
-			if err != nil {
-				return err
-			}
-
-			svc := snapshot.NewVerifier(
-				objectRepo,
-				manifestRepo,
-				repoHand.FolderRepository(),
-				encryption.NewDecryptSymmetricKey(encrypt.NewSymmetricRepository(), disk.NewAsymmetricKeyPairRepository()),
-			)
-			var privateKeyPath *string
-			if privateKey != "" {
-				privateKeyPath = &privateKey
-			}
-			multiMdw, err := middlewares.BuildQueryMiddlewares(obsv)
-			if err != nil {
-				return err
-			}
-
-			handler := multiMdw(app.NewVerifySnapshot(svc))
-
-			resultQuery, err := handler.Handle(cmd.Context(), app.VerifySnapshotQuery{
-				SnapshotID:     snapshotID,
-				RepositoryPath: repoHand.RepositoryPath(),
-				PrivateKeyPath: privateKeyPath,
-			})
-			if err != nil {
-				return err
-			}
-			result, ok := resultQuery.(*snapshot.Result)
-			if !ok {
-				return fmt.Errorf("unexpected result type: %T", resultQuery)
-			}
-			failed := make([]Failed, len(result.Failed()))
-			for i, f := range result.Failed() {
-				failed[i] = Failed{
-					Path:   f.Path(),
-					Reason: f.Reason(),
+			return withRepository(cmd, repositoryPath, func(repo *bootstrap.Repository) error {
+				result, err := app.QueryResult[*snapshot.Result](repo.VerifySnapshot().Handle(cmd.Context(), app.VerifySnapshotQuery{
+					SnapshotID:     snapshotID,
+					RepositoryPath: repo.Path(),
+					PrivateKeyPath: optionalPath(privateKey),
+				}))
+				if err != nil {
+					return err
 				}
-			}
-			if err := printResult(
-				cmd.OutOrStdout(),
-				result.SnapshotID(),
-				result.TotalFiles(),
-				failed,
-				result.IsSuccess(),
-			); err != nil {
-				return err
-			}
-
-			if !result.IsSuccess() {
-				return fmt.Errorf("snapshot %q failed verification", snapshotID)
-			}
-
-			return nil
+				if err := printResult(cmd.OutOrStdout(), result.SnapshotID(), result.TotalFiles(), failedResults(result.Failed()), result.IsSuccess()); err != nil {
+					return err
+				}
+				if !result.IsSuccess() {
+					return fmt.Errorf("snapshot %q failed verification", snapshotID)
+				}
+				return nil
+			})
 		},
 	}
 

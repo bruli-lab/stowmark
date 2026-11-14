@@ -1,10 +1,17 @@
 package compression
 
 import (
+	"errors"
 	"fmt"
 	"io"
 
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
+)
+
+var (
+	ErrUnsupportedCompressionType = errors.New("unsupported compression type")
+	ErrLevelRequired              = errors.New("compression level is required")
+	ErrInvalidLevel               = errors.New("invalid compression level")
 )
 
 type WriterCloser struct {
@@ -29,7 +36,7 @@ type HandlersFactory struct {
 func (e *HandlersFactory) GetHandler(ct repository.CompressionType) (Handler, error) {
 	enc, ok := e.handlers[ct]
 	if !ok {
-		return nil, fmt.Errorf("unsupported compression type %s", ct.String())
+		return nil, fmt.Errorf("%w %s", ErrUnsupportedCompressionType, ct.String())
 	}
 	return enc, nil
 }

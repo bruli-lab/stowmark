@@ -1,5 +1,9 @@
 package repository
 
+import "fmt"
+
+var ErrUnsupportedFormatVersion = fmt.Errorf("unsupported repository format version")
+
 type FormatVersion int
 
 func (c FormatVersion) Int() int {
@@ -12,12 +16,20 @@ const (
 	CurrentFormatVersion = FormatVersionTwo
 )
 
-func ParseFormatVersion(value int) FormatVersion {
+func ParseFormatVersion(value int) (FormatVersion, error) {
 	version := FormatVersion(value)
 
 	if version < FormatVersionOne || version > CurrentFormatVersion {
-		version = CurrentFormatVersion
+		return 0, fmt.Errorf("%w: %d (supported: %d-%d)", ErrUnsupportedFormatVersion, value, FormatVersionOne, CurrentFormatVersion)
 	}
 
-	return version
+	return version, nil
+}
+
+func ParseFormatVersionOrCurrent(value int) (FormatVersion, error) {
+	if value == 0 {
+		return CurrentFormatVersion, nil
+	}
+
+	return ParseFormatVersion(value)
 }

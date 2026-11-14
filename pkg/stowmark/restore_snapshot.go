@@ -2,66 +2,24 @@ package stowmark
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/bruli-lab/stowmark/internal/app"
-	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
-	"github.com/bruli-lab/stowmark/internal/infra/disk"
-	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
-	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 )
 
 func (h *Handler) RestoreSnapshot(ctx context.Context, snapshotID string, destinationPath, privateKey *string) (*Result, error) {
-	obsv, err := builtObservability(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		_ = obsv.Shutdown(ctx)
-	}()
-	decryptKeySvc := encryption.NewDecryptSymmetricKey(encrypt.NewSymmetricRepository(), disk.NewAsymmetricKeyPairRepository())
-	svc := snapshot.NewRestore(
-		h.manifestRepository,
-		h.objectRepository,
-		h.folderRepository,
-		decryptKeySvc,
-	)
-	restoreSnapshotTracer := app.NewRestoreSnapshotTracer(obsv.Logger)
-	evtr := app.NewEventsTracing()
-	evtr.Add(app.RestoreSnapshotCommandName, restoreSnapshotTracer)
-	mdw, err := middlewares.BuildCommandMiddlewares(obsv, evtr)
-	if err != nil {
-		return nil, err
-	}
-	handler := mdw(app.NewRestoreSnapshot(svc))
-	events, err := handler.Handle(ctx, app.RestoreSnapshotCommand{
+	events, err := h.repository.RestoreSnapshot().Handle(ctx, app.RestoreSnapshotCommand{
 		SnapshotID:      snapshotID,
-		RepositoryPath:  h.repositoryPath,
+		RepositoryPath:  h.repository.Path(),
 		PrivateKeyPath:  privateKey,
 		DestinationPath: destinationPath,
 	})
 	if err != nil {
 		return nil, err
 	}
-	if len(events) != 1 {
-		return nil, fmt.Errorf("unexpected number of events")
+	result, err := app.SingleEvent[*snapshot.SnapshotRestored](events)
+	if err != nil {
+		return nil, err
 	}
-	result, ok := events[0].(*app.RestoreSnapshotEvent)
-	if !ok {
-		return nil, fmt.Errorf("unexpected event type")
-	}
-	failed := make([]FailedResult, len(result.FailedFiles))
-	for i, f := range result.FailedFiles {
-		failed[i] = FailedResult{
-			Path:   f.Path,
-			Reason: f.Reason,
-		}
-	}
-	return &Result{
-		SnapshotID: result.SnapshotID,
-		TotalFiles: result.TotalFiles,
-		Failed:     failed,
-		IsSuccess:  result.IsSuccess,
-	}, nil
+	return newResult(result.SnapshotID(), result.TotalFiles(), result.Failed(), result.IsSuccess()), nil
 }

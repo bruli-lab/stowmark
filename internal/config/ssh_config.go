@@ -9,8 +9,12 @@ type SSHConfig struct {
 }
 
 func NewSSHConfig() (*SSHConfig, error) {
+	return NewSSHConfigFrom(nil)
+}
+
+func NewSSHConfigFrom(environment map[string]string) (*SSHConfig, error) {
 	var cfg SSHConfig
-	if err := env.ParseWithOptions(&cfg, env.Options{Prefix: EnvPrefix}); err != nil {
+	if err := env.ParseWithOptions(&cfg, env.Options{Prefix: EnvPrefix, Environment: environment}); err != nil {
 		return nil, err
 	}
 	return &cfg, nil

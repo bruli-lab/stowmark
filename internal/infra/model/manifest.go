@@ -44,13 +44,11 @@ func BuildManifestDomain(data []byte, manifestPath string) (*snapshot.Manifest, 
 		len(mo.Files),
 	)
 	for i, modelFile := range mo.Files {
-		file := snapshot.File{}
 		chunks := make([]snapshot.Chunk, len(modelFile.Chunks))
 		for j, chunk := range modelFile.Chunks {
 			chunks[j] = *snapshot.NewChunk(chunk.Hash, chunk.Offset, chunk.Size)
 		}
-		file.Hydrate(modelFile.Path, modelFile.Hash, modelFile.Size, chunks)
-		snapshotFiles[i] = file
+		snapshotFiles[i] = *snapshot.HydrateFile(modelFile.Path, modelFile.Hash, modelFile.Size, chunks)
 	}
 	compType, err := repository.ParseCompressionType(mo.Compression.Type)
 	if err != nil {
@@ -89,7 +87,7 @@ func NewManifest(m *snapshot.Manifest) Manifest {
 		}
 	}
 	man := Manifest{
-		ID:        m.Id(),
+		ID:        m.ID(),
 		Files:     files,
 		CreatedAt: m.CreatedAt().In(time.Local),
 		Source:    m.Source(),
