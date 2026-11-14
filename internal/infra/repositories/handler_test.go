@@ -124,8 +124,8 @@ func TestNewHandler_Errors(t *testing.T) {
 		contains    string
 	}{
 		{name: "with an empty path, then it returns invalid repository path error", url: "", expectedErr: repository.ErrInvalidRepositoryPath},
-		{name: "with an SSH URL without user, then it returns a username error", url: "ssh://example.com/backups", contains: "SSH username is required"},
-		{name: "with an SSH URL without host, then it returns a host error", url: "ssh://user@/backups", contains: "SSH host is required"},
+		{name: "with an SSH URL without user, then it returns a username error", url: "ssh://example.com/backups", environment: map[string]string{"STOWMARK_SSH_PRIVATE_KEY": "key"}, contains: "SSH username is required"},
+		{name: "with an SSH URL without host, then it returns a host error", url: "ssh://user@/backups", environment: map[string]string{"STOWMARK_SSH_PRIVATE_KEY": "key"}, contains: "SSH host is required"},
 		{name: "with an SMB URL without the password, then it returns a configuration error", url: "smb://user@" + closed + "/share/backups", contains: "SMB_PASSWORD"},
 		{name: "with an SMB server that is not listening, then it returns the connection error", url: "smb://user@" + closed + "/share/backups", environment: map[string]string{"STOWMARK_SMB_PASSWORD": "secret"}, contains: closed},
 		{name: "with a WebDAV URL without credentials, then it returns a configuration error", url: "https://" + closed + "/backups", contains: "WEBDAV_USERNAME"},
@@ -137,7 +137,12 @@ func TestNewHandler_Errors(t *testing.T) {
 		when NewHandler is called `+tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			repos, err := repositories.NewHandler(context.Background(), tt.url, tt.environment)
+			environment := tt.environment
+			if environment == nil {
+				environment = map[string]string{}
+			}
+
+			repos, err := repositories.NewHandler(context.Background(), tt.url, environment)
 
 			require.Error(t, err)
 			require.Nil(t, repos)
