@@ -129,6 +129,23 @@ func (s BlobStore) List(ctx context.Context, prefix string) ([]string, error) {
 	return keys, nil
 }
 
+func (s BlobStore) Delete(ctx context.Context, key string) error {
+	objectKey, err := s.objectKey(ctx, key)
+	if err != nil {
+		return err
+	}
+
+	_, err = s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(objectKey),
+	})
+	if err != nil && !isNotFoundError(err) {
+		return fmt.Errorf("delete object %q from bucket %q: %w", objectKey, s.bucket, err)
+	}
+
+	return nil
+}
+
 func (s BlobStore) DeletePrefix(ctx context.Context, prefix string) error {
 	objectPrefix, err := s.objectKey(ctx, prefix)
 	if err != nil {

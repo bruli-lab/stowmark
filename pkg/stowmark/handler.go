@@ -18,6 +18,7 @@ type Handler struct {
 	repositoriesHandler        repositories.Repositories
 	asymmetricKeyPaiRepository app.AsymmetricKeyPairRepository
 	symmetricKeyRepository     app.SymmetricKeyRepository
+	locker                     *app.RepositoryLocker
 }
 
 func (h *Handler) Close() error {
@@ -40,6 +41,10 @@ func NewHandler(ctx context.Context, repositoryPath string) (*Handler, error) {
 	if err != nil {
 		return nil, err
 	}
+	lockRepo, err := repoHandler.LockRepository()
+	if err != nil {
+		return nil, err
+	}
 
 	return &Handler{
 		folderRepository:           folderRepo,
@@ -50,5 +55,6 @@ func NewHandler(ctx context.Context, repositoryPath string) (*Handler, error) {
 		repositoriesHandler:        repoHandler,
 		asymmetricKeyPaiRepository: disk.NewAsymmetricKeyPairRepository(),
 		symmetricKeyRepository:     encrypt.NewSymmetricRepository(),
+		locker:                     app.NewRepositoryLocker(lockRepo),
 	}, nil
 }

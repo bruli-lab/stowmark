@@ -167,7 +167,7 @@ func TestInit_Handle(t *testing.T) {
 				},
 			}
 
-			handler := app.NewInit(folderRepo, asymmetricRepo, symmetricRepo)
+			handler := app.NewInit(folderRepo, asymmetricRepo, symmetricRepo, newUnlockedLocker())
 			events, err := handler.Handle(t.Context(), app.InitCommand{
 				RepositoryPath: "repo",
 				Compression:    fixtures.CompressionBuilder{}.Build(t),

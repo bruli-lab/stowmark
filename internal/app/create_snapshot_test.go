@@ -221,7 +221,7 @@ func TestCreateSnapshot_Handle(t *testing.T) {
 			asymmetricRepo.ReadRSAPrivateKeyFunc = func(_ context.Context, _ string) (*rsa.PrivateKey, error) {
 				return new(rsa.PrivateKey{}), nil
 			}
-			handler := app.NewCreateSnapshot(sourceRepo, manifestRepo, objRepo, folderRepositoryRep, asymmetricRepo, symmetricRepo)
+			handler := app.NewCreateSnapshot(sourceRepo, manifestRepo, objRepo, folderRepositoryRep, asymmetricRepo, symmetricRepo, newUnlockedLocker())
 			result, err := createSnapshot(t.Context(), handler, app.CreateSnapshotCommand{
 				RepositoryPath: tt.args.repoPath,
 				SourcePath:     tt.args.sourcePath,

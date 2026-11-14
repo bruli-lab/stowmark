@@ -64,6 +64,10 @@ func newSnapshotRestoreCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			locker, err := newRepositoryLocker(repoHandler)
+			if err != nil {
+				return err
+			}
 			switch filePath {
 			case "":
 				return executeRestore(
@@ -72,6 +76,7 @@ func newSnapshotRestoreCommand() *cobra.Command {
 					manifestRepo,
 					objectRepo,
 					repoHandler.FolderRepository(),
+					locker,
 					repoHandler.RepositoryPath(),
 					snapshotID,
 					destination,
@@ -84,6 +89,7 @@ func newSnapshotRestoreCommand() *cobra.Command {
 					manifestRepo,
 					objectRepo,
 					repoHandler.FolderRepository(),
+					locker,
 					snapshotID,
 					filePath,
 					repoHandler.RepositoryPath(),
@@ -133,8 +139,8 @@ func newSnapshotRestoreCommand() *cobra.Command {
 	return cmd
 }
 
-func executeRestoreFile(cmd *cobra.Command, mdw cqs.CommandHandlerMiddleware, manifestRepo app.ManifestRepository, objectRepo app.ObjectRepository, folderRepository app.FolderRepository, snapshotID, filePath, repositoryPath string, destinationPath, privateKey *string) error {
-	handler := mdw(app.NewRestoreFile(manifestRepo, objectRepo, folderRepository, disk.NewAsymmetricKeyPairRepository(), encrypt.NewSymmetricRepository()))
+func executeRestoreFile(cmd *cobra.Command, mdw cqs.CommandHandlerMiddleware, manifestRepo app.ManifestRepository, objectRepo app.ObjectRepository, folderRepository app.FolderRepository, locker *app.RepositoryLocker, snapshotID, filePath, repositoryPath string, destinationPath, privateKey *string) error {
+	handler := mdw(app.NewRestoreFile(manifestRepo, objectRepo, folderRepository, disk.NewAsymmetricKeyPairRepository(), encrypt.NewSymmetricRepository(), locker))
 
 	if _, err := handler.Handle(cmd.Context(), app.RestoreFileCommand{
 		SnapshotID:      snapshotID,
@@ -154,8 +160,8 @@ func executeRestoreFile(cmd *cobra.Command, mdw cqs.CommandHandlerMiddleware, ma
 	return err
 }
 
-func executeRestore(cmd *cobra.Command, mdw cqs.CommandHandlerMiddleware, manifestRepo app.ManifestRepository, objectRepo app.ObjectRepository, folderRepo app.FolderRepository, repositoryPath, snapshotID string, destination, privateKey *string) error {
-	handler := mdw(app.NewRestoreSnapshot(manifestRepo, objectRepo, folderRepo, disk.NewAsymmetricKeyPairRepository(), encrypt.NewSymmetricRepository()))
+func executeRestore(cmd *cobra.Command, mdw cqs.CommandHandlerMiddleware, manifestRepo app.ManifestRepository, objectRepo app.ObjectRepository, folderRepo app.FolderRepository, locker *app.RepositoryLocker, repositoryPath, snapshotID string, destination, privateKey *string) error {
+	handler := mdw(app.NewRestoreSnapshot(manifestRepo, objectRepo, folderRepo, disk.NewAsymmetricKeyPairRepository(), encrypt.NewSymmetricRepository(), locker))
 	events, err := handler.Handle(cmd.Context(), app.RestoreSnapshotCommand{
 		SnapshotID:      snapshotID,
 		RepositoryPath:  repositoryPath,

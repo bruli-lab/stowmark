@@ -22,7 +22,7 @@ func (h *Handler) RestoreFile(ctx context.Context, snapshotID, filePath string, 
 	if err != nil {
 		return err
 	}
-	handler := mdw(app.NewRestoreFile(h.manifestRepository, h.objectRepository, h.folderRepository, h.asymmetricKeyPaiRepository, h.symmetricKeyRepository))
+	handler := mdw(app.NewRestoreFile(h.manifestRepository, h.objectRepository, h.folderRepository, h.asymmetricKeyPaiRepository, h.symmetricKeyRepository, h.locker))
 	_, err = handler.Handle(ctx, app.RestoreFileCommand{
 		SnapshotID:      snapshotID,
 		FilePath:        filePath,

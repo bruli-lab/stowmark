@@ -41,7 +41,7 @@ func (h *Handler) Init(ctx context.Context, comp *Compression, formatVersion int
 	if err != nil {
 		return err
 	}
-	handler := mdw(app.NewInit(h.folderRepository, h.asymmetricKeyPaiRepository, h.symmetricKeyRepository))
+	handler := mdw(app.NewInit(h.folderRepository, h.asymmetricKeyPaiRepository, h.symmetricKeyRepository, h.locker))
 	events, err := handler.Handle(ctx, app.InitCommand{
 		RepositoryPath: h.repositoryPath,
 		Compression:    compre,

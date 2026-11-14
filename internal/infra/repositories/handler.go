@@ -15,6 +15,7 @@ type Repositories interface {
 	BlobStore() (blob.Store, error)
 	ObjectRepository() (app.ObjectRepository, error)
 	ManifestRepository() (app.ManifestRepository, error)
+	LockRepository() (app.LockRepository, error)
 	Close() error
 }
 
@@ -43,6 +44,14 @@ func (b blobRepositories) ManifestRepository() (app.ManifestRepository, error) {
 		return nil, err
 	}
 	return blob.NewManifestRepository(store), nil
+}
+
+func (b blobRepositories) LockRepository() (app.LockRepository, error) {
+	store, err := b.BlobStore()
+	if err != nil {
+		return nil, err
+	}
+	return blob.NewLockRepository(store), nil
 }
 
 func NewHandler(ctx context.Context, value string) (Repositories, error) {

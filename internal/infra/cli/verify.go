@@ -66,12 +66,17 @@ func newSnapshotVerifyCommand() *cobra.Command {
 				return err
 			}
 
+			locker, err := newRepositoryLocker(repoHand)
+			if err != nil {
+				return err
+			}
 			handler := multiMdw(app.NewVerifySnapshot(
 				manifestRepo,
 				objectRepo,
 				repoHand.FolderRepository(),
 				disk.NewAsymmetricKeyPairRepository(),
 				encrypt.NewSymmetricRepository(),
+				locker,
 			))
 
 			resultQuery, err := handler.Handle(cmd.Context(), app.VerifySnapshotQuery{

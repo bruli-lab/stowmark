@@ -10,7 +10,9 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
+	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/infra/blob"
 	"github.com/bruli-lab/stowmark/internal/infra/blob/blobtest"
 	"github.com/bruli-lab/stowmark/internal/infra/repositories"
@@ -53,6 +55,15 @@ func mainFlow(t *testing.T, ctx context.Context, folders Folders, formatVersion 
 		false,
 	)
 	require.NoError(t, err)
+
+	store := blobStore(t, ctx, folders.Repository)
+	lockRepo := blob.NewLockRepository(store)
+	foreignLock, err := repository.NewLock(repository.ExclusiveLock, repository.NewLockOwner("other-host", 1), time.Now())
+	require.NoError(t, err)
+	require.NoError(t, lockRepo.Save(ctx, foreignLock))
+	_, err = handler.CreateSnapshot(ctx, folders.Source, new(keys.PrivateKey()))
+	require.ErrorIs(t, err, repository.ErrRepositoryLocked, "a snapshot must not be created while another process holds an exclusive lock")
+	require.NoError(t, lockRepo.Delete(ctx, foreignLock.ID()))
 
 	created, err := handler.CreateSnapshot(
 		ctx,
@@ -119,7 +130,6 @@ func mainFlow(t *testing.T, ctx context.Context, folders Folders, formatVersion 
 	require.True(t, restored.IsSuccess)
 	requireDirectoriesEqual(t, folders.Source, rekeyedRestore)
 
-	store := blobStore(t, ctx, folders.Repository)
 	encryptedKeys, err := store.List(ctx, "objects/encrypted")
 	require.NoError(t, err)
 	require.NotEmpty(t, encryptedKeys)
@@ -128,6 +138,10 @@ func mainFlow(t *testing.T, ctx context.Context, folders Folders, formatVersion 
 		generations[strings.SplitN(key, "/", 4)[2]] = struct{}{}
 	}
 	require.Len(t, generations, 1, "the previous encrypted generation must be deleted after rekey")
+
+	remainingLocks, err := store.List(ctx, repository.LocksFolder)
+	require.NoError(t, err)
+	require.Empty(t, remainingLocks, "every operation must release its repository lock")
 
 	var contractRepositories atomic.Int64
 	t.Run("blob store contract", func(t *testing.T) {

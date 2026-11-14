@@ -166,7 +166,7 @@ func TestVerifySnapshot_Handle(t *testing.T) {
 			asymmetricRepo.ReadRSAPrivateKeyFunc = func(_ context.Context, _ string) (*rsa.PrivateKey, error) {
 				return new(rsa.PrivateKey{}), tt.readErr
 			}
-			handler := app.NewVerifySnapshot(manifestRepo, objectRepo, folderRepo, asymmetricRepo, symmetricRepo)
+			handler := app.NewVerifySnapshot(manifestRepo, objectRepo, folderRepo, asymmetricRepo, symmetricRepo, newUnlockedLocker())
 			got, err := verifySnapshot(t.Context(), handler, app.VerifySnapshotQuery{
 				SnapshotID:     tt.args.snapshotID,
 				RepositoryPath: tt.args.repositoryPath,

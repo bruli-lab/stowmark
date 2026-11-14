@@ -660,6 +660,8 @@ repository/
 │           ├── 00/
 │           ├── 01/
 │           └── ...
+├── locks/
+│   └── <lock-id>.json
 └── snapshots/
     ├── <snapshot-id>.json
     └── ...
@@ -684,6 +686,22 @@ In encrypted repositories, encrypted objects are stored in a generation-specific
 The active generation is recorded in `config.json`. A rekey writes a complete new generation before switching the
 configuration to it, so an interrupted rotation cannot leave the repository pointing to a partially
 rewritten object set.
+
+### Locks
+
+Commands that read or write repository data take a lock stored under `locks/`, so concurrent processes on the same or
+different machines cannot corrupt each other:
+
+| Lock | Commands | Compatible with |
+|---|---|---|
+| Shared | `snapshot create`, `snapshot restore`, `snapshot verify` | Other shared locks |
+| Exclusive | `init`, `key rekey`, `key rewrap` | Nothing |
+
+A command fails with `repository is locked` and shows the host and process that hold a conflicting lock. A running
+command refreshes its lock every 5 minutes and removes it when it finishes, including when it is interrupted with
+Ctrl+C. A lock that has not been refreshed for 30 minutes, for example after a crash, is considered stale and is
+removed by the next command. Staleness is calculated with the local clock, so machines that share a repository should
+keep their clocks synchronised. `snapshot list` and `snapshot get` do not take a lock.
 
 ### Snapshot manifests
 

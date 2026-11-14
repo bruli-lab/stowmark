@@ -23,7 +23,7 @@ func (h *Handler) RestoreSnapshot(ctx context.Context, snapshotID string, destin
 	if err != nil {
 		return nil, err
 	}
-	handler := mdw(app.NewRestoreSnapshot(h.manifestRepository, h.objectRepository, h.folderRepository, h.asymmetricKeyPaiRepository, h.symmetricKeyRepository))
+	handler := mdw(app.NewRestoreSnapshot(h.manifestRepository, h.objectRepository, h.folderRepository, h.asymmetricKeyPaiRepository, h.symmetricKeyRepository, h.locker))
 	events, err := handler.Handle(ctx, app.RestoreSnapshotCommand{
 		SnapshotID:      snapshotID,
 		RepositoryPath:  h.repositoryPath,

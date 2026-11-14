@@ -20,7 +20,7 @@ func (h *Handler) Rewrap(ctx context.Context, oldPrivateKeyPat, newPublicKeyPath
 	if err != nil {
 		return err
 	}
-	handler := mdw(app.NewRewrapKey(h.folderRepository, h.asymmetricKeyPaiRepository, h.symmetricKeyRepository))
+	handler := mdw(app.NewRewrapKey(h.folderRepository, h.asymmetricKeyPaiRepository, h.symmetricKeyRepository, h.locker))
 	_, err = handler.Handle(ctx, app.RewrapKeyCommand{
 		RepositoryPath: h.repositoryPath,
 		OldPrivateKey:  oldPrivateKeyPat,

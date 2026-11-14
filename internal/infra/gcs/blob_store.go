@@ -110,6 +110,19 @@ func (s BlobStore) List(ctx context.Context, prefix string) ([]string, error) {
 	return keys, nil
 }
 
+func (s BlobStore) Delete(ctx context.Context, key string) error {
+	objectName, err := s.objectName(ctx, key)
+	if err != nil {
+		return err
+	}
+
+	if err := s.client.Bucket(s.bucket).Object(objectName).Delete(ctx); err != nil && !errors.Is(err, storage.ErrObjectNotExist) {
+		return fmt.Errorf("delete object %q from bucket %q: %w", objectName, s.bucket, err)
+	}
+
+	return nil
+}
+
 func (s BlobStore) DeletePrefix(ctx context.Context, prefix string) error {
 	objectPrefix, err := s.objectName(ctx, prefix)
 	if err != nil {

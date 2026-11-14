@@ -69,7 +69,7 @@ func TestRestoreSnapshot_HandleResult(t *testing.T) {
 			symmetricRepo := &app.SymmetricKeyRepositoryMock{}
 			asymmetricRepo := &app.AsymmetricKeyPairRepositoryMock{}
 
-			handler := app.NewRestoreSnapshot(manifestRepo, objectRepo, folderRepo, asymmetricRepo, symmetricRepo)
+			handler := app.NewRestoreSnapshot(manifestRepo, objectRepo, folderRepo, asymmetricRepo, symmetricRepo, newUnlockedLocker())
 			events, err := handler.Handle(t.Context(), app.RestoreSnapshotCommand{
 				SnapshotID:      tt.args.snapshotID,
 				RepositoryPath:  "repository-path",

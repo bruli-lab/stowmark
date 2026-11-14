@@ -20,7 +20,7 @@ func (h *Handler) ReKey(ctx context.Context, privateKeyPath, publicKeyPath strin
 	if err != nil {
 		return err
 	}
-	handler := mdw(app.NewRekeyKey(h.folderRepository, h.objectRepository, h.asymmetricKeyPaiRepository, h.symmetricKeyRepository))
+	handler := mdw(app.NewRekeyKey(h.folderRepository, h.objectRepository, h.asymmetricKeyPaiRepository, h.symmetricKeyRepository, h.locker))
 	_, err = handler.Handle(ctx, app.RekeyKeyCommand{
 		RepositoryPath: h.repositoryPath,
 		PrivateKeyPath: privateKeyPath,

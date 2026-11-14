@@ -188,7 +188,7 @@ func TestRewrapKey_Handle(t *testing.T) {
 			asymmetricRepo.PublicKeyFingerPrintFunc = func(_ context.Context, _ *rsa.PublicKey) (string, error) {
 				return "fingerprint", tt.fingerPrintErr
 			}
-			handler := app.NewRewrapKey(folderRepo, asymmetricRepo, symmetricRepo)
+			handler := app.NewRewrapKey(folderRepo, asymmetricRepo, symmetricRepo, newUnlockedLocker())
 			events, err := handler.Handle(t.Context(), app.RewrapKeyCommand{
 				RepositoryPath: tt.args.repositoryPath,
 				OldPrivateKey:  tt.args.oldPrivateKeyPath,

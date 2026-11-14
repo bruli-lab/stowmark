@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/bruli-lab/go-core/cqs"
+	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"golang.org/x/sync/errgroup"
 )
@@ -33,6 +34,7 @@ type VerifySnapshot struct {
 	manifestRepo ManifestRepository
 	objectRepo   ObjectRepository
 	keys         keyring
+	locker       *RepositoryLocker
 	workers      int
 }
 
@@ -41,7 +43,16 @@ func (v *VerifySnapshot) Handle(ctx context.Context, query cqs.Query) (any, erro
 	if !ok {
 		return nil, cqs.NewInvalidQueryError(VerifySnapshotQueryName, query.Name())
 	}
-	return v.verify(ctx, q)
+	var result *snapshot.Result
+	err := v.locker.WithLock(ctx, repository.SharedLock, func(ctx context.Context) error {
+		verified, err := v.verify(ctx, q)
+		result = verified
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func (v *VerifySnapshot) verify(ctx context.Context, q VerifySnapshotQuery) (*snapshot.Result, error) {
@@ -153,8 +164,9 @@ func NewVerifySnapshot(
 	folderRepo FolderRepository,
 	asymmetricRepo AsymmetricKeyPairRepository,
 	symmetricRepo SymmetricKeyRepository,
+	locker *RepositoryLocker,
 ) *VerifySnapshot {
-	return NewVerifySnapshotWithWorkers(manifestRepo, objectRepo, folderRepo, asymmetricRepo, symmetricRepo, defaultVerifyWorkers)
+	return NewVerifySnapshotWithWorkers(manifestRepo, objectRepo, folderRepo, asymmetricRepo, symmetricRepo, locker, defaultVerifyWorkers)
 }
 
 func NewVerifySnapshotWithWorkers(
@@ -163,6 +175,7 @@ func NewVerifySnapshotWithWorkers(
 	folderRepo FolderRepository,
 	asymmetricRepo AsymmetricKeyPairRepository,
 	symmetricRepo SymmetricKeyRepository,
+	locker *RepositoryLocker,
 	workers int,
 ) *VerifySnapshot {
 	if workers <= 0 {
@@ -172,6 +185,7 @@ func NewVerifySnapshotWithWorkers(
 		manifestRepo: manifestRepo,
 		objectRepo:   objectRepo,
 		keys:         newKeyring(folderRepo, asymmetricRepo, symmetricRepo),
+		locker:       locker,
 		workers:      workers,
 	}
 }

@@ -5,6 +5,7 @@ import (
 
 	"github.com/bruli-lab/go-core/cqs"
 	"github.com/bruli-lab/go-core/event"
+	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	"github.com/google/uuid"
 )
@@ -26,6 +27,7 @@ type RestoreSnapshot struct {
 	manifestRepo ManifestRepository
 	objectRepo   ObjectRepository
 	keys         keyring
+	locker       *RepositoryLocker
 }
 
 func (r *RestoreSnapshot) Handle(ctx context.Context, cmd cqs.Command) ([]event.Event, error) {
@@ -33,7 +35,12 @@ func (r *RestoreSnapshot) Handle(ctx context.Context, cmd cqs.Command) ([]event.
 	if !ok {
 		return nil, cqs.NewInvalidCommandError(RestoreSnapshotCommandName, cmd.Name())
 	}
-	result, err := r.restore(ctx, co)
+	var result *snapshot.Result
+	err := r.locker.WithLock(ctx, repository.SharedLock, func(ctx context.Context) error {
+		restored, err := r.restore(ctx, co)
+		result = restored
+		return err
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -84,11 +91,13 @@ func NewRestoreSnapshot(
 	folderRepo FolderRepository,
 	asymmetricRepo AsymmetricKeyPairRepository,
 	symmetricRepo SymmetricKeyRepository,
+	locker *RepositoryLocker,
 ) *RestoreSnapshot {
 	return &RestoreSnapshot{
 		manifestRepo: manifestRepo,
 		objectRepo:   objectRepo,
 		keys:         newKeyring(folderRepo, asymmetricRepo, symmetricRepo),
+		locker:       locker,
 	}
 }
 

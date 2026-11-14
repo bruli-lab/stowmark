@@ -35,6 +35,7 @@ func (h *Handler) CreateSnapshot(ctx context.Context, source string, privateKey 
 		h.folderRepository,
 		h.asymmetricKeyPaiRepository,
 		h.symmetricKeyRepository,
+		h.locker,
 	))
 
 	events, err := handler.Handle(ctx, app.CreateSnapshotCommand{

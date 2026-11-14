@@ -34,6 +34,7 @@ type CreateSnapshot struct {
 	objectRepo   ObjectRepository
 	folderRepo   FolderRepository
 	keys         keyring
+	locker       *RepositoryLocker
 	workers      int
 }
 
@@ -42,7 +43,12 @@ func (c *CreateSnapshot) Handle(ctx context.Context, cmd cqs.Command) ([]event.E
 	if !ok {
 		return nil, cqs.NewInvalidCommandError(CreateSnapshotCommandName, cmd.Name())
 	}
-	result, err := c.create(ctx, co)
+	var result *snapshot.CreateResult
+	err := c.locker.WithLock(ctx, repository.SharedLock, func(ctx context.Context) error {
+		created, err := c.create(ctx, co)
+		result = created
+		return err
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -170,8 +176,9 @@ func NewCreateSnapshot(
 	folderRepo FolderRepository,
 	asymmetricRepo AsymmetricKeyPairRepository,
 	symmetricRepo SymmetricKeyRepository,
+	locker *RepositoryLocker,
 ) *CreateSnapshot {
-	return NewCreateSnapshotWithWorkers(sourceRepo, manifestRepo, objectRepo, folderRepo, asymmetricRepo, symmetricRepo, defaultCreateWorkers)
+	return NewCreateSnapshotWithWorkers(sourceRepo, manifestRepo, objectRepo, folderRepo, asymmetricRepo, symmetricRepo, locker, defaultCreateWorkers)
 }
 
 func NewCreateSnapshotWithWorkers(
@@ -181,6 +188,7 @@ func NewCreateSnapshotWithWorkers(
 	folderRepo FolderRepository,
 	asymmetricRepo AsymmetricKeyPairRepository,
 	symmetricRepo SymmetricKeyRepository,
+	locker *RepositoryLocker,
 	workers int,
 ) *CreateSnapshot {
 	if workers <= 0 {
@@ -192,6 +200,7 @@ func NewCreateSnapshotWithWorkers(
 		objectRepo:   objectRepo,
 		folderRepo:   folderRepo,
 		keys:         newKeyring(folderRepo, asymmetricRepo, symmetricRepo),
+		locker:       locker,
 		workers:      workers,
 	}
 }

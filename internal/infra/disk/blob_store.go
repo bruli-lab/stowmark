@@ -116,6 +116,19 @@ func (s BlobStore) List(ctx context.Context, prefix string) ([]string, error) {
 	return keys, nil
 }
 
+func (s BlobStore) Delete(ctx context.Context, key string) error {
+	blobPath, err := s.path(ctx, key)
+	if err != nil {
+		return err
+	}
+
+	if err := os.Remove(blobPath); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("delete %q: %w", blobPath, err)
+	}
+
+	return nil
+}
+
 func (s BlobStore) DeletePrefix(ctx context.Context, prefix string) error {
 	prefixPath, err := s.path(ctx, prefix)
 	if err != nil {

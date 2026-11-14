@@ -86,6 +86,7 @@ func (d createDependencies) handler(workers int) *app.CreateSnapshot {
 		d.folderRepo,
 		&app.AsymmetricKeyPairRepositoryMock{},
 		&app.SymmetricKeyRepositoryMock{},
+		newUnlockedLocker(),
 		workers,
 	)
 }
@@ -171,6 +172,7 @@ func newVerifier(objectRepo *app.ObjectRepositoryMock, manifest *snapshot.Manife
 		&app.FolderRepositoryMock{},
 		&app.AsymmetricKeyPairRepositoryMock{},
 		&app.SymmetricKeyRepositoryMock{},
+		newUnlockedLocker(),
 	)
 }
 

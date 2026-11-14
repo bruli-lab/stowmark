@@ -27,6 +27,7 @@ func (i InitCommand) Name() string {
 type Init struct {
 	folderRepo FolderRepository
 	keys       keyring
+	locker     *RepositoryLocker
 }
 
 func (i *Init) Handle(ctx context.Context, cmd cqs.Command) ([]event.Event, error) {
@@ -45,27 +46,46 @@ func (i *Init) Handle(ctx context.Context, cmd cqs.Command) ([]event.Event, erro
 	if err := i.folderRepo.CreateFolder(ctx, repo.Path()); err != nil {
 		return nil, err
 	}
-	conf := repo.Config()
-	var warnings []string
-	if exists {
-		previous, err := i.folderRepo.GetConfig(ctx, repo.Path())
+	var (
+		repositoryID string
+		warnings     []string
+	)
+	err = i.locker.WithLock(ctx, repository.ExclusiveLock, func(ctx context.Context) error {
+		conf, initWarnings, err := i.writeRepository(ctx, repo, exists, co.Force)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		conf, warnings = previous.Reinitialize(conf, co.Force)
-	}
-	if err := i.folderRepo.CreateConfig(ctx, repo.Path(), conf); err != nil {
-		return nil, err
-	}
-	if err := i.folderRepo.CreateFolder(ctx, repo.ObjectsFolder()); err != nil {
-		return nil, err
-	}
-	if err := i.folderRepo.CreateFolder(ctx, repo.SnapshotsFolder()); err != nil {
+		repositoryID = conf.Id().String()
+		warnings = initWarnings
+		return nil
+	})
+	if err != nil {
 		return nil, err
 	}
 	return []event.Event{
-		NewInitEvent(conf.Id().String(), warnings),
+		NewInitEvent(repositoryID, warnings),
 	}, nil
+}
+
+func (i *Init) writeRepository(ctx context.Context, repo *repository.Repository, exists, force bool) (conf *repository.Config, warnings []string, err error) {
+	conf = repo.Config()
+	if exists {
+		previous, err := i.folderRepo.GetConfig(ctx, repo.Path())
+		if err != nil {
+			return nil, nil, err
+		}
+		conf, warnings = previous.Reinitialize(conf, force)
+	}
+	if err := i.folderRepo.CreateConfig(ctx, repo.Path(), conf); err != nil {
+		return nil, nil, err
+	}
+	if err := i.folderRepo.CreateFolder(ctx, repo.ObjectsFolder()); err != nil {
+		return nil, nil, err
+	}
+	if err := i.folderRepo.CreateFolder(ctx, repo.SnapshotsFolder()); err != nil {
+		return nil, nil, err
+	}
+	return conf, warnings, nil
 }
 
 func (i *Init) newRepository(ctx context.Context, co InitCommand) (*repository.Repository, error) {
@@ -81,8 +101,13 @@ func (i *Init) newRepository(ctx context.Context, co InitCommand) (*repository.R
 	return repository.NewRepository(co.RepositoryPath, conf)
 }
 
-func NewInit(folderRepo FolderRepository, asymmetricRepo AsymmetricKeyPairRepository, symmetricRepo SymmetricKeyRepository) *Init {
-	return &Init{folderRepo: folderRepo, keys: newKeyring(folderRepo, asymmetricRepo, symmetricRepo)}
+func NewInit(
+	folderRepo FolderRepository,
+	asymmetricRepo AsymmetricKeyPairRepository,
+	symmetricRepo SymmetricKeyRepository,
+	locker *RepositoryLocker,
+) *Init {
+	return &Init{folderRepo: folderRepo, keys: newKeyring(folderRepo, asymmetricRepo, symmetricRepo), locker: locker}
 }
 
 type InitEvent struct {

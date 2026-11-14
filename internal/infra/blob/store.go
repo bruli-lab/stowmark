@@ -17,5 +17,6 @@ type Store interface {
 	Get(ctx context.Context, key string) (io.ReadCloser, error)
 	Exists(ctx context.Context, key string) (bool, error)
 	List(ctx context.Context, prefix string) ([]string, error)
+	Delete(ctx context.Context, key string) error
 	DeletePrefix(ctx context.Context, prefix string) error
 }

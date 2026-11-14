@@ -286,7 +286,7 @@ func TestRekeyKey_Handle(t *testing.T) {
 				return tt.abortErr
 			}
 
-			handler := app.NewRekeyKey(folderRepo, objectRepo, asymmetricRepo, symmetricRepo)
+			handler := app.NewRekeyKey(folderRepo, objectRepo, asymmetricRepo, symmetricRepo, newUnlockedLocker())
 			events, err := handler.Handle(t.Context(), app.RekeyKeyCommand{
 				RepositoryPath: tt.args.repositoryPath,
 				PrivateKeyPath: tt.args.privateKeyPath,

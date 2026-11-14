@@ -69,7 +69,11 @@ func newInitCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			ch := multiMdw(app.NewInit(repoHand.FolderRepository(), disk.NewAsymmetricKeyPairRepository(), encrypt.NewSymmetricRepository()))
+			locker, err := newRepositoryLocker(repoHand)
+			if err != nil {
+				return err
+			}
+			ch := multiMdw(app.NewInit(repoHand.FolderRepository(), disk.NewAsymmetricKeyPairRepository(), encrypt.NewSymmetricRepository(), locker))
 
 			events, err := ch.Handle(cmd.Context(), app.InitCommand{
 				RepositoryPath: repoHand.RepositoryPath(),

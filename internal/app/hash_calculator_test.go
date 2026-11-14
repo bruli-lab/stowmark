@@ -103,7 +103,7 @@ func TestCreateSnapshot_Handle_HashCalculation(t *testing.T) {
 				GetConfigFunc: func(context.Context, string) (*repository.Config, error) { return &config, nil },
 			}
 
-			handler := app.NewCreateSnapshot(sourceRepo, manifestRepo, objectRepo, folderRepo, nil, nil)
+			handler := app.NewCreateSnapshot(sourceRepo, manifestRepo, objectRepo, folderRepo, nil, nil, newUnlockedLocker())
 			_, err := createSnapshot(t.Context(), handler, createCommand)
 			if tt.expectedErr != nil {
 				require.ErrorIs(t, err, tt.expectedErr)

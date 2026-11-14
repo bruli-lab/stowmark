@@ -99,6 +99,21 @@ func (m *MemoryStore) List(ctx context.Context, prefix string) ([]string, error)
 	return keys, nil
 }
 
+func (m *MemoryStore) Delete(ctx context.Context, key string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := blob.ValidateKey(key); err != nil {
+		return err
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.blobs, key)
+
+	return nil
+}
+
 func (m *MemoryStore) DeletePrefix(ctx context.Context, prefix string) error {
 	if err := ctx.Err(); err != nil {
 		return err

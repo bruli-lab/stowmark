@@ -7,9 +7,10 @@ import (
 
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
+	"github.com/google/uuid"
 )
 
-//go:generate go tool moq -out repositories_mock.go . FolderRepository SourceRepository ManifestRepository ObjectRepository AsymmetricKeyPairRepository SymmetricKeyRepository
+//go:generate go tool moq -out repositories_mock.go . FolderRepository SourceRepository ManifestRepository ObjectRepository AsymmetricKeyPairRepository SymmetricKeyRepository LockRepository
 type FolderRepository interface {
 	Exists(ctx context.Context, path string) (bool, error)
 	CreateFolder(ctx context.Context, path string) error
@@ -54,4 +55,10 @@ type SymmetricKeyRepository interface {
 	GenerateSymmetricKey(ctx context.Context) ([]byte, error)
 	EncryptSymmetricKey(ctx context.Context, publicKey *rsa.PublicKey, symmetricKey []byte) ([]byte, error)
 	DecodeAndDecryptSymmetricKey(ctx context.Context, privateKey *rsa.PrivateKey, encodedKey string) ([]byte, error)
+}
+
+type LockRepository interface {
+	Save(ctx context.Context, lock *repository.Lock) error
+	List(ctx context.Context) ([]repository.Lock, error)
+	Delete(ctx context.Context, lockID uuid.UUID) error
 }

@@ -93,7 +93,7 @@ func TestRestoreFile_Restore(t *testing.T) {
 			asymmetricRepo.ReadRSAPrivateKeyFunc = func(_ context.Context, _ string) (*rsa.PrivateKey, error) {
 				return tt.privateKey, nil
 			}
-			handler := app.NewRestoreFile(manifestRepo, objectRepo, folderRepo, asymmetricRepo, symmetricRepo)
+			handler := app.NewRestoreFile(manifestRepo, objectRepo, folderRepo, asymmetricRepo, symmetricRepo, newUnlockedLocker())
 			snapshotID := uuid.NewString()
 			events, err := handler.Handle(t.Context(), app.RestoreFileCommand{
 				SnapshotID:      snapshotID,

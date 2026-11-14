@@ -9,6 +9,7 @@ const (
 	ObjectsFolder   = "objects"
 	SnapshotsFolder = "snapshots"
 	EncryptedFolder = "encrypted"
+	LocksFolder     = "locks"
 )
 
 var (

@@ -1,3 +1,4 @@
+//nolint:dupl // CQS command handlers intentionally share the same adapter structure.
 package app
 
 import (
@@ -8,6 +9,7 @@ import (
 
 	"github.com/bruli-lab/go-core/cqs"
 	"github.com/bruli-lab/go-core/event"
+	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -31,6 +33,7 @@ type RekeyKey struct {
 	folderRepo FolderRepository
 	objectRepo ObjectRepository
 	keys       keyring
+	locker     *RepositoryLocker
 }
 
 func (r *RekeyKey) Handle(ctx context.Context, cmd cqs.Command) ([]event.Event, error) {
@@ -38,7 +41,9 @@ func (r *RekeyKey) Handle(ctx context.Context, cmd cqs.Command) ([]event.Event, 
 	if !ok {
 		return nil, cqs.NewInvalidCommandError(RekeyKeyCommandName, cmd.Name())
 	}
-	return nil, r.rekey(ctx, co)
+	return nil, r.locker.WithLock(ctx, repository.ExclusiveLock, func(ctx context.Context) error {
+		return r.rekey(ctx, co)
+	})
 }
 
 func (r *RekeyKey) rekey(ctx context.Context, co RekeyKeyCommand) (resultErr error) {
@@ -157,10 +162,12 @@ func NewRekeyKey(
 	objectRepo ObjectRepository,
 	asymmetricRepo AsymmetricKeyPairRepository,
 	symmetricRepo SymmetricKeyRepository,
+	locker *RepositoryLocker,
 ) *RekeyKey {
 	return &RekeyKey{
 		folderRepo: folderRepo,
 		objectRepo: objectRepo,
 		keys:       newKeyring(folderRepo, asymmetricRepo, symmetricRepo),
+		locker:     locker,
 	}
 }

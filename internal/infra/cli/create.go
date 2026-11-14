@@ -59,6 +59,10 @@ func newSnapshotCreateCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			locker, err := newRepositoryLocker(repoHand)
+			if err != nil {
+				return err
+			}
 			handler := multiMdw(app.NewCreateSnapshot(
 				sourceRepo,
 				manifestRepo,
@@ -66,6 +70,7 @@ func newSnapshotCreateCommand() *cobra.Command {
 				repoHand.FolderRepository(),
 				disk.NewAsymmetricKeyPairRepository(),
 				encrypt.NewSymmetricRepository(),
+				locker,
 			))
 
 			var privateKey *string

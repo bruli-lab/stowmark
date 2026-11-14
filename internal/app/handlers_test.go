@@ -30,13 +30,13 @@ func TestCommandHandlers_InvalidCommand(t *testing.T) {
 	t.Parallel()
 
 	handlers := map[string]cqs.CommandHandler{
-		app.CreateSnapshotCommandName:  app.NewCreateSnapshot(nil, nil, nil, nil, nil, nil),
-		app.InitCommandName:            app.NewInit(nil, nil, nil),
+		app.CreateSnapshotCommandName:  app.NewCreateSnapshot(nil, nil, nil, nil, nil, nil, nil),
+		app.InitCommandName:            app.NewInit(nil, nil, nil, nil),
 		app.GenerateKeyCommandName:     app.NewGenerateKey(nil),
-		app.RekeyKeyCommandName:        app.NewRekeyKey(nil, nil, nil, nil),
-		app.RestoreFileCommandName:     app.NewRestoreFile(nil, nil, nil, nil, nil),
-		app.RestoreSnapshotCommandName: app.NewRestoreSnapshot(nil, nil, nil, nil, nil),
-		app.RewrapKeyCommandName:       app.NewRewrapKey(nil, nil, nil),
+		app.RekeyKeyCommandName:        app.NewRekeyKey(nil, nil, nil, nil, nil),
+		app.RestoreFileCommandName:     app.NewRestoreFile(nil, nil, nil, nil, nil, nil),
+		app.RestoreSnapshotCommandName: app.NewRestoreSnapshot(nil, nil, nil, nil, nil, nil),
+		app.RewrapKeyCommandName:       app.NewRewrapKey(nil, nil, nil, nil),
 	}
 
 	for name, handler := range handlers {
@@ -59,7 +59,7 @@ func TestQueryHandlers_InvalidQuery(t *testing.T) {
 	handlers := map[string]cqs.QueryHandler{
 		app.ListQueryName:           app.NewSnapshotList(nil),
 		app.SnapshotGetQueryName:    app.NewManifestGet(nil),
-		app.VerifySnapshotQueryName: app.NewVerifySnapshot(nil, nil, nil, nil, nil),
+		app.VerifySnapshotQueryName: app.NewVerifySnapshot(nil, nil, nil, nil, nil, nil),
 	}
 
 	for name, handler := range handlers {
@@ -222,7 +222,7 @@ func TestRestoreSnapshot_Handle(t *testing.T) {
 
 			manifestRepo := &app.ManifestRepositoryMock{GetFunc: tt.getManifest}
 			objectRepo := &app.ObjectRepositoryMock{RestoreObjectFunc: tt.restoreObject}
-			handler := app.NewRestoreSnapshot(manifestRepo, objectRepo, nil, nil, nil)
+			handler := app.NewRestoreSnapshot(manifestRepo, objectRepo, nil, nil, nil, newUnlockedLocker())
 
 			events, err := handler.Handle(context.Background(), app.RestoreSnapshotCommand{SnapshotID: "20261113T222314Z-abcdef01"})
 

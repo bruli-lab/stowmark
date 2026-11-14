@@ -141,6 +141,22 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) blob.Store) {
 		require.NoError(t, store.DeletePrefix(context.Background(), "objects/encrypted/7"))
 	})
 
+	t.Run(`Given a store with blobs,
+	when Delete is called with a key,
+	then it removes only that blob and deleting it again does not fail`, func(t *testing.T) {
+		store := newStore(t)
+		putString(t, store, "locks/one.json", "one")
+		putString(t, store, "locks/two.json", "two")
+
+		require.NoError(t, store.Delete(context.Background(), "locks/one.json"))
+		require.NoError(t, store.Delete(context.Background(), "locks/one.json"))
+		require.NoError(t, store.Delete(context.Background(), "locks/missing.json"))
+
+		keys, err := store.List(context.Background(), "locks")
+		require.NoError(t, err)
+		require.Equal(t, []string{"locks/two.json"}, keys)
+	})
+
 	t.Run(`Given a store,
 	when it is used with keys that escape the repository or name temporary files,
 	then it returns an invalid key error`, func(t *testing.T) {
@@ -151,6 +167,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) blob.Store) {
 			require.ErrorIs(t, err, blob.ErrInvalidKey, key)
 			_, err = store.Get(context.Background(), key)
 			require.ErrorIs(t, err, blob.ErrInvalidKey, key)
+			require.ErrorIs(t, store.Delete(context.Background(), key), blob.ErrInvalidKey, key)
 		}
 	})
 

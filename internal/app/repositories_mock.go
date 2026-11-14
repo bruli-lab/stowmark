@@ -8,6 +8,7 @@ import (
 	"crypto/rsa"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
+	"github.com/google/uuid"
 	"io"
 	"sync"
 )
@@ -1709,5 +1710,171 @@ func (mock *SymmetricKeyRepositoryMock) GenerateSymmetricKeyCalls() []struct {
 	mock.lockGenerateSymmetricKey.RLock()
 	calls = mock.calls.GenerateSymmetricKey
 	mock.lockGenerateSymmetricKey.RUnlock()
+	return calls
+}
+
+// Ensure, that LockRepositoryMock does implement LockRepository.
+// If this is not the case, regenerate this file with moq.
+var _ LockRepository = &LockRepositoryMock{}
+
+// LockRepositoryMock is a mock implementation of LockRepository.
+//
+//	func TestSomethingThatUsesLockRepository(t *testing.T) {
+//
+//		// make and configure a mocked LockRepository
+//		mockedLockRepository := &LockRepositoryMock{
+//			DeleteFunc: func(ctx context.Context, lockID uuid.UUID) error {
+//				panic("mock out the Delete method")
+//			},
+//			ListFunc: func(ctx context.Context) ([]repository.Lock, error) {
+//				panic("mock out the List method")
+//			},
+//			SaveFunc: func(ctx context.Context, lock *repository.Lock) error {
+//				panic("mock out the Save method")
+//			},
+//		}
+//
+//		// use mockedLockRepository in code that requires LockRepository
+//		// and then make assertions.
+//
+//	}
+type LockRepositoryMock struct {
+	// DeleteFunc mocks the Delete method.
+	DeleteFunc func(ctx context.Context, lockID uuid.UUID) error
+
+	// ListFunc mocks the List method.
+	ListFunc func(ctx context.Context) ([]repository.Lock, error)
+
+	// SaveFunc mocks the Save method.
+	SaveFunc func(ctx context.Context, lock *repository.Lock) error
+
+	// calls tracks calls to the methods.
+	calls struct {
+		// Delete holds details about calls to the Delete method.
+		Delete []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// LockID is the lockID argument value.
+			LockID uuid.UUID
+		}
+		// List holds details about calls to the List method.
+		List []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+		}
+		// Save holds details about calls to the Save method.
+		Save []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Lock is the lock argument value.
+			Lock *repository.Lock
+		}
+	}
+	lockDelete sync.RWMutex
+	lockList   sync.RWMutex
+	lockSave   sync.RWMutex
+}
+
+// Delete calls DeleteFunc.
+func (mock *LockRepositoryMock) Delete(ctx context.Context, lockID uuid.UUID) error {
+	if mock.DeleteFunc == nil {
+		panic("LockRepositoryMock.DeleteFunc: method is nil but LockRepository.Delete was just called")
+	}
+	callInfo := struct {
+		Ctx    context.Context
+		LockID uuid.UUID
+	}{
+		Ctx:    ctx,
+		LockID: lockID,
+	}
+	mock.lockDelete.Lock()
+	mock.calls.Delete = append(mock.calls.Delete, callInfo)
+	mock.lockDelete.Unlock()
+	return mock.DeleteFunc(ctx, lockID)
+}
+
+// DeleteCalls gets all the calls that were made to Delete.
+// Check the length with:
+//
+//	len(mockedLockRepository.DeleteCalls())
+func (mock *LockRepositoryMock) DeleteCalls() []struct {
+	Ctx    context.Context
+	LockID uuid.UUID
+} {
+	var calls []struct {
+		Ctx    context.Context
+		LockID uuid.UUID
+	}
+	mock.lockDelete.RLock()
+	calls = mock.calls.Delete
+	mock.lockDelete.RUnlock()
+	return calls
+}
+
+// List calls ListFunc.
+func (mock *LockRepositoryMock) List(ctx context.Context) ([]repository.Lock, error) {
+	if mock.ListFunc == nil {
+		panic("LockRepositoryMock.ListFunc: method is nil but LockRepository.List was just called")
+	}
+	callInfo := struct {
+		Ctx context.Context
+	}{
+		Ctx: ctx,
+	}
+	mock.lockList.Lock()
+	mock.calls.List = append(mock.calls.List, callInfo)
+	mock.lockList.Unlock()
+	return mock.ListFunc(ctx)
+}
+
+// ListCalls gets all the calls that were made to List.
+// Check the length with:
+//
+//	len(mockedLockRepository.ListCalls())
+func (mock *LockRepositoryMock) ListCalls() []struct {
+	Ctx context.Context
+} {
+	var calls []struct {
+		Ctx context.Context
+	}
+	mock.lockList.RLock()
+	calls = mock.calls.List
+	mock.lockList.RUnlock()
+	return calls
+}
+
+// Save calls SaveFunc.
+func (mock *LockRepositoryMock) Save(ctx context.Context, lock *repository.Lock) error {
+	if mock.SaveFunc == nil {
+		panic("LockRepositoryMock.SaveFunc: method is nil but LockRepository.Save was just called")
+	}
+	callInfo := struct {
+		Ctx  context.Context
+		Lock *repository.Lock
+	}{
+		Ctx:  ctx,
+		Lock: lock,
+	}
+	mock.lockSave.Lock()
+	mock.calls.Save = append(mock.calls.Save, callInfo)
+	mock.lockSave.Unlock()
+	return mock.SaveFunc(ctx, lock)
+}
+
+// SaveCalls gets all the calls that were made to Save.
+// Check the length with:
+//
+//	len(mockedLockRepository.SaveCalls())
+func (mock *LockRepositoryMock) SaveCalls() []struct {
+	Ctx  context.Context
+	Lock *repository.Lock
+} {
+	var calls []struct {
+		Ctx  context.Context
+		Lock *repository.Lock
+	}
+	mock.lockSave.RLock()
+	calls = mock.calls.Save
+	mock.lockSave.RUnlock()
 	return calls
 }

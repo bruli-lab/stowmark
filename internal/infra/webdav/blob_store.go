@@ -169,6 +169,19 @@ func (s *BlobStore) walk(ctx context.Context, directory, keyPrefix string, keys 
 	return nil
 }
 
+func (s *BlobStore) Delete(ctx context.Context, key string) error {
+	blobPath, err := s.path(ctx, key)
+	if err != nil {
+		return err
+	}
+
+	if err := s.client.Remove(blobPath); err != nil && !gowebdav.IsErrNotFound(err) {
+		return fmt.Errorf("delete WebDAV file %q: %w", blobPath, err)
+	}
+
+	return nil
+}
+
 func (s *BlobStore) DeletePrefix(ctx context.Context, prefix string) error {
 	prefixPath, err := s.path(ctx, prefix)
 	if err != nil {
