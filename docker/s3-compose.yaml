@@ -1,3 +1,5 @@
+name: stowmark-s3
+
 services:
   s3-server:
       image: motoserver/moto:5.2.2

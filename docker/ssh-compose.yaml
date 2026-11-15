@@ -1,6 +1,8 @@
+name: stowmark-ssh
+
 services:
   ssh-server:
-    image: lscr.io/linuxserver/openssh-server:latest
+    image: lscr.io/linuxserver/openssh-server:10.3_p1-r2-ls243
     container_name: stowmark-ssh-test
     hostname: stowmark-ssh-test
 

@@ -1,3 +1,5 @@
+name: stowmark-otlp
+
 services:
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.135.0

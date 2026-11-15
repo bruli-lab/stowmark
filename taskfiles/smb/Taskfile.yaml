@@ -13,6 +13,12 @@ tasks:
       - mkdir -p "{{.SMB_DATA_DIR}}"
       - docker compose -f "{{.COMPOSE_FILE}}" up -d "{{.SMB_SERVICE}}"
       - docker compose -f "{{.COMPOSE_FILE}}" exec -T "{{.SMB_SERVICE}}" chown 1000:1000 "{{.SMB_SHARE_PATH}}"
+      - |
+        echo "Waiting for the SMB server..."
+        until docker compose -f "{{.COMPOSE_FILE}}" exec -T "{{.SMB_SERVICE}}" sh -c 'grep -qE ":01BD [0-9A-F:]+ 0A" /proc/net/tcp /proc/net/tcp6'; do
+          sleep 1
+        done
+        echo "SMB server is ready"
 
   down:
     desc: Stop and remove only the SMB server

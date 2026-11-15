@@ -1,6 +1,8 @@
+name: stowmark-smb
+
 services:
   smb-server:
-      image: ghcr.io/servercontainers/samba:smbd-only-latest
+      image: ghcr.io/servercontainers/samba:smbd-only-a3.24.4-s4.23.8-r0
       hostname: stowmark-smb-test
       environment:
         ACCOUNT_stowmark: stowmark

@@ -31,7 +31,7 @@ func startSSHContainer(t *testing.T, ctx context.Context, publicKey []byte) test
 		ctx,
 		testcontainers.GenericContainerRequest{
 			ContainerRequest: testcontainers.ContainerRequest{
-				Image: "lscr.io/linuxserver/openssh-server:latest",
+				Image: "lscr.io/linuxserver/openssh-server:10.3_p1-r2-ls243",
 
 				ExposedPorts: []string{
 					"2222/tcp",

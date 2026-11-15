@@ -101,8 +101,7 @@ func (r *RetainedError) Until() time.Time {
 }
 
 func RetainedUntil(err error) (time.Time, bool) {
-	var retained *RetainedError
-	if errors.As(err, &retained) {
+	if retained, ok := errors.AsType[*RetainedError](err); ok {
 		return retained.until, true
 	}
 	return time.Time{}, errors.Is(err, ErrRetained)

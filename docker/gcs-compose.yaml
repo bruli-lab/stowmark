@@ -1,3 +1,5 @@
+name: stowmark-gcs
+
 services:
   gcs-server:
     image: fsouza/fake-gcs-server:1.55.1

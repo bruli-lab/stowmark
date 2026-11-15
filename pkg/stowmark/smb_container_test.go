@@ -31,7 +31,7 @@ func startSMBContainer(
 		ctx,
 		testcontainers.GenericContainerRequest{
 			ContainerRequest: testcontainers.ContainerRequest{
-				Image: "ghcr.io/servercontainers/samba:smbd-only-latest",
+				Image: "ghcr.io/servercontainers/samba:smbd-only-a3.24.4-s4.23.8-r0",
 
 				ExposedPorts: []string{
 					"445/tcp",
