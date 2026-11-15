@@ -11,7 +11,9 @@ import (
 
 func TestSMBRepositoryFlow(t *testing.T) {
 	for k, version := range Versions() {
-		t.Run(`Running SMB workflow, with format version `+k, func(t *testing.T) {
+		t.Run(`Given an SMB repository with format version `+k+`,
+		when the whole workflow runs,
+		then every step succeeds`, func(t *testing.T) {
 			ctx := context.Background()
 
 			container := startSMBContainer(t, ctx)

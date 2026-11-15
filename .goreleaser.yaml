@@ -7,6 +7,9 @@ builds:
     main: ./cmd/cli
     binary: stowmark
 
+    ldflags:
+      - -s -w -X github.com/bruli-lab/stowmark/internal/infra/cli.version={{ .Version }}
+
     env:
       - CGO_ENABLED=0
 
@@ -20,6 +23,9 @@ builds:
   - id: stowmark_cli_windows
     main: ./cmd/cli
     binary: stowmark
+
+    ldflags:
+      - -s -w -X github.com/bruli-lab/stowmark/internal/infra/cli.version={{ .Version }}
 
     env:
       - CGO_ENABLED=0
@@ -64,6 +70,24 @@ nfpms:
 
 checksum:
   name_template: checksums.txt
+
+sboms:
+  - id: archives
+    artifacts: archive
+
+  - id: packages
+    artifacts: package
+
+signs:
+  - id: checksums
+    cmd: cosign
+    artifacts: checksum
+    signature: "${artifact}.sigstore.json"
+    args:
+      - sign-blob
+      - --bundle=${signature}
+      - ${artifact}
+      - --yes
 
 snapshot:
   version_template: "{{ incpatch .Version }}-devel"

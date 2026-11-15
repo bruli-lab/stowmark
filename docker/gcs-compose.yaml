@@ -1,7 +1,10 @@
+name: stowmark-gcs
+
 services:
   gcs-server:
     image: fsouza/fake-gcs-server:1.55.1
     container_name: stowmark-gcs-test
+    user: "1000:1000"
     command:
       - -scheme
       - http

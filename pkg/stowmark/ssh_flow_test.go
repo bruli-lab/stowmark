@@ -10,7 +10,9 @@ import (
 
 func TestSSHRepositoryFlow(t *testing.T) {
 	for k, version := range Versions() {
-		t.Run(`Running SSH workflow, with format version`+k, func(t *testing.T) {
+		t.Run(`Given an SSH repository with format version `+k+`,
+		when the whole workflow runs,
+		then every step succeeds`, func(t *testing.T) {
 			ctx := t.Context()
 
 			keyPair := createSSHKeyPair(t)

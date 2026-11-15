@@ -8,9 +8,12 @@ type WebdavConfig struct {
 }
 
 func NewWebdavConfig() (*WebdavConfig, error) {
-	var cfg WebdavConfig
+	return NewWebdavConfigFrom(nil)
+}
 
-	if err := env.ParseWithOptions(&cfg, env.Options{Prefix: EnvPrefix}); err != nil {
+func NewWebdavConfigFrom(environment map[string]string) (*WebdavConfig, error) {
+	var cfg WebdavConfig
+	if err := env.ParseWithOptions(&cfg, env.Options{Prefix: EnvPrefix, Environment: environment}); err != nil {
 		return nil, err
 	}
 	return &cfg, nil

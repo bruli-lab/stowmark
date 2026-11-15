@@ -14,7 +14,7 @@ func NewLoggerCommandMiddleware(logger *slog.Logger) cqs.CommandHandlerMiddlewar
 		return cqs.CommandHandlerFunc(func(ctx context.Context, cmd cqs.Command) ([]event.Event, error) {
 			startedAt := time.Now()
 
-			logger.DebugContext(ctx, "com	mand started", slog.String("command", cmd.Name()))
+			logger.DebugContext(ctx, "command started", slog.String("command", cmd.Name()))
 
 			events, err := next.Handle(ctx, cmd)
 

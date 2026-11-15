@@ -2,55 +2,73 @@ package stowmark
 
 import (
 	"context"
+	"errors"
 
-	"github.com/bruli-lab/stowmark/internal/domain/encryption"
-	"github.com/bruli-lab/stowmark/internal/domain/repository"
-	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
-	"github.com/bruli-lab/stowmark/internal/infra/disk"
-	"github.com/bruli-lab/stowmark/internal/infra/encrypt"
-	"github.com/bruli-lab/stowmark/internal/infra/repositories"
+	"github.com/bruli-lab/stowmark/internal/app"
+	"github.com/bruli-lab/stowmark/internal/bootstrap"
+	"github.com/bruli-lab/stowmark/internal/config"
 )
 
+var ErrPrivateKeyRequired = app.ErrPrivateKeyRequired
+
 type Handler struct {
-	folderRepository           repository.FolderRepository
-	sourceRepository           snapshot.SourceRepository
-	manifestRepository         snapshot.ManifestRepository
-	objectRepository           snapshot.ObjectRepository
-	repositoryPath             string
-	repositoriesHandler        repositories.Repositories
-	asymmetricKeyPaiRepository encryption.AsymmetricKeyPairRepository
-	symmetricKeyRepository     encryption.SymmetricKeyRepository
+	runtime    *bootstrap.Runtime
+	repository *bootstrap.Repository
+	privateKey *string
+	progress   app.Progress
+}
+
+type Option func(*Handler)
+
+type (
+	Progress      = app.Progress
+	ProgressStage = app.ProgressStage
+)
+
+const (
+	ProgressBackingUp   = app.ProgressBackingUp
+	ProgressRestoring   = app.ProgressRestoring
+	ProgressVerifying   = app.ProgressVerifying
+	ProgressReadingData = app.ProgressReadingData
+	ProgressRekeying    = app.ProgressRekeying
+	ProgressRetaining   = app.ProgressRetaining
+)
+
+func WithProgress(progress Progress) Option {
+	return func(h *Handler) {
+		h.progress = progress
+	}
+}
+
+func WithPrivateKey(path string) Option {
+	return func(h *Handler) {
+		h.privateKey = &path
+	}
 }
 
 func (h *Handler) Close() error {
-	return h.repositoriesHandler.Close()
+	return errors.Join(h.repository.Close(), h.runtime.Close(context.Background()))
 }
 
-func NewHandler(ctx context.Context, repositoryPath string) (*Handler, error) {
-	repoHandler, err := repositories.NewHandler(ctx, repositoryPath)
-	if err != nil {
-		return nil, err
+func (h *Handler) key(explicit *string) *string {
+	if explicit != nil {
+		return explicit
 	}
+	return h.privateKey
+}
 
-	folderRepo := repoHandler.FolderRepository()
-	sourceRepo := disk.NewSourceRepository()
-	manifestRepo, err := repoHandler.ManifestRepository()
+func NewHandler(ctx context.Context, repositoryPath string, options ...Option) (*Handler, error) {
+	runtime, err := bootstrap.NewRuntime(ctx, config.ProcessEnvironment())
 	if err != nil {
 		return nil, err
 	}
-	objectRepo, err := repoHandler.ObjectRepository()
+	repo, err := runtime.OpenRepository(ctx, repositoryPath)
 	if err != nil {
-		return nil, err
+		return nil, errors.Join(err, runtime.Close(ctx))
 	}
-
-	return &Handler{
-		folderRepository:           folderRepo,
-		sourceRepository:           sourceRepo,
-		manifestRepository:         manifestRepo,
-		objectRepository:           objectRepo,
-		repositoryPath:             repoHandler.RepositoryPath(),
-		repositoriesHandler:        repoHandler,
-		asymmetricKeyPaiRepository: disk.NewAsymmetricKeyPairRepository(),
-		symmetricKeyRepository:     encrypt.NewSymmetricRepository(),
-	}, nil
+	handler := &Handler{runtime: runtime, repository: repo}
+	for _, option := range options {
+		option(handler)
+	}
+	return handler, nil
 }

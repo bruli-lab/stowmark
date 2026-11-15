@@ -2,14 +2,11 @@ package stowmark
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/bruli-lab/stowmark/internal/app"
-	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
-	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
-	"github.com/google/uuid"
 )
 
 type Compression struct {
@@ -17,8 +14,40 @@ type Compression struct {
 	Level *int
 }
 
+type ObjectLockMode = repository.ObjectLockMode
+
+const (
+	GovernanceObjectLock = repository.GovernanceObjectLock
+	ComplianceObjectLock = repository.ComplianceObjectLock
+)
+
+var (
+	ErrObjectLockUnsupported = repository.ErrObjectLockUnsupported
+	ErrObjectLockDisabled    = repository.ErrObjectLockDisabled
+)
+
+type ObjectLock struct {
+	Mode   ObjectLockMode
+	Period time.Duration
+}
+
+type InitOptions struct {
+	Compression   *Compression
+	FormatVersion int
+	PublicKey     *string
+	ObjectLock    *ObjectLock
+	Force         bool
+}
+
 func (h *Handler) Init(ctx context.Context, comp *Compression, formatVersion int, publicKey *string, force bool) error {
-	svc := repository.NewInit(h.folderRepository)
+	return h.InitWithOptions(ctx, InitOptions{Compression: comp, FormatVersion: formatVersion, PublicKey: publicKey, Force: force})
+}
+
+func (h *Handler) InitWithOptions(ctx context.Context, options InitOptions) error {
+	comp := options.Compression
+	if comp == nil {
+		comp = &Compression{Type: repository.NoneCompressionType.String()}
+	}
 	compType, err := repository.ParseCompressionType(comp.Type)
 	if err != nil {
 		return err
@@ -27,49 +56,43 @@ func (h *Handler) Init(ctx context.Context, comp *Compression, formatVersion int
 	if err != nil {
 		return err
 	}
-	var encryptionConfig *encryption.EncryptionConfig
-	if publicKey != nil {
-		encryptionConfigSvc := encryption.NewCreateEncryptionConfig(h.asymmetricKeyPaiRepository, h.symmetricKeyRepository)
-		encryptionConfig, err = encryptionConfigSvc.Create(ctx, *publicKey)
-		if err != nil {
-			return err
-		}
+	version, err := repository.ParseFormatVersionOrDefault(options.FormatVersion)
+	if err != nil {
+		return err
 	}
-	conf := repository.NewConfig(uuid.New(), repository.ParseFormatVersion(formatVersion), compre, encryptionConfig)
-	repo, err := repository.NewRepository(h.repositoryPath, conf)
+	lock, err := options.ObjectLock.build()
 	if err != nil {
 		return err
 	}
 
-	obsv, err := builtObservability(ctx)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		_ = obsv.Shutdown(ctx)
-	}()
-	evtr := app.NewEventsTracing()
-	mdw, err := middlewares.BuildCommandMiddlewares(obsv, evtr)
-	if err != nil {
-		return err
-	}
-	handler := mdw(app.NewInit(svc))
-	events, err := handler.Handle(ctx, app.InitCommand{
-		Repository: repo,
-		Force:      force,
+	events, err := h.repository.Init().Handle(ctx, app.InitCommand{
+		RepositoryPath: h.repository.Path(),
+		Compression:    compre,
+		FormatVersion:  version,
+		PublicKeyPath:  options.PublicKey,
+		ObjectLock:     lock,
+		Force:          options.Force,
 	})
-	if len(events) != 1 {
-		return fmt.Errorf("unexpected number of init events: %d", len(events))
-	}
-	result, ok := events[0].(*app.InitEvent)
-	if !ok {
-		return fmt.Errorf("unexpected event type: %T", events[0])
-	}
 	if err != nil {
 		return err
 	}
-	for _, warning := range result.Warnings {
+	result, err := app.SingleEvent[*repository.RepositoryInitialized](events)
+	if err != nil {
+		return err
+	}
+	for _, warning := range result.Warnings() {
 		slog.Warn(warning)
 	}
 	return nil
+}
+
+func (o *ObjectLock) build() (*repository.ObjectLock, error) {
+	if o == nil {
+		return nil, nil
+	}
+	mode := o.Mode
+	if mode == "" {
+		mode = GovernanceObjectLock
+	}
+	return repository.NewObjectLock(mode, o.Period)
 }

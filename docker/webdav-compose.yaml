@@ -1,6 +1,9 @@
+name: stowmark-webdav
+
 services:
   webdav-server:
-    image: ghcr.io/hacdias/webdav:latest
+    image: ghcr.io/hacdias/webdav:v5.17.3
+    user: "1000:1000"
     command:
       - --config
       - /config.yml

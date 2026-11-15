@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Stowmark command line reference: every command, option, repository URL and environment variable.">
+    <meta name="theme-color" content="#070B14">
+
+    <meta property="og:title" content="Stowmark documentation">
+    <meta property="og:description" content="Command line reference for Stowmark.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://stowmark.dev/docs.html">
+    <meta property="og:image" content="https://stowmark.dev/assets/brand-image.png">
+
+    <title>Stowmark — Documentation</title>
+
+    <link rel="icon" href="assets/favicon.png" type="image/png">
+    <link rel="stylesheet" href="styles.css">
+    <script src="app.js" defer></script>
+</head>
+<body>
+<header class="site-header">
+    <a class="brand" href="index.html" aria-label="Stowmark home">
+        <img src="assets/title.png" alt="" width="200" height="100">
+    </a>
+
+    <nav aria-label="Main navigation">
+        <a href="index.html#features">Features</a>
+        <a href="index.html#projects">Projects</a>
+        <a href="index.html#install">Install</a>
+        <a class="nav-docs" href="docs.html" aria-current="page">Docs</a>
+        <a href="https://github.com/bruli-lab/stowmark" rel="noreferrer">GitHub</a>
+    </nav>
+</header>
+
+<main class="section docs">
+    <aside class="docs-toc" aria-label="Documentation contents">
+        <p class="eyebrow">CONTENTS</p>
+        <ol>
+            <li><a href="#getting-started">Getting started</a></li>
+            <li><a href="#global-flags">Global flags</a></li>
+            <li><a href="#init">init</a></li>
+            <li>
+                <a href="#key">key</a>
+                <ol>
+                    <li><a href="#key-generate">generate</a></li>
+                    <li><a href="#key-rekey">rekey</a></li>
+                    <li><a href="#key-rewrap">rewrap</a></li>
+                </ol>
+            </li>
+            <li>
+                <a href="#snapshot">snapshot</a>
+                <ol>
+                    <li><a href="#snapshot-create">create</a></li>
+                    <li><a href="#snapshot-list">list</a></li>
+                    <li><a href="#snapshot-get">get</a></li>
+                    <li><a href="#snapshot-verify">verify</a></li>
+                    <li><a href="#snapshot-restore">restore</a></li>
+                </ol>
+            </li>
+            <li><a href="#check">check</a></li>
+            <li><a href="#forget">forget</a></li>
+            <li><a href="#prune">prune</a></li>
+            <li><a href="#retention-extend">retention extend</a></li>
+            <li><a href="#unlock">unlock</a></li>
+            <li><a href="#completion">completion</a></li>
+            <li><a href="#repositories">Repository URLs</a></li>
+            <li><a href="#environment">Environment variables</a></li>
+            <li><a href="#exclude-patterns">Exclude patterns</a></li>
+            <li><a href="#format-versions">Format versions</a></li>
+        </ol>
+    </aside>
+
+    <div class="docs-content">
+        <div class="section-heading">
+            <p class="eyebrow">DOCUMENTATION</p>
+            <h1 class="docs-title">Command reference</h1>
+            <p class="section-description">
+                Every Stowmark command and option. Run <code>stowmark &lt;command&gt; --help</code> to see the same
+                information from the binary you have installed.
+            </p>
+        </div>
+
+        <section class="docs-section" id="getting-started">
+            <h2>Getting started</h2>
+            <p>
+                A repository stores the configuration, one manifest per snapshot and the content-addressed objects.
+                Encryption is optional: create an RSA key pair, initialize the repository with the public key and pass
+                the private key to the commands that read or write data.
+            </p>
+            <div class="code-block">
+                <button type="button" class="copy-button" data-copy-target="docs-getting-started">Copy</button>
+                <pre><code id="docs-getting-started">stowmark key generate --folder ~/.stowmark/keys
+stowmark init --repo ~/backups/documents --version 3 --compression zstd \
+  --public-key ~/.stowmark/keys/stowmark-public.pem
+stowmark snapshot create ./documents --repo ~/backups/documents \
+  --private-key ~/.stowmark/keys/stowmark-private.pem
+stowmark snapshot list --repo ~/backups/documents \
+  --private-key ~/.stowmark/keys/stowmark-private.pem</code></pre>
+            </div>
+            <p>
+                Every command that reads or writes repository data takes a repository lock. Create, restore, verify
+                and check share it; init, rekey, rewrap, forget and prune need it exclusively.
+            </p>
+        </section>
+
+        <section class="docs-section" id="global-flags">
+            <h2>Global flags</h2>
+            <p>These flags are accepted by every command.</p>
+            <table class="docs-options">
+                <thead><tr><th>Flag</th><th>Description</th></tr></thead>
+                <tbody>
+                <tr><td><code>--json</code></td><td>Print the result as an indented JSON document on stdout. Logs, warnings and errors stay on stderr and are not JSON.</td></tr>
+                <tr><td><code>--no-progress</code></td><td>Do not show the progress bar. It is only shown when stderr is a terminal and <code>--json</code> is not set.</td></tr>
+                <tr><td><code>-v</code>, <code>--version</code></td><td>Print the Stowmark version.</td></tr>
+                <tr><td><code>-h</code>, <code>--help</code></td><td>Show the help of any command.</td></tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="docs-section" id="init">
+            <h2><code>stowmark init</code></h2>
+            <p>Initialize a new repository. The compression, the format version and the encryption are fixed at this point.</p>
+            <pre class="docs-usage"><code>stowmark init --repo &lt;url&gt; [flags]</code></pre>
+            <table class="docs-options">
+                <thead><tr><th>Flag</th><th>Description</th></tr></thead>
+                <tbody>
+                <tr><td><code>--repo</code></td><td>Repository path or URL. See <a href="#repositories">repository URLs</a>.</td></tr>
+                <tr><td><code>--compression</code></td><td><code>none</code> (default), <code>gzip</code>, <code>zstd</code>, <code>lz4</code> or <code>xz</code>.</td></tr>
+                <tr><td><code>--level</code></td><td>Compression level: gzip 1–9, zstd 1–22, lz4 0–9. Defaults to the algorithm default.</td></tr>
+                <tr><td><code>--public-key</code></td><td>Path to the RSA public key that protects the repository key. Without it the repository is not encrypted.</td></tr>
+                <tr><td><code>--version</code></td><td>Format version: <code>1</code>, <code>2</code> (default) or <code>3</code>. See <a href="#format-versions">format versions</a>.</td></tr>
+                <tr><td><code>--object-lock</code></td><td>Retain every object, manifest and the config for this period (for example <code>30d</code>, <code>2w</code> or <code>36h</code>) with S3 Object Lock or GCS object retention. The bucket must have it enabled, versioning and no default retention.</td></tr>
+                <tr><td><code>--object-lock-mode</code></td><td><code>governance</code> (default): users with <code>s3:BypassGovernanceRetention</code>, or GCS <code>overrideUnlockedRetention</code>, can still delete. <code>compliance</code>: nobody can delete until the retention ends.</td></tr>
+                <tr><td><code>--force</code></td><td>Reinitialize an existing repository.</td></tr>
+                </tbody>
+            </table>
+            <pre class="docs-example"><code>stowmark init --repo s3://backups/documents --version 3 --compression zstd --level 6 \
+  --public-key keys/stowmark-public.pem --object-lock 30d --object-lock-mode compliance</code></pre>
+        </section>
+
+        <section class="docs-section" id="key">
+            <h2><code>stowmark key</code></h2>
+            <p>
+                Manage the encryption keys. Objects are encrypted with a random symmetric key (AES-256-GCM), which is
+                stored in the config wrapped with your RSA public key (RSA-OAEP-SHA256).
+            </p>
+
+            <h3 id="key-generate"><code>key generate</code></h3>
+            <p>Create a new RSA key pair: <code>stowmark-public.pem</code> and <code>stowmark-private.pem</code>.</p>
+            <table class="docs-options">
+                <thead><tr><th>Flag</th><th>Description</th></tr></thead>
+                <tbody>
+                <tr><td><code>--folder</code></td><td>Folder where the key pair is written.</td></tr>
+                </tbody>
+            </table>
+            <pre class="docs-example"><code>stowmark key generate --folder keys</code></pre>
+
+            <h3 id="key-rekey"><code>key rekey</code></h3>
+            <p>
+                Rotate the symmetric key and re-encrypt every object with it, in a new key generation. Use it when the
+                symmetric key must be revoked. The old generation is removed at the end; if the command is interrupted,
+                <a href="#prune"><code>prune</code></a> removes what is left.
+            </p>
+            <table class="docs-options">
+                <thead><tr><th>Flag</th><th>Description</th></tr></thead>
+                <tbody>
+                <tr><td><code>--repo</code></td><td>Repository path or URL.</td></tr>
+                <tr><td><code>--private-key</code></td><td>Current private key, to unwrap the old symmetric key.</td></tr>
+                <tr><td><code>--public-key</code></td><td>Public key that protects the new symmetric key.</td></tr>
+                </tbody>
+            </table>
+            <pre class="docs-example"><code>stowmark key rekey --repo /srv/backups/stowmark \
+  --private-key keys/stowmark-private.pem --public-key keys/stowmark-public.pem</code></pre>
+
+            <h3 id="key-rewrap"><code>key rewrap</code></h3>
+            <p>
+                Replace the RSA key pair. The symmetric key and the objects do not change: only the wrapped key in the
+                config. Afterwards every command needs the new private key.
+            </p>
+            <table class="docs-options">
+                <thead><tr><th>Flag</th><th>Description</th></tr></thead>
+                <tbody>
+                <tr><td><code>--repo</code></td><td>Repository path or URL.</td></tr>
+                <tr><td><code>--old-private-key</code></td><td>Private key of the current pair.</td></tr>
+                <tr><td><code>--new-public-key</code></td><td>Public key of the new pair.</td></tr>
+                </tbody>
+            </table>
+            <pre class="docs-example"><code>stowmark key rewrap --repo /srv/backups/stowmark \
+  --old-private-key keys/stowmark-old-private.pem --new-public-key keys/stowmark-new-public.pem</code></pre>
+        </section>
+
+        <section class="docs-section" id="snapshot">
+            <h2><code>stowmark snapshot</code></h2>
+            <p>Create, inspect, verify and restore snapshots.</p>
+
+            <h3 id="snapshot-create"><code>snapshot create</code></h3>
+            <p>
+                Back up a directory. Unchanged files are not stored again, and files of 8 MiB or more are split into
+                4 MiB chunks. Files and directories that match a <code>.stowmarkignore</code> file or an
+                <code>--exclude</code> pattern are skipped (see <a href="#exclude-patterns">exclude patterns</a>).
+                Symlinks and special files that formats 1 and 2 cannot store are reported as a warning on stderr.
+            </p>
+            <pre class="docs-usage"><code>stowmark snapshot create &lt;source&gt; --repo &lt;url&gt; [flags]</code></pre>
+            <table class="docs-options">
+                <thead><tr><th>Flag</th><th>Description</th></tr></thead>
+                <tbody>
+                <tr><td><code>--repo</code></td><td>Repository path or URL.</td></tr>
+                <tr><td><code>--private-key</code></td><td>Private key of an encrypted repository, to unwrap the key that encrypts the new objects.</td></tr>
+                <tr><td><code>--exclude</code></td><td>Exclude files and directories that match this pattern. Repeatable; same syntax as <code>.stowmarkignore</code>. Applied after every ignore file, so it can override them.</td></tr>
+                <tr><td><code>--no-ignore-file</code></td><td>Do not read <code>.stowmarkignore</code> files; only <code>--exclude</code> patterns apply.</td></tr>
+                </tbody>
+            </table>
+            <pre class="docs-example"><code>stowmark snapshot create ~/projects --repo /srv/backups/stowmark \
+  --exclude 'node_modules/' --exclude '*.log' --private-key keys/stowmark-private.pem</code></pre>
+
+            <h3 id="snapshot-list"><code>snapshot list</code></h3>
+            <p>List the snapshots of the repository.</p>
+            <table class="docs-options">
+                <thead><tr><th>Flag</th><th>Description</th></tr></thead>
+                <tbody>
+                <tr><td><code>--repo</code></td><td>Repository path or URL.</td></tr>
+                <tr><td><code>--private-key</code></td><td>Required for an encrypted format 3 repository, whose manifests are encrypted.</td></tr>
+                </tbody>
+            </table>
+
+            <h3 id="snapshot-get"><code>snapshot get</code></h3>
+            <p>Show the manifest of a snapshot: its source and every file with its hash, size and chunks.</p>
+            <table class="docs-options">
+                <thead><tr><th>Flag</th><th>Description</th></tr></thead>
+                <tbody>
+                <tr><td><code>--id</code></td><td>Snapshot ID, for example <code>20260115T093000Z-1a2b3c4d</code>.</td></tr>
+                <tr><td><code>--repo</code></td><td>Repository path or URL.</td></tr>
+                <tr><td><code>--private-key</code></td><td>Required for an encrypted format 3 repository.</td></tr>
+                </tbody>
+            </table>
+
+            <h3 id="snapshot-verify"><code>snapshot verify</code></h3>
+            <p>Read every object of a snapshot and check its hash. On encrypted repositories this also authenticates the data.</p>
+            <table class="docs-options">
+                <thead><tr><th>Flag</th><th>Description</th></tr></thead>
+                <tbody>
+                <tr><td><code>--id</code></td><td>Snapshot ID.</td></tr>
+                <tr><td><code>--repo</code></td><td>Repository path or URL.</td></tr>
+                <tr><td><code>--private-key</code></td><td>Private key of an encrypted repository.</td></tr>
+                </tbody>
+            </table>
+
+            <h3 id="snapshot-restore"><code>snapshot restore</code></h3>
+            <p>
+                Restore a whole snapshot or a single file. Without <code>--destination</code>, files are restored to
+                their original paths inside the source directory of the snapshot. Each file is written to a temporary
+                file, verified and then renamed. Format 3 also restores directories, symlinks, permissions and
+                modification times.
+            </p>
+            <table class="docs-options">
+                <thead><tr><th>Flag</th><th>Description</th></tr></thead>
+                <tbody>
+                <tr><td><code>--id</code></td><td>Snapshot ID.</td></tr>
+                <tr><td><code>--repo</code></td><td>Repository path or URL.</td></tr>
+                <tr><td><code>--destination</code></td><td>Directory to restore into.</td></tr>
+                <tr><td><code>--file</code></td><td>Restore only this file, given by its path in the snapshot.</td></tr>
+                <tr><td><code>--private-key</code></td><td>Private key of an encrypted repository.</td></tr>
+                </tbody>
+            </table>
+            <pre class="docs-example"><code>stowmark snapshot restore --id &lt;snapshot-id&gt; --repo /srv/backups/stowmark \
+  --file reports/2026.pdf --destination /tmp/restore</code></pre>
+        </section>
+
+        <section class="docs-section" id="check">
+            <h2><code>stowmark check</code></h2>
+            <p>
+                Check the whole repository: every manifest can be read and every object it references exists. It
+                exits with an error if a manifest is corrupt or an object is missing or corrupt. Orphan objects, stale
+                locks, old key generations and items whose retention has ended are reported as warnings.
+            </p>
+            <table class="docs-options">
+                <thead><tr><th>Flag</th><th>Description</th></tr></thead>
+                <tbody>
+                <tr><td><code>--repo</code></td><td>Repository path or URL.</td></tr>
+                <tr><td><code>--read-data</code></td><td>Also download every referenced object once and verify its hash.</td></tr>
+                <tr><td><code>--read-data-subset</code></td><td>Verify only part of the objects: a random percentage (<code>10%</code>) or a stable part (<code>2/7</code>). Running parts 1/7 to 7/7 covers everything.</td></tr>
+                <tr><td><code>--private-key</code></td><td>Needed to read the data, or the format 3 manifests, of an encrypted repository.</td></tr>
+                </tbody>
+            </table>
+            <pre class="docs-example"><code>stowmark check --repo /srv/backups/stowmark --read-data-subset 10% \
+  --private-key keys/stowmark-private.pem</code></pre>
+        </section>
+
+        <section class="docs-section" id="forget">
+            <h2><code>stowmark forget</code></h2>
+            <p>
+                Apply a retention policy to the snapshots of each source and delete the manifests it does not keep.
+                Periods are counted in UTC; a snapshot kept by any rule is kept. Forgetting does not free space: run
+                <a href="#prune"><code>prune</code></a> afterwards or add <code>--prune</code>.
+            </p>
+            <table class="docs-options">
+                <thead><tr><th>Flag</th><th>Description</th></tr></thead>
+                <tbody>
+                <tr><td><code>--repo</code></td><td>Repository path or URL.</td></tr>
+                <tr><td><code>--keep-last</code></td><td>Keep the N most recent snapshots.</td></tr>
+                <tr><td><code>--keep-within</code></td><td>Keep every snapshot newer than this duration (<code>30d</code>, <code>2w</code>, <code>36h</code>).</td></tr>
+                <tr><td><code>--keep-daily</code></td><td>Keep the most recent snapshot of the last N days that have snapshots.</td></tr>
+                <tr><td><code>--keep-weekly</code></td><td>Keep the most recent snapshot of the last N weeks that have snapshots.</td></tr>
+                <tr><td><code>--keep-monthly</code></td><td>Keep the most recent snapshot of the last N months that have snapshots.</td></tr>
+                <tr><td><code>--keep-yearly</code></td><td>Keep the most recent snapshot of the last N years that have snapshots.</td></tr>
+                <tr><td><code>--dry-run</code></td><td>Only show which snapshots would be kept or forgotten, and why.</td></tr>
+                <tr><td><code>--prune</code></td><td>Run <code>prune</code> after forgetting the snapshots.</td></tr>
+                <tr><td><code>--private-key</code></td><td>Required for an encrypted format 3 repository.</td></tr>
+                </tbody>
+            </table>
+            <pre class="docs-example"><code>stowmark forget --repo /srv/backups/stowmark \
+  --keep-daily 7 --keep-weekly 4 --keep-monthly 12 --prune</code></pre>
+            <p>
+                Snapshots still under Object Lock retention cannot be deleted yet; they are reported as postponed and a
+                later run removes them.
+            </p>
+        </section>
+
+        <section class="docs-section" id="prune">
+            <h2><code>stowmark prune</code></h2>
+            <p>
+                Remove the objects that no manifest references, the objects of old key generations left by an
+                interrupted rekey and the temporary files left by interrupted writes. It takes an exclusive lock, so
+                no other command can use the repository while it runs.
+            </p>
+            <table class="docs-options">
+                <thead><tr><th>Flag</th><th>Description</th></tr></thead>
+                <tbody>
+                <tr><td><code>--repo</code></td><td>Repository path or URL.</td></tr>
+                <tr><td><code>--dry-run</code></td><td>Only report the unreferenced objects and their size; do not delete them.</td></tr>
+                <tr><td><code>--private-key</code></td><td>Required for an encrypted format 3 repository.</td></tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="docs-section" id="retention-extend">
+            <h2><code>stowmark retention extend</code></h2>
+            <p>
+                Extend the S3 Object Lock or GCS object retention of the config, every manifest and every object they
+                reference to one full period from now, for the items whose retention ends within half a period.
+                Objects written once and reused by later snapshots keep their first retention, so run it regularly
+                (for example from cron, more often than half the period).
+            </p>
+            <table class="docs-options">
+                <thead><tr><th>Flag</th><th>Description</th></tr></thead>
+                <tbody>
+                <tr><td><code>--repo</code></td><td>Repository URL (<code>s3://</code> or <code>gcs://</code>).</td></tr>
+                <tr><td><code>--private-key</code></td><td>Required for an encrypted format 3 repository.</td></tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="docs-section" id="unlock">
+            <h2><code>stowmark unlock</code></h2>
+            <p>
+                Remove the repository locks that have not been refreshed for 30 minutes, for example after a crash.
+                Running commands refresh their lock every 5 minutes.
+            </p>
+            <table class="docs-options">
+                <thead><tr><th>Flag</th><th>Description</th></tr></thead>
+                <tbody>
+                <tr><td><code>--repo</code></td><td>Repository path or URL.</td></tr>
+                <tr><td><code>--all</code></td><td>Remove every lock, including locks held by running commands.</td></tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="docs-section" id="completion">
+            <h2><code>stowmark completion</code></h2>
+            <p>Generate the autocompletion script for <code>bash</code>, <code>zsh</code>, <code>fish</code> or <code>powershell</code>.</p>
+            <pre class="docs-example"><code>stowmark completion zsh &gt; "${fpath[1]}/_stowmark"</code></pre>
+        </section>
+
+        <section class="docs-section" id="repositories">
+            <h2>Repository URLs</h2>
+            <p>The <code>--repo</code> value selects the backend. The source and restored files always stay on the local machine.</p>
+            <table class="docs-options">
+                <thead><tr><th>Backend</th><th>Format</th></tr></thead>
+                <tbody>
+                <tr><td>Local disk</td><td><code>/srv/backups/stowmark</code> or any path without a scheme</td></tr>
+                <tr><td>SSH / SFTP</td><td><code>ssh://&lt;user&gt;@&lt;host&gt;[:&lt;port&gt;]/&lt;absolute-path&gt;</code> (also <code>sftp://</code>)</td></tr>
+                <tr><td>SMB</td><td><code>smb://&lt;user&gt;@&lt;host&gt;[:&lt;port&gt;]/&lt;share&gt;[/&lt;path&gt;]</code></td></tr>
+                <tr><td>Amazon S3 and compatible</td><td><code>s3://&lt;bucket&gt;/&lt;path&gt;</code></td></tr>
+                <tr><td>Google Cloud Storage</td><td><code>gcs://&lt;bucket&gt;/&lt;path&gt;</code></td></tr>
+                <tr><td>WebDAV</td><td><code>webdav://</code>, <code>webdavs://</code>, <code>http://</code> or <code>https://&lt;host&gt;/&lt;path&gt;</code></td></tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="docs-section" id="environment">
+            <h2>Environment variables</h2>
+            <p>Credentials and backend settings are read from the environment, never from flags.</p>
+            <table class="docs-options">
+                <thead><tr><th>Variable</th><th>Description</th></tr></thead>
+                <tbody>
+                <tr class="docs-group"><td colspan="2">SSH</td></tr>
+                <tr><td><code>STOWMARK_SSH_PRIVATE_KEY</code></td><td>Path to the SSH private key. Without it, the agent of <code>SSH_AUTH_SOCK</code> is used; never both.</td></tr>
+                <tr><td><code>STOWMARK_SSH_PRIVATE_KEY_PASSPHRASE</code></td><td>Passphrase of that key, if it has one.</td></tr>
+                <tr><td><code>SSH_AUTH_SOCK</code></td><td>Socket of the <code>ssh-agent</code>.</td></tr>
+                <tr><td><code>STOWMARK_SSH_KNOWN_HOSTS</code></td><td>known_hosts file used to check the host key. Defaults to <code>~/.ssh/known_hosts</code>.</td></tr>
+                <tr class="docs-group"><td colspan="2">SMB</td></tr>
+                <tr><td><code>STOWMARK_SMB_PASSWORD</code></td><td>Password of the SMB user. Required.</td></tr>
+                <tr class="docs-group"><td colspan="2">S3</td></tr>
+                <tr><td><code>AWS_REGION</code></td><td>Bucket region. Credentials come from the standard AWS chain (<code>AWS_ACCESS_KEY_ID</code>, <code>AWS_SECRET_ACCESS_KEY</code>, <code>AWS_PROFILE</code>…).</td></tr>
+                <tr><td><code>STOWMARK_S3_ENDPOINT</code></td><td>Endpoint of an S3-compatible service (MinIO, Ceph…).</td></tr>
+                <tr><td><code>STOWMARK_S3_PATH_STYLE</code></td><td><code>true</code> to use path-style addressing.</td></tr>
+                <tr class="docs-group"><td colspan="2">Google Cloud Storage</td></tr>
+                <tr><td><code>GOOGLE_APPLICATION_CREDENTIALS</code></td><td>Service account credentials file. Defaults to the Application Default Credentials.</td></tr>
+                <tr><td><code>STOWMARK_GCS_ENDPOINT</code></td><td>Custom endpoint, for example an emulator.</td></tr>
+                <tr class="docs-group"><td colspan="2">WebDAV</td></tr>
+                <tr><td><code>STOWMARK_WEBDAV_USERNAME</code></td><td>WebDAV user. Required.</td></tr>
+                <tr><td><code>STOWMARK_WEBDAV_PASSWORD</code></td><td>WebDAV password. Required.</td></tr>
+                <tr class="docs-group"><td colspan="2">Logs and observability</td></tr>
+                <tr><td><code>STOWMARK_LOG_LEVEL</code></td><td><code>debug</code>, <code>info</code> (default), <code>warn</code> or <code>error</code>. Logs go to stderr without an OTLP endpoint.</td></tr>
+                <tr><td><code>OTEL_EXPORTER_OTLP_ENDPOINT</code></td><td>Enables OpenTelemetry traces, logs and metrics. Nothing is sent without it.</td></tr>
+                <tr><td><code>OTEL_EXPORTER_OTLP_PROTOCOL</code></td><td><code>http/protobuf</code> (default) or <code>grpc</code>.</td></tr>
+                <tr><td><code>OTEL_SERVICE_NAME</code></td><td>Service name. Defaults to <code>stowmark</code>.</td></tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="docs-section" id="exclude-patterns">
+            <h2>Exclude patterns</h2>
+            <p>
+                A <code>.stowmarkignore</code> file uses a subset of the <code>.gitignore</code> syntax. It applies to
+                its own directory and below, and can override the files of its parent directories.
+                <code>--exclude</code> patterns are applied last.
+            </p>
+            <table class="docs-options">
+                <thead><tr><th>Pattern</th><th>Meaning</th></tr></thead>
+                <tbody>
+                <tr><td><code># comment</code></td><td>Ignored line.</td></tr>
+                <tr><td><code>*.log</code></td><td>Any file or directory named <code>*.log</code>, at any depth.</td></tr>
+                <tr><td><code>node_modules/</code></td><td>A trailing <code>/</code> matches directories only.</td></tr>
+                <tr><td><code>/build</code></td><td>A pattern with a <code>/</code> is anchored to the directory of the ignore file.</td></tr>
+                <tr><td><code>docs/**/*.md</code></td><td><code>**</code> matches any number of directories.</td></tr>
+                <tr><td><code>!important.log</code></td><td>Include again. The last pattern that matches wins.</td></tr>
+                </tbody>
+            </table>
+            <pre class="docs-example"><code># .stowmarkignore
+node_modules/
+*.log
+!important.log
+/build</code></pre>
+        </section>
+
+        <section class="docs-section" id="format-versions">
+            <h2>Format versions</h2>
+            <table class="docs-options">
+                <thead><tr><th>Version</th><th>Description</th></tr></thead>
+                <tbody>
+                <tr><td><code>1</code>, <code>2</code></td><td>Objects are identified by the SHA-256 of their compressed data. Only regular files are stored. Version 2 is the default, for compatibility with existing repositories.</td></tr>
+                <tr><td><code>3</code></td><td>Objects are identified by their content (HMAC-SHA256 when encrypted), so changing the compression keeps deduplication. Encryption is streamed, manifests are encrypted, and directories, symlinks, permissions and modification times are stored.</td></tr>
+                </tbody>
+            </table>
+            <p>There is no migration command: create a new repository with <code>--version 3</code> to use it.</p>
+        </section>
+    </div>
+</main>
+
+<footer>
+    <div class="footer-brand">
+        <img src="assets/favicon.png" alt="" width="32" height="32">
+        <div>
+            <span>stowmark</span>
+            <p>Open source software.</p>
+        </div>
+    </div>
+
+    <div class="footer-projects">
+        <div class="footer-project">
+            <strong>stowmark</strong>
+            <div class="footer-links">
+                <a href="https://github.com/bruli-lab/stowmark">GitHub</a>
+                <a href="https://github.com/bruli-lab/stowmark/releases">Releases</a>
+                <a href="https://github.com/bruli-lab/stowmark/issues">Issues</a>
+            </div>
+        </div>
+
+        <div class="footer-project">
+            <strong>stowmark-console</strong>
+            <div class="footer-links">
+                <a href="https://github.com/bruli-lab/stowmark-console">GitHub</a>
+                <a href="https://github.com/bruli-lab/stowmark-console/releases">Releases</a>
+                <a href="https://github.com/bruli-lab/stowmark-console/issues">Issues</a>
+            </div>
+        </div>
+
+        <div class="footer-project">
+            <strong>stowmark-observability</strong>
+            <div class="footer-links">
+                <a href="https://github.com/bruli-lab/stowmark-observability">GitHub</a>
+                <a href="https://github.com/bruli-lab/stowmark-observability/releases">Releases</a>
+                <a href="https://github.com/bruli-lab/stowmark-observability/issues">Issues</a>
+            </div>
+        </div>
+    </div>
+</footer>
+</body>
+</html>

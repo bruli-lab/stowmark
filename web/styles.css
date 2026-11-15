@@ -807,7 +807,7 @@ footer p {
         width: min(calc(100% - 24px), var(--max-width));
     }
 
-    nav a:not(:last-child) {
+    nav a:not(:last-child):not(.nav-docs) {
         display: none;
     }
 
@@ -900,5 +900,224 @@ footer p {
 
     .brand-image-card img {
         aspect-ratio: 16 / 9;
+    }
+}
+
+nav a[aria-current="page"] {
+    color: var(--accent-soft);
+}
+
+.docs {
+    display: grid;
+    grid-template-columns: 240px minmax(0, 1fr);
+    align-items: start;
+    gap: clamp(32px, 5vw, 72px);
+    padding-top: clamp(40px, 6vw, 80px);
+    border-top: 0;
+}
+
+.docs-toc {
+    position: sticky;
+    top: 112px;
+    max-height: calc(100vh - 136px);
+    overflow-y: auto;
+    padding-right: 8px;
+}
+
+.docs-toc ol {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.docs-toc li {
+    margin: 0;
+}
+
+.docs-toc ol ol {
+    margin: 2px 0 6px 14px;
+    padding-left: 12px;
+    border-left: 1px solid var(--border);
+}
+
+.docs-toc a {
+    display: block;
+    padding: 5px 0;
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 0.9rem;
+}
+
+.docs-toc a:hover {
+    color: var(--accent-soft);
+}
+
+.docs-content {
+    min-width: 0;
+    max-width: 920px;
+}
+
+.docs-title {
+    margin: 0 0 16px;
+    font-size: clamp(2.5rem, 5vw, 4.2rem);
+    line-height: 1.03;
+    letter-spacing: -0.05em;
+}
+
+.docs-section {
+    padding: 44px 0;
+    border-top: 1px solid var(--border);
+    scroll-margin-top: 104px;
+}
+
+.docs-section h2 {
+    font-size: clamp(1.6rem, 3vw, 2.2rem);
+    letter-spacing: -0.03em;
+}
+
+.docs-section h3 {
+    margin-top: 36px;
+    scroll-margin-top: 104px;
+}
+
+.docs-section h2 code,
+.docs-section h3 code {
+    font-size: inherit;
+    line-height: inherit;
+    color: var(--accent-soft);
+}
+
+.docs-section p,
+.docs-section td {
+    color: var(--muted);
+    line-height: 1.65;
+}
+
+.docs-section a,
+.quick-start .section-description a {
+    color: var(--accent-soft);
+}
+
+.docs-section :not(pre) > code,
+.docs-title + .section-description code {
+    padding: 1px 5px;
+    border-radius: 5px;
+    color: var(--text);
+    background: var(--surface);
+    font-size: 0.84rem;
+    white-space: nowrap;
+}
+
+.docs-section .code-block {
+    margin: 20px 0;
+}
+
+.docs-usage,
+.docs-example {
+    margin: 18px 0;
+    padding: 16px 20px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: #020b14;
+}
+
+.docs-options {
+    width: 100%;
+    margin: 18px 0;
+    border-collapse: collapse;
+    font-size: 0.92rem;
+}
+
+.docs-options th {
+    padding: 10px 14px;
+    color: var(--text);
+    background: var(--surface);
+    text-align: left;
+    font-weight: 650;
+}
+
+.docs-options td {
+    padding: 11px 14px;
+    border-top: 1px solid var(--border);
+    vertical-align: top;
+}
+
+.docs-options td:first-child {
+    width: 34%;
+}
+
+.docs-options td code {
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+.docs-options td:first-child code {
+    color: var(--accent-soft);
+}
+
+.docs-options .docs-group td {
+    padding-top: 18px;
+    color: var(--text);
+    font-weight: 650;
+}
+
+@media (max-width: 980px) {
+    .docs {
+        grid-template-columns: 1fr;
+    }
+
+    .docs-toc {
+        position: static;
+        max-height: none;
+        padding: 18px 20px;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: var(--bg-soft);
+    }
+
+    .docs-toc > ol {
+        columns: 2;
+        column-gap: 28px;
+    }
+
+    .docs-toc > ol > li {
+        break-inside: avoid;
+    }
+}
+
+@media (max-width: 420px) {
+    .docs-toc > ol {
+        columns: 1;
+    }
+}
+
+@media (max-width: 620px) {
+    .docs-options thead {
+        display: none;
+    }
+
+    .docs-options,
+    .docs-options tbody,
+    .docs-options tr,
+    .docs-options td {
+        display: block;
+        width: 100%;
+    }
+
+    .docs-options tr {
+        padding: 10px 0;
+        border-top: 1px solid var(--border);
+    }
+
+    .docs-options td,
+    .docs-options td:first-child {
+        width: 100%;
+        padding: 3px 0;
+        border-top: 0;
+    }
+
+    .docs-usage,
+    .docs-example {
+        padding: 14px;
     }
 }

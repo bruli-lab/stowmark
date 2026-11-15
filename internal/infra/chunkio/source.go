@@ -1,20 +1,13 @@
 package chunkio
 
 import (
-	"errors"
 	"fmt"
 	"os"
-
-	"github.com/bruli-lab/stowmark/internal/domain/repository"
 )
 
-func OpenSource(filePath, hash string, offset, size int64, comp *repository.Compression) (*os.File, error) {
-	if comp == nil {
-		return nil, errors.New("compression configuration is required")
-	}
-
+func OpenSource(filePath, hash string, offset, size int64) (*os.File, error) {
 	if len(hash) < 3 {
-		return nil, fmt.Errorf("invalid o bject hash %q", hash)
+		return nil, fmt.Errorf("invalid object hash %q", hash)
 	}
 
 	if offset < 0 {

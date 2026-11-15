@@ -25,6 +25,8 @@ func ParseWebDAVURL(repositoryURL string) (*Location, error) {
 		u.Scheme = "http"
 	case "webdavs":
 		u.Scheme = "https"
+	case "http", "https":
+		u.Scheme = strings.ToLower(u.Scheme)
 	default:
 		return nil, fmt.Errorf(
 			"unsupported WebDAV scheme %q",

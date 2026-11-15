@@ -18,6 +18,9 @@ const (
 	PublicKey              = "PUBLIC KEY"
 	PrivateKey             = "PRIVATE KEY"
 	MinimumRSAKeySizeInBit = 2048
+
+	privateKeyFileMode os.FileMode = 0o600
+	publicKeyFileMode  os.FileMode = 0o644
 )
 
 type AsymmetricKeyPairRepository struct{}
@@ -134,18 +137,18 @@ func (a AsymmetricKeyPairRepository) PublicKeyFingerPrint(ctx context.Context, p
 }
 
 func (a AsymmetricKeyPairRepository) CreatePrivateKey(ctx context.Context, filePath string, privateKey *rsa.PrivateKey) error {
-	return a.createKey(ctx, filePath, PrivateKey, func() ([]byte, error) {
+	return a.createKey(ctx, filePath, PrivateKey, privateKeyFileMode, func() ([]byte, error) {
 		return x509.MarshalPKCS8PrivateKey(privateKey)
 	})
 }
 
 func (a AsymmetricKeyPairRepository) CreatePublicKey(ctx context.Context, filePath string, publicKey *rsa.PublicKey) error {
-	return a.createKey(ctx, filePath, PublicKey, func() ([]byte, error) {
+	return a.createKey(ctx, filePath, PublicKey, publicKeyFileMode, func() ([]byte, error) {
 		return x509.MarshalPKIXPublicKey(publicKey)
 	})
 }
 
-func (a AsymmetricKeyPairRepository) createKey(ctx context.Context, filePath, keyType string, marshal func() ([]byte, error)) error {
+func (a AsymmetricKeyPairRepository) createKey(ctx context.Context, filePath, keyType string, perm os.FileMode, marshal func() ([]byte, error)) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -160,20 +163,51 @@ func (a AsymmetricKeyPairRepository) createKey(ctx context.Context, filePath, ke
 		return fmt.Errorf("marshal %s: %w", keyType, err)
 	}
 
-	if err := a.writeFile(data, filePath, keyType); err != nil {
+	block := pem.EncodeToMemory(&pem.Block{
+		Type:  keyType,
+		Bytes: data,
+	})
+
+	if err := writeNewFile(filePath, perm, block); err != nil {
 		return fmt.Errorf("write %s %q: %w", keyType, filePath, err)
 	}
 
 	return nil
 }
 
-func (a AsymmetricKeyPairRepository) writeFile(data []byte, filePath, fileType string) error {
-	block := pem.EncodeToMemory(&pem.Block{
-		Type:  fileType,
-		Bytes: data,
-	})
+func writeNewFile(filePath string, perm os.FileMode, data []byte) error {
+	file, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, perm)
+	if err != nil {
+		return err
+	}
 
-	return os.WriteFile(filePath, block, 0o644)
+	written := false
+	defer func() {
+		_ = file.Close()
+		if !written {
+			_ = os.Remove(filePath)
+		}
+	}()
+
+	if err := file.Chmod(perm); err != nil {
+		return err
+	}
+
+	if _, err := file.Write(data); err != nil {
+		return err
+	}
+
+	if err := file.Sync(); err != nil {
+		return err
+	}
+
+	if err := file.Close(); err != nil {
+		return err
+	}
+
+	written = true
+
+	return nil
 }
 
 func NewAsymmetricKeyPairRepository() *AsymmetricKeyPairRepository {

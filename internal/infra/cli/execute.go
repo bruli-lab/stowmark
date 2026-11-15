@@ -1,13 +1,29 @@
 package cli
 
 import (
+	"context"
+	"os"
+	"os/signal"
+	"syscall"
+
 	"github.com/spf13/cobra"
 )
 
+var version = "dev"
+
 func Execute() error {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	context.AfterFunc(ctx, stop)
+
+	return newRootCommand().ExecuteContext(ctx)
+}
+
+func newRootCommand() *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:           "stowmark",
 		Short:         "Immutable snapshot backup tool",
+		Version:       version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
@@ -15,6 +31,12 @@ func Execute() error {
 	rootCmd.AddCommand(newInitCommand())
 	rootCmd.AddCommand(newSnapshotCommand())
 	rootCmd.AddCommand(newKeyCommand())
+	rootCmd.AddCommand(newUnlockCommand())
+	rootCmd.AddCommand(newForgetCommand())
+	rootCmd.AddCommand(newPruneCommand())
+	rootCmd.AddCommand(newCheckCommand())
+	rootCmd.AddCommand(newRetentionCommand())
+	addOutputFlags(rootCmd)
 
-	return rootCmd.Execute()
+	return rootCmd
 }

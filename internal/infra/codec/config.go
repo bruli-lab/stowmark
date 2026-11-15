@@ -22,11 +22,12 @@ func MarshalConfig(ctx context.Context, c *repository.Config) ([]byte, error) {
 			EncryptedKey:         c.Encryption().EncryptedKey(),
 			PublicKeyFingerprint: c.Encryption().PublicKeyFingerprint(),
 			Generation:           c.Encryption().Generation(),
+			EncryptedMetadataKey: c.Encryption().EncryptedMetadataKey(),
 		}
 	}
 
 	co := model.Config{
-		ID:            c.Id().String(),
+		ID:            c.ID().String(),
 		FormatVersion: c.FormatVersion().Int(),
 		CreatedAt:     c.CreatedAt().In(time.Local).Format(time.RFC3339),
 		Compression: model.Compression{
@@ -34,6 +35,9 @@ func MarshalConfig(ctx context.Context, c *repository.Config) ([]byte, error) {
 			Level: c.Compression().Level(),
 		},
 		Encryption: encryption,
+	}
+	if lock := c.ObjectLock(); lock != nil {
+		co.ObjectLock = &model.ObjectLock{Mode: string(lock.Mode()), PeriodSeconds: int64(lock.Period() / time.Second)}
 	}
 
 	data, err := json.MarshalIndent(co, "", "  ")

@@ -1,19 +1,20 @@
 package repositories
 
 import (
+	"github.com/bruli-lab/stowmark/internal/app"
 	"github.com/bruli-lab/stowmark/internal/config"
-	"github.com/bruli-lab/stowmark/internal/domain/repository"
-	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
+	"github.com/bruli-lab/stowmark/internal/infra/blob"
 	"github.com/bruli-lab/stowmark/internal/infra/webdav"
 	"github.com/studio-b12/gowebdav"
 )
 
 type WebDavRepositories struct {
 	client         *gowebdav.Client
+	store          *webdav.BlobStore
 	repositoryPath string
 }
 
-func (w WebDavRepositories) FolderRepository() repository.FolderRepository {
+func (w WebDavRepositories) FolderRepository() app.FolderRepository {
 	return webdav.NewFolderRepositoryRepository(w.client)
 }
 
@@ -21,20 +22,16 @@ func (w WebDavRepositories) RepositoryPath() string {
 	return w.repositoryPath
 }
 
-func (w WebDavRepositories) ObjectRepository() (snapshot.ObjectRepository, error) {
-	return webdav.NewObjectRepository(w.client, w.repositoryPath), nil
-}
-
-func (w WebDavRepositories) ManifestRepository() (snapshot.ManifestRepository, error) {
-	return webdav.NewManifestRepository(w.client, w.repositoryPath), nil
-}
-
 func (w WebDavRepositories) Close() error {
 	return nil
 }
 
-func NewWebDavRepositories(address string) (*WebDavRepositories, error) {
-	conf, err := config.NewWebdavConfig()
+func (w WebDavRepositories) BlobStore() (blob.Store, error) {
+	return w.store, nil
+}
+
+func NewWebDavRepositories(address string, environment map[string]string) (*WebDavRepositories, error) {
+	conf, err := config.NewWebdavConfigFrom(environment)
 	if err != nil {
 		return nil, err
 	}
@@ -46,5 +43,5 @@ func NewWebDavRepositories(address string) (*WebDavRepositories, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &WebDavRepositories{client: client, repositoryPath: location.Path}, nil
+	return &WebDavRepositories{client: client, store: webdav.NewBlobStore(client, location.Path), repositoryPath: location.Path}, nil
 }

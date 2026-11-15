@@ -120,7 +120,7 @@ func (f FolderRepositoryRepository) GetConfig(ctx context.Context, repositoryPat
 		)
 	}
 
-	return model.BuildConfigDomain(conf)
+	return model.BuildConfigDomain(&conf)
 }
 
 func (f FolderRepositoryRepository) writeFile(ctx context.Context, filePath string, data []byte) error {

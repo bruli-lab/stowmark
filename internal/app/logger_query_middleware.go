@@ -18,7 +18,7 @@ func NewLoggerQueryMiddleware(logger *slog.Logger) cqs.QueryHandlerMiddleware {
 			events, err := next.Handle(ctx, query)
 
 			attrs := []any{
-				slog.String("command", query.Name()),
+				slog.String("query", query.Name()),
 				slog.Int64("duration_ms", time.Since(startedAt).Milliseconds()),
 			}
 

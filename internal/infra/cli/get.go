@@ -5,10 +5,11 @@ import (
 	"io"
 	"text/tabwriter"
 
+	"github.com/bruli-lab/stowmark/internal/infra/progress"
+
 	"github.com/bruli-lab/stowmark/internal/app"
+	"github.com/bruli-lab/stowmark/internal/bootstrap"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
-	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
-	"github.com/bruli-lab/stowmark/internal/infra/repositories"
 	"github.com/spf13/cobra"
 )
 
@@ -16,46 +17,26 @@ func newSnapshotGetCommand() *cobra.Command {
 	var (
 		repositoryPath string
 		snapshotID     string
+		privateKeyPath string
 	)
 	cmd := &cobra.Command{
 		Use:   "get",
 		Short: "Show a snapshot manifest",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			obsv, err := builtObservability(cmd.Context())
-			if err != nil {
-				return fmt.Errorf("create observability: %w", err)
-			}
-			repohand, err := repositories.NewHandler(cmd.Context(), repositoryPath)
-			if err != nil {
-				return err
-			}
-			defer func() {
-				_ = obsv.Shutdown(cmd.Context())
-				_ = repohand.Close()
-			}()
-
-			manifestRepo, err := repohand.ManifestRepository()
-			if err != nil {
-				return err
-			}
-			svc := snapshot.NewGetManifest(manifestRepo)
-			multiMdw, err2 := middlewares.BuildQueryMiddlewares(obsv)
-			if err2 != nil {
-				return err2
-			}
-			handler := multiMdw(app.NewManifestGet(svc))
-			result, err := handler.Handle(cmd.Context(), app.ManifestGetQuery{
-				SnapshotID: snapshotID,
+			return withRepository(cmd, repositoryPath, func(repo *bootstrap.Repository) error {
+				manifest, err := app.QueryResult[*snapshot.Manifest](repo.ManifestGet().Handle(cmd.Context(), app.ManifestGetQuery{
+					RepositoryPath: repo.Path(),
+					PrivateKeyPath: optionalPath(privateKeyPath),
+					SnapshotID:     snapshotID,
+				}))
+				if err != nil {
+					return err
+				}
+				return render(cmd, newManifestDocument(manifest), func(output io.Writer) error {
+					return printManifest(output, manifest)
+				})
 			})
-			manifest, ok := result.(*snapshot.Manifest)
-			if !ok {
-				return fmt.Errorf("unexpected result type: %T", result)
-			}
-			if err != nil {
-				return err
-			}
-			return printManifest(cmd.OutOrStdout(), manifest)
 		},
 	}
 
@@ -71,6 +52,7 @@ func newSnapshotGetCommand() *cobra.Command {
 		"",
 		"snapshot ID",
 	)
+	cmd.Flags().StringVar(&privateKeyPath, "private-key", "", metadataPrivateKeyUsage)
 
 	_ = cmd.MarkFlagRequired("id")
 	_ = cmd.MarkFlagRequired("repo")
@@ -84,9 +66,9 @@ func printManifest(
 ) error {
 	writer := tabwriter.NewWriter(
 		output,
-		0, // amplada mínima
-		4, // amplada del tabulador
-		2, // espais entre columnes
+		0,
+		4,
+		2,
 		' ',
 		0,
 	)
@@ -98,7 +80,7 @@ func printManifest(
 		"ID:\t%s\n"+
 			"CREATED AT:\t%s\n"+
 			"SOURCE:\t%s\n",
-		manifest.Id(),
+		manifest.ID(),
 		createdAt.Format("2006-01-02 15:04:05"),
 		manifest.Source(),
 	)
@@ -117,13 +99,24 @@ func printManifest(
 		if _, err := fmt.Fprintf(
 			writer,
 			"%s\t%s\t%s\n",
-			file.Path(),
+			entryName(file),
 			file.Hash(),
-			formatBytes(file.Size()),
+			progress.FormatBytes(file.Size()),
 		); err != nil {
 			return err
 		}
 	}
 
 	return writer.Flush()
+}
+
+func entryName(file snapshot.File) string {
+	switch file.Kind() {
+	case snapshot.DirectoryEntry:
+		return file.Path() + "/"
+	case snapshot.SymlinkEntry:
+		return file.Path() + " -> " + file.Target()
+	default:
+		return file.Path()
+	}
 }

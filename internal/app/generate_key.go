@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/bruli-lab/go-core/cqs"
 	"github.com/bruli-lab/go-core/event"
@@ -19,20 +20,25 @@ func (g GenerateKeyCommand) Name() string {
 }
 
 type GenerateKey struct {
-	svc *encryption.CreateAsymmetricKeyPair
+	generator      KeyGenerator
+	asymmetricRepo AsymmetricKeyPairRepository
 }
 
-func (g GenerateKey) Handle(ctx context.Context, cmd cqs.Command) ([]event.Event, error) {
+func (g *GenerateKey) Handle(ctx context.Context, cmd cqs.Command) ([]event.Event, error) {
 	co, ok := cmd.(GenerateKeyCommand)
 	if !ok {
 		return nil, cqs.NewInvalidCommandError(GenerateKeyCommandName, cmd.Name())
 	}
-	if err := g.svc.Create(ctx, co.Keys); err != nil {
+	privateKey, err := g.generator.GenerateRSAKey(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate private key: %w", err)
+	}
+	if err := g.asymmetricRepo.CreatePrivateKey(ctx, co.Keys.PrivateKey(), privateKey); err != nil {
 		return nil, err
 	}
-	return nil, nil
+	return nil, g.asymmetricRepo.CreatePublicKey(ctx, co.Keys.PublicKey(), &privateKey.PublicKey)
 }
 
-func NewGenerateKey(svc *encryption.CreateAsymmetricKeyPair) *GenerateKey {
-	return &GenerateKey{svc: svc}
+func NewGenerateKey(generator KeyGenerator, asymmetricRepo AsymmetricKeyPairRepository) *GenerateKey {
+	return &GenerateKey{generator: generator, asymmetricRepo: asymmetricRepo}
 }

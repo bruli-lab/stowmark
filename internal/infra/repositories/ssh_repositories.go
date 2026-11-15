@@ -1,6 +1,7 @@
 package repositories
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/url"
@@ -8,9 +9,11 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/bruli-lab/stowmark/internal/app"
+
+	"github.com/bruli-lab/stowmark/internal/infra/blob"
+
 	"github.com/bruli-lab/stowmark/internal/config"
-	"github.com/bruli-lab/stowmark/internal/domain/repository"
-	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	sshinfra "github.com/bruli-lab/stowmark/internal/infra/ssh"
 	gossh "golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
@@ -23,19 +26,11 @@ type SSHRepositories struct {
 	repositoryPath string
 }
 
-func (s *SSHRepositories) ObjectRepository() (snapshot.ObjectRepository, error) {
-	return sshinfra.NewObjectRepository(s.repositoryPath, s.client.Sftp()), nil
-}
-
-func (s *SSHRepositories) ManifestRepository() (snapshot.ManifestRepository, error) {
-	return sshinfra.NewManifestRepository(s.repositoryPath, s.client.Sftp())
-}
-
 func (s *SSHRepositories) RepositoryPath() string {
 	return s.repositoryPath
 }
 
-func (s *SSHRepositories) FolderRepository() repository.FolderRepository {
+func (s *SSHRepositories) FolderRepository() app.FolderRepository {
 	return sshinfra.NewFolderRepositoryRepository(s.client.Sftp())
 }
 
@@ -43,8 +38,12 @@ func (s *SSHRepositories) Close() error {
 	return s.client.Close()
 }
 
-func NewSSHRepositories(address string) (*SSHRepositories, error) {
-	conf, err := config.NewSSHConfig()
+func (s *SSHRepositories) BlobStore() (blob.Store, error) {
+	return sshinfra.NewBlobStore(s.client.Sftp(), s.repositoryPath), nil
+}
+
+func NewSSHRepositories(ctx context.Context, address string, environment map[string]string) (*SSHRepositories, error) {
+	conf, err := config.NewSSHConfigFrom(environment)
 	if err != nil {
 		return nil, fmt.Errorf("load SSH configuration: %w", err)
 	}
@@ -68,15 +67,23 @@ func NewSSHRepositories(address string) (*SSHRepositories, error) {
 		port = DefaultSSHPort
 	}
 
-	homeDir, err := os.UserHomeDir()
+	knownHosts, err := knownHostsPath(conf)
 	if err != nil {
-		return nil, fmt.Errorf("get home directory: %w", err)
+		return nil, err
 	}
+
+	auth, authCloser, err := NewSSHAuth(ctx, conf)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = authCloser.Close()
+	}()
 
 	clientConfig, err := newClientConfig(
 		u.User.Username(),
-		conf.PrivateKey,
-		filepath.Join(homeDir, ".ssh", "known_hosts"),
+		auth,
+		knownHosts,
 	)
 	if err != nil {
 		return nil, err
@@ -96,17 +103,18 @@ func NewSSHRepositories(address string) (*SSHRepositories, error) {
 	}, nil
 }
 
-func newClientConfig(username, privateKey, knownHostsPath string) (*gossh.ClientConfig, error) {
-	file, err := os.ReadFile(privateKey)
-	if err != nil {
-		return nil, fmt.Errorf("read SSH private key: %w", err)
+func knownHostsPath(conf *config.SSHConfig) (string, error) {
+	if conf.KnownHosts != "" {
+		return conf.KnownHosts, nil
 	}
-
-	signer, err := gossh.ParsePrivateKey(file)
+	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return nil, fmt.Errorf("parse SSH private key: %w", err)
+		return "", fmt.Errorf("get home directory: %w", err)
 	}
+	return filepath.Join(homeDir, ".ssh", "known_hosts"), nil
+}
 
+func newClientConfig(username string, auth gossh.AuthMethod, knownHostsPath string) (*gossh.ClientConfig, error) {
 	hostKeyCallback, err := knownhosts.New(knownHostsPath)
 	if err != nil {
 		return nil, fmt.Errorf(
@@ -117,10 +125,8 @@ func newClientConfig(username, privateKey, knownHostsPath string) (*gossh.Client
 	}
 
 	return &gossh.ClientConfig{
-		User: username,
-		Auth: []gossh.AuthMethod{
-			gossh.PublicKeys(signer),
-		},
+		User:            username,
+		Auth:            []gossh.AuthMethod{auth},
 		HostKeyCallback: hostKeyCallback,
 		Timeout:         10 * time.Second,
 	}, nil

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"os"
+	"strings"
 
 	"github.com/bruli-lab/stowmark/internal/config"
 	"go.opentelemetry.io/contrib/bridges/otelslog"
@@ -12,7 +13,7 @@ import (
 
 func New(ctx context.Context, conf *config.ObservabilityConfig) (*OTLPObservability, error) {
 	if conf.OTELExporterEndpoint == nil || *conf.OTELExporterEndpoint == "" {
-		return newNoop(), nil
+		return newNoop(logLevel(conf.LogLevel)), nil
 	}
 	return newOTLP(ctx, *conf)
 }
@@ -80,14 +81,14 @@ func newOTLP(ctx context.Context, cfg config.ObservabilityConfig) (*OTLPObservab
 }
 
 func logLevel(level string) slog.Level {
-	switch level {
-	case "info":
-		return slog.LevelInfo
+	switch strings.ToLower(level) {
+	case "debug":
+		return slog.LevelDebug
 	case "warn":
 		return slog.LevelWarn
 	case "error":
 		return slog.LevelError
 	default:
-		return slog.LevelDebug
+		return slog.LevelInfo
 	}
 }

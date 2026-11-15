@@ -6,7 +6,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func newID() string {
+func NewID() string {
 	timestamp := time.Now().UTC().Format("20060102T150405Z")
 	random := uuid.NewString()[:8]
 

@@ -1,5 +1,9 @@
 package encryption
 
+import "errors"
+
+var ErrUnsupportedEncryption = errors.New("unsupported encryption")
+
 const (
 	DefaultEncryptionType = "aes-256-gcm"
 	DefaultKeyEncryption  = "rsa-oaep-sha256"
@@ -11,6 +15,19 @@ type EncryptionConfig struct {
 	encryptedKey         string
 	publicKeyFingerprint string
 	generation           uint64
+	encryptedMetadataKey string
+}
+
+func (e *EncryptionConfig) EncryptedMetadataKey() string {
+	return e.encryptedMetadataKey
+}
+
+func (e *EncryptionConfig) HasMetadataKey() bool {
+	return e.encryptedMetadataKey != ""
+}
+
+func (e *EncryptionConfig) ChangeEncryptedMetadataKey(key string) {
+	e.encryptedMetadataKey = key
 }
 
 func (e *EncryptionConfig) Generation() uint64 {
@@ -53,4 +70,18 @@ func NewEncryptionConfig(encryptedKey, publicKeyFingerprint string, generation u
 		publicKeyFingerprint: publicKeyFingerprint,
 		generation:           generation,
 	}
+}
+
+func HydrateEncryptionConfig(
+	encryptionType, keyEncryption, encryptedKey, publicKeyFingerprint string,
+	generation uint64,
+	encryptedMetadataKey string,
+) (*EncryptionConfig, error) {
+	if encryptionType != DefaultEncryptionType || keyEncryption != DefaultKeyEncryption {
+		return nil, ErrUnsupportedEncryption
+	}
+
+	conf := NewEncryptionConfig(encryptedKey, publicKeyFingerprint, generation)
+	conf.encryptedMetadataKey = encryptedMetadataKey
+	return conf, nil
 }

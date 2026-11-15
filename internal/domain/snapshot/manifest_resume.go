@@ -10,7 +10,7 @@ type ManifestResume struct {
 	source    string
 }
 
-func (m ManifestResume) Id() string {
+func (m ManifestResume) ID() string {
 	return m.id
 }
 

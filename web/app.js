@@ -159,4 +159,4 @@ document.querySelectorAll("[data-copy-target]").forEach((button) => {
   });
 });
 
-projects.forEach(loadLatestRelease);
+projects.filter((project) => project.grid).forEach(loadLatestRelease);

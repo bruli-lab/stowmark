@@ -1,7 +1,10 @@
 ignore:
   - "**/*_mock.go"
   - "cmd/**"
-  - "internal/infra/**"
-  - "internal/app/**"
   - "internal/fixtures/**"
-  - "pkg/**"
+
+flags:
+  unit:
+    carryforward: true
+  integration:
+    carryforward: true

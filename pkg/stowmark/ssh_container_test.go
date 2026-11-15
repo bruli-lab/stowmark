@@ -31,7 +31,7 @@ func startSSHContainer(t *testing.T, ctx context.Context, publicKey []byte) test
 		ctx,
 		testcontainers.GenericContainerRequest{
 			ContainerRequest: testcontainers.ContainerRequest{
-				Image: "lscr.io/linuxserver/openssh-server:latest",
+				Image: "lscr.io/linuxserver/openssh-server:10.3_p1-r2-ls243",
 
 				ExposedPorts: []string{
 					"2222/tcp",
@@ -131,10 +131,7 @@ func createKnownHosts(t *testing.T, address string) {
 	require.Error(t, err)
 	require.NotNil(t, serverKey)
 
-	homePath := t.TempDir()
-	sshPath := filepath.Join(homePath, ".ssh")
-
-	require.NoError(t, os.MkdirAll(sshPath, 0o700))
+	knownHostsPath := filepath.Join(t.TempDir(), "known_hosts")
 
 	knownHostsEntry := knownhosts.Line(
 		[]string{knownhosts.Normalize(address)},
@@ -144,11 +141,11 @@ func createKnownHosts(t *testing.T, address string) {
 	require.NoError(
 		t,
 		os.WriteFile(
-			filepath.Join(sshPath, "known_hosts"),
+			knownHostsPath,
 			[]byte(knownHostsEntry+"\n"),
 			0o600,
 		),
 	)
 
-	t.Setenv("HOME", homePath)
+	t.Setenv("STOWMARK_SSH_KNOWN_HOSTS", knownHostsPath)
 }

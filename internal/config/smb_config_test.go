@@ -8,6 +8,8 @@ import (
 )
 
 func TestNewSMBConfig(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name             string
 		envVars          map[string]string
@@ -15,19 +17,19 @@ func TestNewSMBConfig(t *testing.T) {
 		expectedPassword string
 	}{
 		{
-			name:        "with no env vars set, it returns an error",
+			name:        "with no env vars set, then it returns an error",
 			envVars:     map[string]string{},
 			expectedErr: true,
 		},
 		{
-			name: "with unrelated env vars set, it returns an error",
+			name: "with unrelated env vars set, then it returns an error",
 			envVars: map[string]string{
 				"EX_SMB_PASSWORD": "test",
 			},
 			expectedErr: true,
 		},
 		{
-			name: "with STOWMARK_SSH_PRIVATE_KEY set, it returns a valid SSHConfig",
+			name: "with STOWMARK_SMB_PASSWORD set, then it returns a valid SMBConfig",
 			envVars: map[string]string{
 				"STOWMARK_SMB_PASSWORD": "test",
 			},
@@ -36,12 +38,11 @@ func TestNewSMBConfig(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			for key, value := range tt.envVars {
-				t.Setenv(key, value)
-			}
+		t.Run(`Given an environment,
+		when NewSMBConfigFrom is called `+tt.name, func(t *testing.T) {
+			t.Parallel()
 
-			got, err := config.NewSMBConfig()
+			got, err := config.NewSMBConfigFrom(tt.envVars)
 			if tt.expectedErr {
 				require.Error(t, err)
 				return

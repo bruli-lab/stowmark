@@ -1,3 +1,127 @@
 {
-  "$schema": "https://docs.renovatebot.com/renovate-schema.json"
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigests",
+    ":semanticCommits"
+  ],
+  "postUpdateOptions": [
+    "gomodTidy"
+  ],
+  "packageRules": [
+    {
+      "description": "Keep the go directive in go.mod up to date; CI reads the Go version from go.mod",
+      "matchDatasources": [
+        "golang-version"
+      ],
+      "rangeStrategy": "bump"
+    },
+    {
+      "description": "Group AWS SDK modules in a single pull request",
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchPackageNames": [
+        "github.com/aws/**"
+      ],
+      "groupName": "aws-sdk-go-v2"
+    },
+    {
+      "description": "Group OpenTelemetry modules in a single pull request",
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchPackageNames": [
+        "go.opentelemetry.io/**"
+      ],
+      "groupName": "opentelemetry"
+    },
+    {
+      "description": "Group Google Cloud modules in a single pull request",
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchPackageNames": [
+        "cloud.google.com/**",
+        "google.golang.org/**"
+      ],
+      "groupName": "google-cloud"
+    },
+    {
+      "description": "Group GitHub Actions updates",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "groupName": "github-actions"
+    },
+    {
+      "description": "Group the container images of the local environments and the integration tests",
+      "matchDatasources": [
+        "docker"
+      ],
+      "groupName": "container images"
+    },
+    {
+      "description": "linuxserver.io tags are <version>_p<patch>-r<release>-ls<build>",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "lscr.io/linuxserver/openssh-server"
+      ],
+      "versioning": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)_p(?<patch>\\d+)-r(?<build>\\d+)-ls(?<revision>\\d+)$"
+    },
+    {
+      "description": "servercontainers/samba tags are smbd-only-a<alpine>-s<samba>-r<release>; order by Alpine and then Samba",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "ghcr.io/servercontainers/samba"
+      ],
+      "versioning": "regex:^smbd-only-a(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-s\\d+\\.(?<build>\\d+)\\.(?<revision>\\d+)-r\\d+$"
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "golangci-lint version shared by the Taskfile and the CI lint action",
+      "managerFilePatterns": [
+        "/^\\.golangci-lint-version$/"
+      ],
+      "matchStrings": [
+        "^(?<currentValue>v\\S+)"
+      ],
+      "depNameTemplate": "golangci/golangci-lint",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
+      "description": "Task version installed by the setup-go-task action",
+      "managerFilePatterns": [
+        "/^\\.github/actions/setup-go-task/action\\.yml$/"
+      ],
+      "matchStrings": [
+        "default: '(?<currentValue>v[0-9.]+)' # renovate: task"
+      ],
+      "depNameTemplate": "github.com/go-task/task/v3",
+      "datasourceTemplate": "go"
+    },
+    {
+      "customType": "regex",
+      "description": "Container images started by testcontainers in the integration tests",
+      "managerFilePatterns": [
+        "/^pkg/stowmark/.+_test\\.go$/"
+      ],
+      "matchStrings": [
+        "Image:\\s+\"(?<depName>[^\":]+):(?<currentValue>[^\"@]+)\""
+      ],
+      "datasourceTemplate": "docker"
+    }
+  ],
+  "docker-compose": {
+    "managerFilePatterns": [
+      "/^docker/[^/]+-compose\\.ya?ml$/"
+    ]
+  }
 }

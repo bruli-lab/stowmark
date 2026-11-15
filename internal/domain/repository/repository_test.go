@@ -32,13 +32,13 @@ func TestNewRepository(t *testing.T) {
 			args: args{
 				name: "name",
 			},
-			expectedErr: repository.ErrMissingCRepositoryConfig,
+			expectedErr: repository.ErrMissingRepositoryConfig,
 		},
 		{
 			name: "with valid data, then it returns a valid repository struct",
 			args: args{
 				name:   "name",
-				config: repository.NewConfig(uuid.New(), repository.CurrentFormatVersion, compType, nil),
+				config: repository.NewConfig(uuid.New(), repository.DefaultFormatVersion, compType, nil),
 			},
 		},
 	}

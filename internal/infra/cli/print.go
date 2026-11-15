@@ -4,11 +4,28 @@ import (
 	"fmt"
 	"io"
 	"text/tabwriter"
+
+	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
+	"github.com/spf13/cobra"
 )
 
 type Failed struct {
 	Path   string
 	Reason string
+}
+
+func failedResults(results []snapshot.FailedResult) []Failed {
+	failed := make([]Failed, len(results))
+	for i, result := range results {
+		failed[i] = Failed{Path: result.Path(), Reason: result.Reason()}
+	}
+	return failed
+}
+
+func renderResult(cmd *cobra.Command, snapshotID string, totalFiles int, failed []snapshot.FailedResult, isSuccess bool) error {
+	return render(cmd, newResultDocument(snapshotID, totalFiles, failed, isSuccess), func(output io.Writer) error {
+		return printResult(output, snapshotID, totalFiles, failedResults(failed), isSuccess)
+	})
 }
 
 func printResult(output io.Writer, snapshotID string, totalFiles int, failed []Failed, isSuccess bool) error {

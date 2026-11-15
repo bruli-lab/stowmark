@@ -2,62 +2,59 @@ package stowmark
 
 import (
 	"context"
-	"errors"
 
 	"github.com/bruli-lab/stowmark/internal/app"
-	"github.com/bruli-lab/stowmark/internal/domain/encryption"
-	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
-	"github.com/bruli-lab/stowmark/internal/infra/middlewares"
 )
 
-type CreateResult struct {
-	ID        string
-	FileCount int
-	TotalSize int64
+const IgnoreFileName = snapshot.IgnoreFileName
+
+type SkippedFile struct {
+	Path string
+	Kind string
 }
 
-func (h *Handler) CreateSnapshot(ctx context.Context, source string, privateKey *string) (*CreateResult, error) {
-	obsv, err := builtObservability(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		_ = obsv.Shutdown(ctx)
-	}()
-	svc := snapshot.NewCreate(
-		h.sourceRepository,
-		h.manifestRepository,
-		h.objectRepository,
-		repository.NewGetConfig(h.folderRepository),
-		encryption.NewDecryptSymmetricKey(h.symmetricKeyRepository, h.asymmetricKeyPaiRepository),
-	)
-	evtr := app.NewEventsTracing()
-	evtr.Add(app.CreateSnapshotCommandName, app.NewCreateSnapshotTracer(obsv.Logger))
-	mdw, err := middlewares.BuildCommandMiddlewares(obsv, evtr)
-	if err != nil {
-		return nil, err
-	}
-	handler := mdw(app.NewCreateSnapshot(svc))
+type CreateResult struct {
+	ID           string
+	FileCount    int
+	TotalSize    int64
+	SkippedFiles []SkippedFile
+}
 
-	events, err := handler.Handle(ctx, app.CreateSnapshotCommand{
-		RepositoryPath: h.repositoryPath,
-		SourcePath:     source,
-		PrivateKey:     privateKey,
+type CreateOptions struct {
+	PrivateKey      *string
+	Exclude         []string
+	SkipIgnoreFiles bool
+}
+
+func (h *Handler) CreateSnapshot(ctx context.Context, source string, privateKey *string, exclude ...string) (*CreateResult, error) {
+	return h.CreateSnapshotWithOptions(ctx, source, CreateOptions{PrivateKey: privateKey, Exclude: exclude})
+}
+
+func (h *Handler) CreateSnapshotWithOptions(ctx context.Context, source string, options CreateOptions) (*CreateResult, error) {
+	events, err := h.repository.CreateSnapshot().Handle(ctx, &app.CreateSnapshotCommand{
+		RepositoryPath:  h.repository.Path(),
+		SourcePath:      source,
+		PrivateKey:      h.key(options.PrivateKey),
+		Exclude:         options.Exclude,
+		SkipIgnoreFiles: options.SkipIgnoreFiles,
+		Progress:        h.progress,
 	})
 	if err != nil {
 		return nil, err
 	}
-	if len(events) != 1 {
-		return nil, errors.New("unexpected number of events")
+	result, err := app.SingleEvent[*snapshot.SnapshotCreated](events)
+	if err != nil {
+		return nil, err
 	}
-	result, ok := events[0].(*app.CreateSnapshotEvent)
-	if !ok {
-		return nil, errors.New("unexpected event type")
+	skipped := make([]SkippedFile, len(result.SkippedFiles()))
+	for i, file := range result.SkippedFiles() {
+		skipped[i] = SkippedFile{Path: file.Path(), Kind: file.Kind()}
 	}
 	return &CreateResult{
-		ID:        result.SnapshotID,
-		FileCount: result.FileCount,
-		TotalSize: result.TotalSize,
+		ID:           result.SnapshotID(),
+		FileCount:    result.FileCount(),
+		TotalSize:    result.TotalSize(),
+		SkippedFiles: skipped,
 	}, nil
 }

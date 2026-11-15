@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/bruli-lab/stowmark/internal/domain/encryption"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
@@ -21,16 +22,23 @@ type Encryption struct {
 	EncryptedKey         string `json:"encrypted_key"`
 	PublicKeyFingerprint string `json:"public_key_fingerprint"`
 	Generation           uint64 `json:"generation"`
+	EncryptedMetadataKey string `json:"encrypted_metadata_key,omitempty"`
 }
+type ObjectLock struct {
+	Mode          string `json:"mode"`
+	PeriodSeconds int64  `json:"period_seconds"`
+}
+
 type Config struct {
 	ID            string      `json:"id"`
 	FormatVersion int         `json:"format_version"`
 	CreatedAt     string      `json:"created_at"`
 	Compression   Compression `json:"compression"`
 	Encryption    *Encryption `json:"encryption,omitempty"`
+	ObjectLock    *ObjectLock `json:"object_lock,omitempty"`
 }
 
-func BuildConfigDomain(conf Config) (*repository.Config, error) {
+func BuildConfigDomain(conf *Config) (*repository.Config, error) {
 	id, err := uuid.Parse(conf.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse config id: %w", err)
@@ -45,11 +53,36 @@ func BuildConfigDomain(conf Config) (*repository.Config, error) {
 	}
 	var encryptionConfig *encryption.EncryptionConfig
 	if conf.Encryption != nil {
-		encryptionConfig = encryption.NewEncryptionConfig(
+		encryptionConfig, err = encryption.HydrateEncryptionConfig(
+			conf.Encryption.Type,
+			conf.Encryption.KeyEncryption,
 			conf.Encryption.EncryptedKey,
 			conf.Encryption.PublicKeyFingerprint,
 			conf.Encryption.Generation,
+			conf.Encryption.EncryptedMetadataKey,
 		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse config encryption %q/%q: %w", conf.Encryption.Type, conf.Encryption.KeyEncryption, err)
+		}
 	}
-	return repository.NewConfig(id, repository.FormatVersion(conf.FormatVersion), comp, encryptionConfig), nil
+	formatVersion, err := repository.ParseFormatVersion(conf.FormatVersion)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse config format version: %w", err)
+	}
+	createdAt, err := time.Parse(time.RFC3339, conf.CreatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse config created_at: %w", err)
+	}
+	var objectLock *repository.ObjectLock
+	if conf.ObjectLock != nil {
+		mode, err := repository.ParseObjectLockMode(conf.ObjectLock.Mode)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse config object lock: %w", err)
+		}
+		objectLock, err = repository.NewObjectLock(mode, time.Duration(conf.ObjectLock.PeriodSeconds)*time.Second)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse config object lock: %w", err)
+		}
+	}
+	return repository.HydrateConfig(id, formatVersion, createdAt, comp, encryptionConfig).WithObjectLock(objectLock), nil
 }

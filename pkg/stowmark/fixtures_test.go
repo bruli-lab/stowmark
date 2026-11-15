@@ -10,9 +10,55 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
+
+const (
+	metadataFixtureMode = os.FileMode(0o640)
+	symlinkFixturePath  = "links/readme"
+	symlinkFixtureLink  = "../README.txt"
+	emptyFixtureDir     = "empty"
+)
+
+var (
+	metadataFixtureEntries = []string{emptyFixtureDir, "links", symlinkFixturePath}
+	metadataFixtureTime    = time.Date(2024, 2, 3, 4, 5, 6, 0, time.UTC)
+)
+
+func createMetadataFixture(t *testing.T, sourcePath string) {
+	t.Helper()
+
+	require.NoError(t, os.MkdirAll(filepath.Join(sourcePath, emptyFixtureDir), 0o750))
+	require.NoError(t, os.MkdirAll(filepath.Join(sourcePath, "links"), 0o755))
+	require.NoError(t, os.Symlink(symlinkFixtureLink, filepath.Join(sourcePath, symlinkFixturePath)))
+	readme := filepath.Join(sourcePath, "README.txt")
+	require.NoError(t, os.Chmod(readme, metadataFixtureMode))
+	require.NoError(t, os.Chtimes(readme, metadataFixtureTime, metadataFixtureTime))
+	require.NoError(t, os.Chtimes(filepath.Join(sourcePath, emptyFixtureDir), metadataFixtureTime, metadataFixtureTime))
+}
+
+func requireMetadataRestored(t *testing.T, sourcePath, restorePath string) {
+	t.Helper()
+
+	target, err := os.Readlink(filepath.Join(restorePath, symlinkFixturePath))
+	require.NoError(t, err)
+	require.Equal(t, symlinkFixtureLink, target)
+
+	readme, err := os.Stat(filepath.Join(restorePath, "README.txt"))
+	require.NoError(t, err)
+	require.Equal(t, metadataFixtureMode, readme.Mode().Perm())
+	require.True(t, metadataFixtureTime.Equal(readme.ModTime()))
+
+	empty, err := os.Stat(filepath.Join(restorePath, emptyFixtureDir))
+	require.NoError(t, err)
+	require.True(t, empty.IsDir())
+	require.True(t, metadataFixtureTime.Equal(empty.ModTime()))
+	source, err := os.Stat(filepath.Join(sourcePath, emptyFixtureDir))
+	require.NoError(t, err)
+	require.Equal(t, source.Mode().Perm(), empty.Mode().Perm())
+}
 
 const mebibyte int64 = 1024 * 1024
 

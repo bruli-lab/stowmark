@@ -9,6 +9,7 @@ import (
 	"io"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -76,12 +77,19 @@ func (f FolderRepositoryRepository) CreateConfig(ctx context.Context, repository
 	}
 
 	key := path.Join(repositoryPath, model.ConfigFile)
-	_, err = f.client.PutObject(ctx, &s3.PutObjectInput{
+	input := &s3.PutObjectInput{
 		Bucket:      aws.String(f.bucket),
 		Key:         aws.String(key),
 		Body:        bytes.NewReader(data),
 		ContentType: aws.String("application/json"),
-	})
+	}
+	if lock := c.ObjectLock(); lock != nil {
+		retention := lock.RetentionFrom(time.Now())
+		input.ObjectLockMode = types.ObjectLockMode(objectLockMode(retention.Mode()))
+		input.ObjectLockRetainUntilDate = aws.Time(retention.Until())
+		input.ChecksumAlgorithm = types.ChecksumAlgorithmCrc32
+	}
+	_, err = f.client.PutObject(ctx, input)
 	if err != nil {
 		return fmt.Errorf(
 			"write config %q in bucket %q: %w",
@@ -141,7 +149,7 @@ func (f FolderRepositoryRepository) GetConfig(ctx context.Context, repositoryPat
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
-	return model.BuildConfigDomain(conf)
+	return model.BuildConfigDomain(&conf)
 }
 
 func NewFolderRepositoryRepository(client *s3.Client, bucket string) *FolderRepositoryRepository {

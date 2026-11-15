@@ -37,7 +37,7 @@ users:
 		ctx,
 		testcontainers.GenericContainerRequest{
 			ContainerRequest: testcontainers.ContainerRequest{
-				Image: "ghcr.io/hacdias/webdav:v5.14.2",
+				Image: "ghcr.io/hacdias/webdav:v5.17.3",
 				ExposedPorts: []string{
 					"6065/tcp",
 				},

@@ -1,0 +1,190 @@
+package gcs
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"path"
+	"strings"
+
+	"cloud.google.com/go/storage"
+	"github.com/bruli-lab/stowmark/internal/domain/repository"
+	"github.com/bruli-lab/stowmark/internal/infra/blob"
+	"google.golang.org/api/googleapi"
+	"google.golang.org/api/iterator"
+)
+
+type BlobStore struct {
+	client *storage.Client
+	bucket string
+	root   string
+	lock   *objectLockState
+}
+
+func (s BlobStore) Put(ctx context.Context, key string, write func(io.Writer) error) error {
+	return s.put(ctx, key, write, func(*storage.Writer) {})
+}
+
+func (s BlobStore) put(ctx context.Context, key string, write func(io.Writer) error, configure func(*storage.Writer)) error {
+	objectName, err := s.objectName(ctx, key)
+	if err != nil {
+		return err
+	}
+
+	uploadCtx, cancelUpload := context.WithCancel(ctx)
+	defer cancelUpload()
+
+	writer := s.client.Bucket(s.bucket).Object(objectName).
+		If(storage.Conditions{DoesNotExist: true}).
+		NewWriter(uploadCtx)
+	writer.ContentType = "application/octet-stream"
+	configure(writer)
+
+	if err := write(writer); err != nil {
+		cancelUpload()
+		_ = writer.Close()
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		cancelUpload()
+		_ = writer.Close()
+		return err
+	}
+
+	if err := writer.Close(); err != nil {
+		if isPreconditionFailed(err) {
+			return nil
+		}
+		return fmt.Errorf("write object %q in bucket %q: %w", objectName, s.bucket, err)
+	}
+
+	return nil
+}
+
+func (s BlobStore) Get(ctx context.Context, key string) (io.ReadCloser, error) {
+	objectName, err := s.objectName(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+
+	reader, err := s.client.Bucket(s.bucket).Object(objectName).NewReader(ctx)
+	if err != nil {
+		if errors.Is(err, storage.ErrObjectNotExist) {
+			return nil, fmt.Errorf("%w: %q", blob.ErrNotFound, key)
+		}
+		return nil, fmt.Errorf("open object %q in bucket %q: %w", objectName, s.bucket, err)
+	}
+
+	return reader, nil
+}
+
+func (s BlobStore) Exists(ctx context.Context, key string) (bool, error) {
+	objectName, err := s.objectName(ctx, key)
+	if err != nil {
+		return false, err
+	}
+
+	_, err = s.client.Bucket(s.bucket).Object(objectName).Attrs(ctx)
+	switch {
+	case err == nil:
+		return true, nil
+	case errors.Is(err, storage.ErrObjectNotExist):
+		return false, nil
+	default:
+		return false, fmt.Errorf("stat object %q in bucket %q: %w", objectName, s.bucket, err)
+	}
+}
+
+func (s BlobStore) List(ctx context.Context, prefix string) ([]blob.Entry, error) {
+	objectPrefix, err := s.objectName(ctx, prefix)
+	if err != nil {
+		return nil, err
+	}
+
+	entries := make([]blob.Entry, 0)
+	err = s.each(ctx, objectPrefix+"/", func(objectName string, size int64) error {
+		entries = append(entries, blob.Entry{Key: strings.TrimPrefix(objectName, s.root+"/"), Size: size})
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	blob.SortEntries(entries)
+
+	return entries, nil
+}
+
+func (s BlobStore) Delete(ctx context.Context, key string) error {
+	objectName, err := s.objectName(ctx, key)
+	if err != nil {
+		return err
+	}
+
+	return s.deleteRetainable(ctx, objectName)
+}
+
+func (s BlobStore) DeletePrefix(ctx context.Context, prefix string) error {
+	objectPrefix, err := s.objectName(ctx, prefix)
+	if err != nil {
+		return err
+	}
+
+	var retained *repository.RetainedError
+	err = s.each(ctx, objectPrefix+"/", func(objectName string, _ int64) error {
+		err := s.deleteRetainable(ctx, objectName)
+		if until, ok := repository.RetainedUntil(err); ok {
+			if retained == nil || until.After(retained.Until()) {
+				retained = repository.NewRetainedError(until)
+			}
+			return nil
+		}
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	if retained != nil {
+		return retained
+	}
+	return nil
+}
+
+func (s BlobStore) each(ctx context.Context, objectPrefix string, visit func(objectName string, size int64) error) error {
+	objects := s.client.Bucket(s.bucket).Objects(ctx, &storage.Query{Prefix: objectPrefix})
+	for {
+		attrs, err := objects.Next()
+		if errors.Is(err, iterator.Done) {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("list objects under %q in bucket %q: %w", objectPrefix, s.bucket, err)
+		}
+		if err := visit(attrs.Name, attrs.Size); err != nil {
+			return err
+		}
+	}
+}
+
+func (s BlobStore) objectName(ctx context.Context, key string) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	if err := blob.ValidateKey(key); err != nil {
+		return "", err
+	}
+
+	return path.Join(s.root, key), nil
+}
+
+func NewBlobStore(client *storage.Client, bucket, repositoryPath string) *BlobStore {
+	return &BlobStore{client: client, bucket: bucket, root: path.Clean(repositoryPath), lock: &objectLockState{}}
+}
+
+func isPreconditionFailed(err error) bool {
+	if apiErr, ok := errors.AsType[*googleapi.Error](err); ok {
+		return apiErr.Code == http.StatusPreconditionFailed
+	}
+	return false
+}

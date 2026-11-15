@@ -3,10 +3,12 @@ package repositories
 import (
 	"context"
 
+	"github.com/bruli-lab/stowmark/internal/app"
+
+	"github.com/bruli-lab/stowmark/internal/infra/blob"
+
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/bruli-lab/stowmark/internal/config"
-	"github.com/bruli-lab/stowmark/internal/domain/repository"
-	"github.com/bruli-lab/stowmark/internal/domain/snapshot"
 	s3infra "github.com/bruli-lab/stowmark/internal/infra/s3"
 )
 
@@ -15,7 +17,7 @@ type S3Repositories struct {
 	repositoryPath, bucket string
 }
 
-func (s S3Repositories) FolderRepository() repository.FolderRepository {
+func (s S3Repositories) FolderRepository() app.FolderRepository {
 	return s3infra.NewFolderRepositoryRepository(s.client, s.bucket)
 }
 
@@ -23,20 +25,16 @@ func (s S3Repositories) RepositoryPath() string {
 	return s.repositoryPath
 }
 
-func (s S3Repositories) ObjectRepository() (snapshot.ObjectRepository, error) {
-	return s3infra.NewObjectRepository(s.client, s.bucket, s.repositoryPath), nil
-}
-
-func (s S3Repositories) ManifestRepository() (snapshot.ManifestRepository, error) {
-	return s3infra.NewManifestRepository(s.client, s.bucket, s.repositoryPath), nil
-}
-
 func (s S3Repositories) Close() error {
 	return nil
 }
 
-func NewS3Repositories(ctx context.Context, repositoryPath string) (*S3Repositories, error) {
-	cfg, err := config.NewS3Config()
+func (s S3Repositories) BlobStore() (blob.Store, error) {
+	return s3infra.NewBlobStore(s.client, s.bucket, s.repositoryPath), nil
+}
+
+func NewS3Repositories(ctx context.Context, repositoryPath string, environment map[string]string) (*S3Repositories, error) {
+	cfg, err := config.NewS3ConfigFrom(environment)
 	if err != nil {
 		return nil, err
 	}
