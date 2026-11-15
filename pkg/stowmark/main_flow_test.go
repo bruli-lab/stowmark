@@ -295,6 +295,12 @@ func mainFlow(t *testing.T, ctx context.Context, folders Folders, formatVersion 
 	require.NoError(t, err)
 	require.Empty(t, remainingLocks)
 
+	t.Run(`Given a source with many small files in an encrypted repository,
+	when it is backed up, rekeyed, verified and restored,
+	then every concurrent write succeeds and the restore matches the source`, func(t *testing.T) {
+		manyFilesFlow(t, ctx, folders.Repository+"-many-files", formatVersion)
+	})
+
 	var contractRepositories atomic.Int64
 	t.Run(`Given the blob store of the repository,
 	when the store contract runs,

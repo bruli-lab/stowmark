@@ -47,7 +47,10 @@ logs_dir="$run_dir/logs"
 csv="$run_dir/timings.csv"
 summary="$run_dir/summary.txt"
 
-mkdir -p "$origin_1/small" "$origin_1/large" "$origin_2/small" "$origin_2/large" "$keys_dir" "$logs_dir"
+mkdir -p "$origin_1/small" "$origin_2/small" "$keys_dir" "$logs_dir"
+if ((LARGE_FILES > 0)); then
+  mkdir -p "$origin_1/large" "$origin_2/large"
+fi
 printf 'operation,status,duration_seconds\n' > "$csv"
 
 generate_origin() {
