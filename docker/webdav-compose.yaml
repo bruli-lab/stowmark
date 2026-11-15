@@ -1,6 +1,7 @@
 services:
   webdav-server:
     image: ghcr.io/hacdias/webdav:latest
+    user: "1000:1000"
     command:
       - --config
       - /config.yml
