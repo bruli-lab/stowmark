@@ -29,6 +29,7 @@
         <a href="#features">Features</a>
         <a href="#projects">Projects</a>
         <a href="#install">Install</a>
+        <a class="nav-docs" href="docs.html">Docs</a>
         <a href="https://github.com/bruli-lab/stowmark" rel="noreferrer">GitHub</a>
     </nav>
 </header>
@@ -276,14 +277,18 @@
         <div>
             <p class="eyebrow">QUICK START</p>
             <h2>Create your first snapshot</h2>
+            <p class="section-description">
+                Every command and option, encryption included, is in the
+                <a href="docs.html">documentation</a>.
+            </p>
         </div>
 
         <div class="code-block">
             <button type="button" class="copy-button" data-copy-target="quick-start-code">
                 Copy
             </button>
-            <pre><code id="quick-start-code">stowmark repository create --source ./documents --repo ~/backups/documents
-stowmark snapshot source --repo ~/backups/documents
+            <pre><code id="quick-start-code">stowmark init --repo ~/backups/documents --version 3 --compression zstd
+stowmark snapshot create ./documents --repo ~/backups/documents
 stowmark snapshot list --repo ~/backups/documents</code></pre>
         </div>
     </section>
