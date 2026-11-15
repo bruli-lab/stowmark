@@ -27,7 +27,7 @@ func newRetentionExtendCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "extend",
 		Short: "Extend the object lock retention of everything the snapshots use",
-		Long: "Extend the S3 Object Lock retention of the config, every snapshot manifest and every object they " +
+		Long: "Extend the S3 Object Lock or GCS object retention of the config, every snapshot manifest and every object they " +
 			"reference to one full period from now, for the items whose retention ends within half a period. " +
 			"Objects written once and reused by later snapshots keep their first retention, so run it regularly " +
 			"(for example from cron, more often than half the period).",

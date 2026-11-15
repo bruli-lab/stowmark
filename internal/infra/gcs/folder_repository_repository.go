@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"path"
+	"time"
 
 	"cloud.google.com/go/storage"
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
@@ -67,6 +68,9 @@ func (f FolderRepositoryRepository) CreateConfig(ctx context.Context, repository
 		NewWriter(writeCtx)
 
 	writer.ContentType = "application/json"
+	if lock := c.ObjectLock(); lock != nil {
+		writer.Retention = objectRetention(lock.RetentionFrom(time.Now()))
+	}
 
 	n, err := writer.Write(data)
 	if err != nil {

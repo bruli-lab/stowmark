@@ -46,7 +46,8 @@ the source path, creation time and references to its files.
 - Remote repositories over SSH/SFTP using public-key authentication.
 - Remote repositories over SMB using password authentication.
 - Remote repositories in Amazon S3 and S3-compatible object storage.
-- Optional S3 Object Lock (WORM) retention of every object, manifest and the repository config.
+- Optional WORM retention of every object, manifest and the repository config, with S3 Object Lock or GCS object
+  retention.
 - Remote repositories in Google Cloud Storage using Application Default Credentials.
 - Remote repositories over WebDAV using username and password authentication.
 - Optional OpenTelemetry observability through an OTLP-compatible collector.
@@ -397,7 +398,8 @@ Bucket requirements:
   which also turns on versioning. `init --object-lock` checks it and fails otherwise.
 - The bucket must **not** have a default retention. Stowmark sets the retention of each object itself, and a default
   retention would also lock the repository locks (`locks/`), which have to be deletable.
-- Object Lock is only supported on S3. `init --object-lock` fails on every other backend.
+- Object Lock is supported on S3 and, with the same flags, on Google Cloud Storage (see
+  [GCS object retention](#gcs-object-retention)). `init --object-lock` fails on every other backend.
 
 Modes:
 
@@ -504,6 +506,36 @@ disabled when a custom endpoint is configured. The bucket must already exist; St
 under the path specified in the URL. For GCS itself, the active identity must have permission to read, create and
 inspect objects in the bucket.
 
+### GCS object retention
+
+`init --object-lock` also works on Google Cloud Storage, with
+[object retention](https://cloud.google.com/storage/docs/object-lock). Stowmark sets a retain-until date on every
+object, snapshot manifest and `config.json` it writes, and GCS refuses to delete or replace them until then:
+
+```bash
+stowmark init --repo gcs://stowmark-backups/home-server --object-lock 30d --object-lock-mode governance
+```
+
+Bucket requirements, checked by `init --object-lock`:
+
+- Object retention must be enabled when the bucket is created (`gcloud storage buckets create ... --enable-per-object-retention`);
+  it cannot be enabled later.
+- Object versioning must be enabled (`gcloud storage buckets update ... --versioning`). A retained `config.json` cannot be
+  replaced, so `key rekey`, `key rewrap` and `init --force` write it as a new version.
+- The bucket must **not** have a bucket retention policy, which would also retain the repository locks.
+
+The modes map to the GCS retention modes: `governance` is `Unlocked` (a user with
+`storage.objects.overrideUnlockedRetention` can still shorten or remove it) and `compliance` is `Locked` (nobody can
+shorten it; it can only be extended).
+
+Everything else works as described in [S3 Object Lock](#s3-object-lock): `retention extend`, the `check` warning, and
+`forget`, `prune` and `key rekey` postponing what is still retained. When the bucket uses object retention, Stowmark
+deletes every generation of an object so that `prune` really frees space. Add a lifecycle rule that deletes noncurrent
+versions to clean up anything deleted outside Stowmark, and keep in mind that soft delete keeps deleted objects (and
+bills them) for its own retention period.
+
+The local GCS emulator does not support object retention, so this can only be used against Google Cloud Storage.
+
 ## WebDAV repositories
 
 Stowmark can store a repository on a WebDAV server. The source directory and restored files remain on the local
@@ -584,7 +616,7 @@ and remove files and collections under the repository path.
 | `stowmark forget --repo <repository> --keep-<rule> <n> [--prune] [--private-key <key>]` | Forget the snapshots a retention policy does not keep. |
 | `stowmark prune --repo <repository> [--private-key <key>]`              | Delete objects that no snapshot references. |
 | `stowmark check --repo <repository> [--read-data \| --read-data-subset <subset>]` | Check the integrity of the whole repository. |
-| `stowmark retention extend --repo <repository> [--private-key <key>]`   | Extend the [S3 Object Lock](#s3-object-lock) retention. |
+| `stowmark retention extend --repo <repository> [--private-key <key>]`   | Extend the [S3 Object Lock](#s3-object-lock) or [GCS](#gcs-object-retention) retention. |
 
 Every command also accepts `--json` (see [JSON output](#json-output)) and `--no-progress` (see [Progress](#progress)).
 
@@ -1172,7 +1204,8 @@ stowmark prune --repo /backups/stowmark --dry-run
   unreferenced objects as stored, after compression and encryption. It does not include old key generations or
   temporary files.
 - `prune` lists every object of the repository, which can take a while on large S3 or GCS repositories.
-- With [S3 Object Lock](#s3-object-lock), `forget` and `prune` postpone what is still retained and report until when.
+- With [S3 Object Lock](#s3-object-lock) or [GCS object retention](#gcs-object-retention), `forget` and `prune`
+  postpone what is still retained and report until when.
 
 ## Security model and limitations
 
@@ -1205,7 +1238,7 @@ What it does **not** protect:
   does not check for symbolic links that already exist on disk below the restore path and point elsewhere.
 - "Immutable-style" means objects and manifests are never overwritten by Stowmark. It is not enforced by the storage:
   anyone with write access to the backend can still delete or replace them, unless the repository uses
-  [S3 Object Lock](#s3-object-lock). On other backends, use bucket versioning or backend snapshots if you need
+  [S3 Object Lock](#s3-object-lock) or [GCS object retention](#gcs-object-retention). On other backends, use bucket versioning or backend snapshots if you need
   protection against that.
 
 What is not backed up:

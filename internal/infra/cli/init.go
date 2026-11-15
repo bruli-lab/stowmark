@@ -113,13 +113,13 @@ func newInitCommand() *cobra.Command {
 		&objectLock,
 		"object-lock",
 		"",
-		"retain every object, manifest and the config for this period with S3 Object Lock (for example 30d, 2w or 36h); the bucket must have object lock enabled and no default retention",
+		"retain every object, manifest and the config for this period with S3 Object Lock or GCS object retention (for example 30d, 2w or 36h); the bucket must have it enabled, versioning and no default retention",
 	)
 	cmd.Flags().StringVar(
 		&objectLockMode,
 		"object-lock-mode",
 		string(repository.GovernanceObjectLock),
-		"object lock mode: governance (users with s3:BypassGovernanceRetention can still delete) or compliance (nobody can delete until the retention ends)",
+		"object lock mode: governance (users with s3:BypassGovernanceRetention, or GCS overrideUnlockedRetention, can still delete) or compliance (nobody can delete until the retention ends)",
 	)
 	cmd.Flags().BoolVar(
 		&force,

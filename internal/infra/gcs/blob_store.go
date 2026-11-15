@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"cloud.google.com/go/storage"
+	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/infra/blob"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
@@ -19,9 +20,14 @@ type BlobStore struct {
 	client *storage.Client
 	bucket string
 	root   string
+	lock   *objectLockState
 }
 
 func (s BlobStore) Put(ctx context.Context, key string, write func(io.Writer) error) error {
+	return s.put(ctx, key, write, func(*storage.Writer) {})
+}
+
+func (s BlobStore) put(ctx context.Context, key string, write func(io.Writer) error, configure func(*storage.Writer)) error {
 	objectName, err := s.objectName(ctx, key)
 	if err != nil {
 		return err
@@ -34,6 +40,7 @@ func (s BlobStore) Put(ctx context.Context, key string, write func(io.Writer) er
 		If(storage.Conditions{DoesNotExist: true}).
 		NewWriter(uploadCtx)
 	writer.ContentType = "application/octet-stream"
+	configure(writer)
 
 	if err := write(writer); err != nil {
 		cancelUpload()
@@ -115,11 +122,7 @@ func (s BlobStore) Delete(ctx context.Context, key string) error {
 		return err
 	}
 
-	if err := s.client.Bucket(s.bucket).Object(objectName).Delete(ctx); err != nil && !errors.Is(err, storage.ErrObjectNotExist) {
-		return fmt.Errorf("delete object %q from bucket %q: %w", objectName, s.bucket, err)
-	}
-
-	return nil
+	return s.deleteRetainable(ctx, objectName)
 }
 
 func (s BlobStore) DeletePrefix(ctx context.Context, prefix string) error {
@@ -128,13 +131,24 @@ func (s BlobStore) DeletePrefix(ctx context.Context, prefix string) error {
 		return err
 	}
 
-	bucket := s.client.Bucket(s.bucket)
-	return s.each(ctx, objectPrefix+"/", func(objectName string, _ int64) error {
-		if err := bucket.Object(objectName).Delete(ctx); err != nil && !errors.Is(err, storage.ErrObjectNotExist) {
-			return fmt.Errorf("delete object %q from bucket %q: %w", objectName, s.bucket, err)
+	var retained *repository.RetainedError
+	err = s.each(ctx, objectPrefix+"/", func(objectName string, _ int64) error {
+		err := s.deleteRetainable(ctx, objectName)
+		if until, ok := repository.RetainedUntil(err); ok {
+			if retained == nil || until.After(retained.Until()) {
+				retained = repository.NewRetainedError(until)
+			}
+			return nil
 		}
-		return nil
+		return err
 	})
+	if err != nil {
+		return err
+	}
+	if retained != nil {
+		return retained
+	}
+	return nil
 }
 
 func (s BlobStore) each(ctx context.Context, objectPrefix string, visit func(objectName string, size int64) error) error {
@@ -165,7 +179,7 @@ func (s BlobStore) objectName(ctx context.Context, key string) (string, error) {
 }
 
 func NewBlobStore(client *storage.Client, bucket, repositoryPath string) *BlobStore {
-	return &BlobStore{client: client, bucket: bucket, root: path.Clean(repositoryPath)}
+	return &BlobStore{client: client, bucket: bucket, root: path.Clean(repositoryPath), lock: &objectLockState{}}
 }
 
 func isPreconditionFailed(err error) bool {
