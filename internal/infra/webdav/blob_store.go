@@ -63,7 +63,7 @@ func (s *BlobStore) Put(ctx context.Context, key string, write func(io.Writer) e
 	}()
 
 	size := int64(buffer.Len())
-	if err := s.client.WriteStream(temporaryPath, &buffer, webDAVFileMode); err != nil {
+	if err := s.client.Write(temporaryPath, buffer.Bytes(), webDAVFileMode); err != nil {
 		return fmt.Errorf("write WebDAV temporary file %q: %w", temporaryPath, err)
 	}
 
