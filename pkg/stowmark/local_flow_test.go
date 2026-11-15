@@ -16,7 +16,9 @@ import (
 
 func TestLocalRepositoryFlow(t *testing.T) {
 	for k, version := range Versions() {
-		t.Run(`Running local workflow, with format version `+k, func(t *testing.T) {
+		t.Run(`Given a local repository with format version `+k+`,
+		when the whole workflow runs,
+		then every step succeeds`, func(t *testing.T) {
 			testRoot := t.TempDir()
 			sourcePath := filepath.Join(testRoot, "source-"+k)
 			repositoryPath := filepath.Join(testRoot, "repository-"+k)

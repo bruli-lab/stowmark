@@ -58,7 +58,7 @@ func TestTerminal_Line(t *testing.T) {
 		expected string
 	}{
 		{
-			name:     "with bytes half done after 10 seconds, then it shows the percentage by bytes, the counts, the speed and the remaining time",
+			name:     "with bytes half done after 10 seconds, when its line is drawn, then it shows the percentage by bytes, the counts, the speed and the remaining time",
 			stage:    app.ProgressBackingUp,
 			items:    4,
 			bytes:    4 << 20,
@@ -67,7 +67,7 @@ func TestTerminal_Line(t *testing.T) {
 			expected: "Backing up  50% [============            ]  1/4  2.0 MiB/4.0 MiB  204.8 KiB/s  ETA 10s",
 		},
 		{
-			name:     "without bytes, then it shows the percentage by items and no sizes",
+			name:     "without bytes, when its line is drawn, then it shows the percentage by items and no sizes",
 			stage:    app.ProgressRekeying,
 			items:    4,
 			advance:  [2]int64{1, 0},
@@ -75,7 +75,7 @@ func TestTerminal_Line(t *testing.T) {
 			expected: "Rekeying  25% [======                  ]  1/4  ETA 9s",
 		},
 		{
-			name:     "with nothing to do, then it shows it as complete",
+			name:     "with nothing to do, when its line is drawn, then it shows it as complete",
 			stage:    app.ProgressVerifying,
 			expected: "Verifying 100% [========================]  0/0",
 		},

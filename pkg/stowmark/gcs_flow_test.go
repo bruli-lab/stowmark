@@ -9,7 +9,9 @@ import (
 
 func TestGCSRepositoryFlow(t *testing.T) {
 	for k, version := range Versions() {
-		t.Run(`Running GCS workflow, with format version `+k, func(t *testing.T) {
+		t.Run(`Given a GCS repository with format version `+k+`,
+		when the whole workflow runs,
+		then every step succeeds`, func(t *testing.T) {
 			ctx := t.Context()
 
 			gcsContainer := startGCSContainer(t, ctx)

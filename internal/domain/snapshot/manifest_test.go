@@ -102,12 +102,12 @@ func TestManifest_ValidateRestore(t *testing.T) {
 		destination *string
 		expectedErr error
 	}{
-		{name: "with a clean absolute source and no destination, then it can be restored in place", source: "/home/user/docs"},
-		{name: "with a relative source and no destination, then it cannot be restored in place", source: "home/user", expectedErr: snapshot.ErrUnsafeRestoreInPlace},
-		{name: "with a source that is not clean and no destination, then it cannot be restored in place", source: "/home/user/../../etc", expectedErr: snapshot.ErrUnsafeRestoreInPlace},
-		{name: "with the filesystem root as source and no destination, then it cannot be restored in place", source: "/", expectedErr: snapshot.ErrUnsafeRestoreInPlace},
-		{name: "with an empty source and no destination, then it cannot be restored in place", source: "", expectedErr: snapshot.ErrUnsafeRestoreInPlace},
-		{name: "with an unsafe source and a destination, then it can be restored", source: "/", destination: new("/restore")},
+		{name: "with a clean absolute source and no destination, when ValidateRestore is called, then it can be restored in place", source: "/home/user/docs"},
+		{name: "with a relative source and no destination, when ValidateRestore is called, then it cannot be restored in place", source: "home/user", expectedErr: snapshot.ErrUnsafeRestoreInPlace},
+		{name: "with a source that is not clean and no destination, when ValidateRestore is called, then it cannot be restored in place", source: "/home/user/../../etc", expectedErr: snapshot.ErrUnsafeRestoreInPlace},
+		{name: "with the filesystem root as source and no destination, when ValidateRestore is called, then it cannot be restored in place", source: "/", expectedErr: snapshot.ErrUnsafeRestoreInPlace},
+		{name: "with an empty source and no destination, when ValidateRestore is called, then it cannot be restored in place", source: "", expectedErr: snapshot.ErrUnsafeRestoreInPlace},
+		{name: "with an unsafe source and a destination, when ValidateRestore is called, then it can be restored", source: "/", destination: new("/restore")},
 	}
 	for _, tt := range tests {
 		t.Run(`Given a manifest `+tt.name, func(t *testing.T) {
@@ -130,13 +130,13 @@ func TestManifest_RestoreTarget(t *testing.T) {
 		expectedPath string
 		expectedErr  error
 	}{
-		{name: "an entry inside the source and no destination, then it keeps its path", path: "/home/user/docs/a.txt", expectedPath: "/home/user/docs/a.txt"},
-		{name: "the source directory itself and no destination, then it keeps its path", path: "/home/user/docs", expectedPath: "/home/user/docs"},
-		{name: "an entry outside the source and no destination, then it is rejected", path: "/home/user/.ssh/authorized_keys", expectedErr: snapshot.ErrPathOutsideSource},
-		{name: "an entry that escapes the source with dot dot and no destination, then it is rejected", path: "/home/user/docs/../../../etc/passwd", expectedErr: snapshot.ErrPathOutsideSource},
-		{name: "an entry with a sibling prefix and no destination, then it is rejected", path: "/home/user/docs-private/key", expectedErr: snapshot.ErrPathOutsideSource},
-		{name: "an entry inside the source and a destination, then it is moved below the destination", path: "/home/user/docs/sub/a.txt", destination: new("/restore"), expectedPath: "/restore/sub/a.txt"},
-		{name: "an entry outside the source and a destination, then it is rejected", path: "/etc/passwd", destination: new("/restore"), expectedErr: snapshot.ErrPathOutsideSource},
+		{name: "an entry inside the source and no destination, when RestoreTarget is called, then it keeps its path", path: "/home/user/docs/a.txt", expectedPath: "/home/user/docs/a.txt"},
+		{name: "the source directory itself and no destination, when RestoreTarget is called, then it keeps its path", path: "/home/user/docs", expectedPath: "/home/user/docs"},
+		{name: "an entry outside the source and no destination, when RestoreTarget is called, then it is rejected", path: "/home/user/.ssh/authorized_keys", expectedErr: snapshot.ErrPathOutsideSource},
+		{name: "an entry that escapes the source with dot dot and no destination, when RestoreTarget is called, then it is rejected", path: "/home/user/docs/../../../etc/passwd", expectedErr: snapshot.ErrPathOutsideSource},
+		{name: "an entry with a sibling prefix and no destination, when RestoreTarget is called, then it is rejected", path: "/home/user/docs-private/key", expectedErr: snapshot.ErrPathOutsideSource},
+		{name: "an entry inside the source and a destination, when RestoreTarget is called, then it is moved below the destination", path: "/home/user/docs/sub/a.txt", destination: new("/restore"), expectedPath: "/restore/sub/a.txt"},
+		{name: "an entry outside the source and a destination, when RestoreTarget is called, then it is rejected", path: "/etc/passwd", destination: new("/restore"), expectedErr: snapshot.ErrPathOutsideSource},
 	}
 	for _, tt := range tests {
 		t.Run(`Given a manifest of /home/user/docs and `+tt.name, func(t *testing.T) {

@@ -296,7 +296,9 @@ func mainFlow(t *testing.T, ctx context.Context, folders Folders, formatVersion 
 	require.Empty(t, remainingLocks)
 
 	var contractRepositories atomic.Int64
-	t.Run("blob store contract", func(t *testing.T) {
+	t.Run(`Given the blob store of the repository,
+	when the store contract runs,
+	then every operation behaves as the contract expects`, func(t *testing.T) {
 		blobtest.RunStoreContract(t, func(t *testing.T) blob.Store {
 			return blobStore(t, ctx, fmt.Sprintf("%s-contract-%d", folders.Repository, contractRepositories.Add(1)))
 		})

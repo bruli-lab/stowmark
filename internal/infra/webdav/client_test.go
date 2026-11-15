@@ -53,8 +53,8 @@ func TestNewClient(t *testing.T) {
 		status  int
 		wantErr bool
 	}{
-		{name: "that accepts the credentials, then it returns a client", status: http.StatusOK},
-		{name: "that rejects the credentials, then it returns a connection error", status: http.StatusUnauthorized, wantErr: true},
+		{name: "that accepts the credentials, when NewClient is called, then it returns a client", status: http.StatusOK},
+		{name: "that rejects the credentials, when NewClient is called, then it returns a connection error", status: http.StatusUnauthorized, wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(`Given a WebDAV server `+tt.name, func(t *testing.T) {

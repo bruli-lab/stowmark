@@ -24,7 +24,7 @@ func TestConfig_Reinitialize(t *testing.T) {
 		expectedEncryptionConfig *encryption.EncryptionConfig
 	}{
 		{
-			name: "with encryption in previous config but no in new config and force is true, it should remove the encryption config",
+			name: "with encryption in previous config but no in new config and force is true, then it removes the encryption config",
 			args: args{
 				previous: &Config{
 					id:            id,
@@ -48,7 +48,7 @@ func TestConfig_Reinitialize(t *testing.T) {
 			expectedEncryptionConfig: nil,
 		},
 		{
-			name: "with encryption in previous config but no in new config and no force, it should maintain the encryption config",
+			name: "with encryption in previous config but no in new config and no force, then it keeps the encryption config",
 			args: args{
 				previous: &Config{
 					id:            id,
@@ -72,7 +72,7 @@ func TestConfig_Reinitialize(t *testing.T) {
 			expectedEncryptionConfig: encryptionConfig,
 		},
 		{
-			name: "with encryption in previous config and encryption in new config, it should maintain the encryption config",
+			name: "with encryption in previous config and encryption in new config, then it keeps the encryption config",
 			args: args{
 				previous: &Config{
 					id:            id,
@@ -97,7 +97,7 @@ func TestConfig_Reinitialize(t *testing.T) {
 			expectedEncryptionConfig: encryptionConfig,
 		},
 		{
-			name: "without encryption in previous config and encryption in new config, it should update the encryption config",
+			name: "without encryption in previous config and encryption in new config, then it updates the encryption config",
 			args: args{
 				previous: &Config{
 					id:            id,

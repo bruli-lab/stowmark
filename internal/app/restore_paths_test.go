@@ -103,13 +103,13 @@ func TestRestoreFile_InPlacePaths(t *testing.T) {
 		expectedErr error
 	}{
 		{
-			name:        "an entry outside the source of the manifest, then it returns a path outside source error",
+			name:        "an entry outside the source of the manifest, when Handle method is called, then it returns a path outside source error",
 			source:      "/home/user/docs",
 			filePath:    "/home/user/.ssh/authorized_keys",
 			expectedErr: snapshot.ErrPathOutsideSource,
 		},
 		{
-			name:        "a manifest whose source is the filesystem root, then it returns an unsafe restore error",
+			name:        "a manifest whose source is the filesystem root, when Handle method is called, then it returns an unsafe restore error",
 			source:      "/",
 			filePath:    "/home/user/docs/a.txt",
 			expectedErr: snapshot.ErrUnsafeRestoreInPlace,

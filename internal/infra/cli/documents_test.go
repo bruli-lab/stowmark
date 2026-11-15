@@ -25,17 +25,17 @@ func TestNewEntryDocument(t *testing.T) {
 		expected string
 	}{
 		{
-			name:     "a regular file without metadata, then it has the hash and no mode",
+			name:     "a regular file without metadata, when newEntryDocument is called, then it has the hash and no mode",
 			file:     fixtures.FileBuilder{Path: new("docs/a.txt"), Hash: new("aa01"), Size: new(int64(3))}.Build(),
 			expected: `{"path":"docs/a.txt","kind":"file","hash":"aa01","size":3}`,
 		},
 		{
-			name:     "a directory with metadata, then it has the unix mode in octal and the UTC modification time",
+			name:     "a directory with metadata, when newEntryDocument is called, then it has the unix mode in octal and the UTC modification time",
 			file:     snapshot.NewDirectory("docs").WithMetadata(metadata),
 			expected: `{"path":"docs","kind":"dir","size":0,"mode":"5750","modified_at":"2026-03-04T04:06:07Z"}`,
 		},
 		{
-			name:     "a symlink, then it has the target",
+			name:     "a symlink, when newEntryDocument is called, then it has the target",
 			file:     *snapshot.NewSymlink("links/readme", "../README.txt"),
 			expected: `{"path":"links/readme","kind":"symlink","size":0,"target":"../README.txt"}`,
 		},

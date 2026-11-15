@@ -9,7 +9,9 @@ import (
 
 func TestS3RepositoryFlow(t *testing.T) {
 	for k, version := range Versions() {
-		t.Run(`Running S3 workflow, with format version `+k, func(t *testing.T) {
+		t.Run(`Given an S3 repository with format version `+k+`,
+		when the whole workflow runs,
+		then every step succeeds`, func(t *testing.T) {
 			ctx := t.Context()
 
 			s3Container := startS3Container(t, ctx)

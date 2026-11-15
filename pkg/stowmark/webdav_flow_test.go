@@ -10,7 +10,7 @@ import (
 
 func TestWebdavRepositoryFlow(t *testing.T) {
 	for k, version := range Versions() {
-		t.Run(fmt.Sprintf("Running WEBDAV workflow, with format version %d", version), func(t *testing.T) {
+		t.Run(fmt.Sprintf("Given a WebDAV repository with format version %d, when the whole workflow runs, then every step succeeds", version), func(t *testing.T) {
 			ctx := t.Context()
 
 			container := startWebDAVContainer(t, ctx)

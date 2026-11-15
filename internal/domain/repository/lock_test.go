@@ -122,13 +122,12 @@ func TestLock_IsStale(t *testing.T) {
 		createdAt time.Time
 		expected  bool
 	}{
-		{name: "refreshed recently, then it is not stale", createdAt: now.Add(-time.Minute), expected: false},
-		{name: "refreshed in the future because of clock skew, then it is not stale", createdAt: now.Add(time.Hour), expected: false},
-		{name: "not refreshed for longer than the stale period, then it is stale", createdAt: now.Add(-repository.LockStaleAfter - time.Second), expected: true},
+		{name: "refreshed recently, when IsStale is called, then it is not stale", createdAt: now.Add(-time.Minute), expected: false},
+		{name: "refreshed in the future because of clock skew, when IsStale is called, then it is not stale", createdAt: now.Add(time.Hour), expected: false},
+		{name: "not refreshed for longer than the stale period, when IsStale is called, then it is stale", createdAt: now.Add(-repository.LockStaleAfter - time.Second), expected: true},
 	}
 	for _, tt := range tests {
-		t.Run(`Given a lock `+tt.name+`,
-		when IsStale is called`, func(t *testing.T) {
+		t.Run(`Given a lock `+tt.name, func(t *testing.T) {
 			t.Parallel()
 
 			require.Equal(t, tt.expected, newLock(t, repository.SharedLock, tt.createdAt).IsStale(now))

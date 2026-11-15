@@ -85,9 +85,9 @@ func TestObjectLock_Retention(t *testing.T) {
 		until    time.Time
 		expected bool
 	}{
-		{name: "already expired, then it needs an extension", until: now.Add(-time.Hour), expected: true},
-		{name: "ending within half a period, then it needs an extension", until: now.Add(4 * 24 * time.Hour), expected: true},
-		{name: "ending after half a period, then it does not need an extension", until: now.Add(6 * 24 * time.Hour), expected: false},
+		{name: "already expired, when NeedsExtension is called, then it needs an extension", until: now.Add(-time.Hour), expected: true},
+		{name: "ending within half a period, when NeedsExtension is called, then it needs an extension", until: now.Add(4 * 24 * time.Hour), expected: true},
+		{name: "ending after half a period, when NeedsExtension is called, then it does not need an extension", until: now.Add(6 * 24 * time.Hour), expected: false},
 	}
 	for _, tt := range tests {
 		t.Run(`Given an object lock and a retention `+tt.name, func(t *testing.T) {
