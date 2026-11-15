@@ -10,6 +10,7 @@ export LC_ALL=C
 #   REPOSITORY='webdav://localhost:18080/backups/benchmark' ./scripts/benchmark-stowmark.sh
 #   SMALL_FILES=10000 SMALL_SIZE_KIB=16 LARGE_FILES=10 LARGE_SIZE_MIB=1024 ./scripts/benchmark-stowmark.sh
 #   ENCRYPTION=0 COMPRESSION=none ./scripts/benchmark-stowmark.sh
+#   FORMAT_VERSION=3 ./scripts/benchmark-stowmark.sh
 
 STOWMARK_BIN="${STOWMARK_BIN:-./stowmark}"
 RESULTS_ROOT="${RESULTS_ROOT:-./benchmark-results}"
@@ -21,6 +22,7 @@ COMPRESSION="${COMPRESSION:-zstd}"
 COMPRESSION_LEVEL="${COMPRESSION_LEVEL:-3}"
 ENCRYPTION="${ENCRYPTION:-1}"
 REPOSITORY="${REPOSITORY:-}"
+FORMAT_VERSION="${FORMAT_VERSION:-}"
 
 for dependency in "$STOWMARK_BIN" diff find grep head awk date du; do
   if [[ "$dependency" == "$STOWMARK_BIN" ]]; then
@@ -89,7 +91,7 @@ measure() {
 latest_snapshot_id() {
   local snapshot_id
 
-  if ! "$STOWMARK_BIN" snapshot list --repo "$repository" >"$logs_dir/snapshot_list_latest.log" 2>&1; then
+  if ! "$STOWMARK_BIN" snapshot list --repo "$repository" "${private_key_args[@]}" >"$logs_dir/snapshot_list_latest.log" 2>&1; then
     printf 'No s\x27ha pogut consultar la llista de snapshots. Log: %s\n' "$logs_dir/snapshot_list_latest.log" >&2
     return 1
   fi
@@ -106,6 +108,10 @@ printf 'Generant origin 2...\n'
 generate_origin "$origin_2" two
 
 init_args=(init --repo "$repository" --compression "$COMPRESSION")
+if [[ -n "$FORMAT_VERSION" ]]; then
+  [[ "$FORMAT_VERSION" =~ ^[0-9]+$ ]] || { printf 'FORMAT_VERSION ha de ser un enter\n' >&2; exit 1; }
+  init_args+=(--version "$FORMAT_VERSION")
+fi
 if [[ "$COMPRESSION" != none ]]; then
   init_args+=(--level "$COMPRESSION_LEVEL")
 fi
@@ -138,7 +144,7 @@ measure snapshot_create_origin_2 "$STOWMARK_BIN" snapshot create "$origin_2" --r
 second_snapshot_id="$(latest_snapshot_id)"
 
 measure snapshot_verify "$STOWMARK_BIN" snapshot verify --id "$second_snapshot_id" --repo "$repository" "${private_key_args[@]}"
-measure snapshot_get "$STOWMARK_BIN" snapshot get --id "$second_snapshot_id" --repo "$repository"
+measure snapshot_get "$STOWMARK_BIN" snapshot get --id "$second_snapshot_id" --repo "$repository" "${private_key_args[@]}"
 measure snapshot_restore "$STOWMARK_BIN" snapshot restore --id "$second_snapshot_id" --repo "$repository" --destination "$restore_dir" "${private_key_args[@]}"
 measure restore_diff diff -qr "$origin_2" "$restore_dir"
 
@@ -162,6 +168,7 @@ fi
   printf 'run_id=%s\n' "$run_id"
   printf 'stowmark_bin=%s\n' "$STOWMARK_BIN"
   printf 'repository=%s\n' "$repository"
+  printf 'format_version=%s\n' "${FORMAT_VERSION:-default}"
   printf 'compression=%s\n' "$COMPRESSION"
   printf 'encryption=%s\n' "$ENCRYPTION"
   printf 'small_files_per_origin=%s\n' "$SMALL_FILES"

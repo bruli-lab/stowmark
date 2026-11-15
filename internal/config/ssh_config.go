@@ -14,6 +14,7 @@ type SSHConfig struct {
 	PrivateKey           string `env:"STOWMARK_SSH_PRIVATE_KEY"`
 	PrivateKeyPassphrase string `env:"STOWMARK_SSH_PRIVATE_KEY_PASSPHRASE"`
 	AgentSocket          string `env:"SSH_AUTH_SOCK"`
+	KnownHosts           string `env:"STOWMARK_SSH_KNOWN_HOSTS"`
 }
 
 func (c SSHConfig) UsesAgent() bool {

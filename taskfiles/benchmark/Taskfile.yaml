@@ -17,6 +17,7 @@ tasks:
     desc: Executing benchmark over SSH
     env:
       STOWMARK_SSH_PRIVATE_KEY: ./docker/ssh-test/keys/stowmark
+      STOWMARK_SSH_KNOWN_HOSTS: ./docker/ssh-test/known_hosts
     deps:
       - task: :build
       - task: :ssh:up

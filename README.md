@@ -223,6 +223,13 @@ ssh-add ~/.ssh/id_ed25519
 
 When `STOWMARK_SSH_PRIVATE_KEY` is set, only that key is used, even if an agent is running.
 
+The host key of the server is checked against `~/.ssh/known_hosts`, and a host that is not there or whose key changed
+is rejected. Set `STOWMARK_SSH_KNOWN_HOSTS` to use another file, for example one dedicated to the backup servers:
+
+```bash
+export STOWMARK_SSH_KNOWN_HOSTS="/etc/stowmark/known_hosts"
+```
+
 Use an SSH repository URL anywhere that `--repo` or the repository argument is accepted:
 
 ```text

@@ -38,6 +38,12 @@ func TestNewSSHConfig(t *testing.T) {
 			expected: config.SSHConfig{PrivateKey: "test", PrivateKeyPassphrase: "secret"},
 		},
 		{
+			name:      "with STOWMARK_SSH_KNOWN_HOSTS set, then it returns the known_hosts path",
+			envVars:   map[string]string{"SSH_AUTH_SOCK": "/run/agent.sock", "STOWMARK_SSH_KNOWN_HOSTS": "/etc/stowmark/known_hosts"},
+			expected:  config.SSHConfig{AgentSocket: "/run/agent.sock", KnownHosts: "/etc/stowmark/known_hosts"},
+			usesAgent: true,
+		},
+		{
 			name:      "with only SSH_AUTH_SOCK set, then it uses the ssh-agent",
 			envVars:   map[string]string{"SSH_AUTH_SOCK": "/run/agent.sock"},
 			expected:  config.SSHConfig{AgentSocket: "/run/agent.sock"},

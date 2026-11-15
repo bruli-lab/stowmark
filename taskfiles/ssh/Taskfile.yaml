@@ -5,6 +5,9 @@ vars:
   SSH_SERVICE: ssh-server
   SSH_KEYS_DIR: docker/ssh-test/keys
   SSH_PRIVATE_KEY: '{{.SSH_KEYS_DIR}}/stowmark'
+  SSH_HOST_KEYS_DIR: docker/ssh-test/config/ssh_host_keys
+  SSH_KNOWN_HOSTS: docker/ssh-test/known_hosts
+  SSH_ADDRESS: '[localhost]:2222'
 
 tasks:
   keys:
@@ -28,7 +31,24 @@ tasks:
     deps:
       - keys
     cmds:
+      - mkdir -p docker/ssh-test/repositories
       - docker compose -f "{{.COMPOSE_FILE}}" up -d "{{.SSH_SERVICE}}" --remove-orphans
+      - docker compose -f "{{.COMPOSE_FILE}}" exec -T "{{.SSH_SERVICE}}" chown 1000:1000 /repositories
+      - task: known-hosts
+
+  known-hosts:
+    desc: Write a known_hosts file with the host keys of the SSH server
+    cmds:
+      - |
+        set -euo pipefail
+        for _ in $(seq 1 30); do
+          if ls "{{.SSH_HOST_KEYS_DIR}}"/ssh_host_*_key.pub >/dev/null 2>&1; then
+            break
+          fi
+          sleep 1
+        done
+        ls "{{.SSH_HOST_KEYS_DIR}}"/ssh_host_*_key.pub >/dev/null
+        awk '{ print "{{.SSH_ADDRESS}}", $1, $2 }' "{{.SSH_HOST_KEYS_DIR}}"/ssh_host_*_key.pub > "{{.SSH_KNOWN_HOSTS}}"
 
   down:
     desc: Stop and remove only the SSH server

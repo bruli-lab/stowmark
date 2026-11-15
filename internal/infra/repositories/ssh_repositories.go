@@ -67,9 +67,9 @@ func NewSSHRepositories(ctx context.Context, address string, environment map[str
 		port = DefaultSSHPort
 	}
 
-	homeDir, err := os.UserHomeDir()
+	knownHosts, err := knownHostsPath(conf)
 	if err != nil {
-		return nil, fmt.Errorf("get home directory: %w", err)
+		return nil, err
 	}
 
 	auth, authCloser, err := NewSSHAuth(ctx, conf)
@@ -83,7 +83,7 @@ func NewSSHRepositories(ctx context.Context, address string, environment map[str
 	clientConfig, err := newClientConfig(
 		u.User.Username(),
 		auth,
-		filepath.Join(homeDir, ".ssh", "known_hosts"),
+		knownHosts,
 	)
 	if err != nil {
 		return nil, err
@@ -101,6 +101,17 @@ func NewSSHRepositories(ctx context.Context, address string, environment map[str
 		client:         client,
 		repositoryPath: u.Path,
 	}, nil
+}
+
+func knownHostsPath(conf *config.SSHConfig) (string, error) {
+	if conf.KnownHosts != "" {
+		return conf.KnownHosts, nil
+	}
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("get home directory: %w", err)
+	}
+	return filepath.Join(homeDir, ".ssh", "known_hosts"), nil
 }
 
 func newClientConfig(username string, auth gossh.AuthMethod, knownHostsPath string) (*gossh.ClientConfig, error) {

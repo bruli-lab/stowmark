@@ -2,15 +2,20 @@ package repositories_test
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/pem"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/bruli-lab/stowmark/internal/domain/repository"
 	"github.com/bruli-lab/stowmark/internal/infra/repositories"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/ssh"
 )
 
 func requireRepositories(t *testing.T, repos repositories.Repositories, expectedPath string) {
@@ -163,4 +168,36 @@ func closedAddress(t *testing.T) string {
 	address := listener.Addr().String()
 	require.NoError(t, listener.Close())
 	return address
+}
+
+func TestNewHandler_SSHKnownHosts(t *testing.T) {
+	t.Parallel()
+
+	t.Run(`Given an SSH URL and STOWMARK_SSH_KNOWN_HOSTS pointing to a file that does not exist,
+	when NewHandler is called,
+	then it fails loading that known_hosts file instead of the one in the home directory`, func(t *testing.T) {
+		t.Parallel()
+
+		dir := t.TempDir()
+		knownHosts := filepath.Join(dir, "missing_known_hosts")
+
+		repos, err := repositories.NewHandler(t.Context(), "ssh://user@"+closedAddress(t)+"/backups", map[string]string{
+			"STOWMARK_SSH_PRIVATE_KEY": writeSSHPrivateKey(t, dir),
+			"STOWMARK_SSH_KNOWN_HOSTS": knownHosts,
+		})
+
+		require.Nil(t, repos)
+		require.ErrorContains(t, err, `load known_hosts file "`+knownHosts+`"`)
+	})
+}
+
+func writeSSHPrivateKey(t *testing.T, dir string) string {
+	t.Helper()
+	_, private, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	block, err := ssh.MarshalPrivateKey(private, "")
+	require.NoError(t, err)
+	path := filepath.Join(dir, "id_ed25519")
+	require.NoError(t, os.WriteFile(path, pem.EncodeToMemory(block), 0o600))
+	return path
 }
