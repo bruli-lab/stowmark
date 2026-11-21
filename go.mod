@@ -13,7 +13,7 @@ require (
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/cloudsoda/go-smb2 v0.0.0-20261105190815-95be04a983b8
 	github.com/google/uuid v1.6.0
-	github.com/klauspost/compress v1.20.2
+	github.com/klauspost/compress v1.20.5
 	github.com/moby/moby/api v1.55.0
 	github.com/pierrec/lz4/v4 v4.1.33
 	github.com/pkg/sftp v1.13.11
