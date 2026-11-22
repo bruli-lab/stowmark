@@ -10,7 +10,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.107.4
 	github.com/aws/smithy-go v1.28.8
 	github.com/bruli-lab/go-core v1.8.0
-	github.com/caarlos0/env/v11 v11.4.1
+	github.com/caarlos0/env/v11 v11.4.2
 	github.com/cloudsoda/go-smb2 v0.0.0-20261105190815-95be04a983b8
 	github.com/google/uuid v1.6.0
 	github.com/klauspost/compress v1.20.2
