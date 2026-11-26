@@ -952,6 +952,50 @@ nav a[aria-current="page"] {
     color: var(--accent-soft);
 }
 
+.docs-switch {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 28px;
+    padding: 6px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--bg-soft);
+}
+
+.docs-switch a {
+    padding: 8px 12px;
+    border-radius: 8px;
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.docs-switch a:hover {
+    color: var(--text);
+}
+
+.docs-switch a[aria-current="page"] {
+    color: var(--accent-soft);
+    background: var(--surface);
+}
+
+.docs-section .console-preview {
+    margin: 20px 0 24px;
+}
+
+.docs-list {
+    margin: 0 0 18px;
+    padding-left: 20px;
+    color: var(--muted);
+    line-height: 1.65;
+}
+
+.docs-list li + li {
+    margin-top: 4px;
+}
+
 .docs-content {
     min-width: 0;
     max-width: 920px;

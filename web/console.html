@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Stowmark Console documentation: installation, repositories, configuration and keyboard controls of the terminal user interface.">
+    <meta name="theme-color" content="#070B14">
+
+    <meta property="og:title" content="Stowmark Console documentation">
+    <meta property="og:description" content="Terminal user interface for browsing and managing Stowmark repositories.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://stowmark.dev/console.html">
+    <meta property="og:image" content="https://stowmark.dev/assets/brand-image.png">
+
+    <title>Stowmark Console — Documentation</title>
+
+    <link rel="icon" href="assets/favicon.png" type="image/png">
+    <link rel="stylesheet" href="styles.css">
+    <script src="app.js" defer></script>
+</head>
+<body>
+<header class="site-header">
+    <a class="brand" href="index.html" aria-label="Stowmark home">
+        <img src="assets/title.png" alt="" width="200" height="100">
+    </a>
+
+    <nav aria-label="Main navigation">
+        <a href="index.html#features">Features</a>
+        <a href="index.html#projects">Projects</a>
+        <a href="index.html#install">Install</a>
+        <a class="nav-docs" href="docs.html" aria-current="page">Docs</a>
+        <a href="https://github.com/bruli-lab/stowmark" rel="noreferrer">GitHub</a>
+    </nav>
+</header>
+
+<main class="section docs">
+    <aside class="docs-toc" aria-label="Documentation contents">
+        <div class="docs-switch" role="navigation" aria-label="Documentation projects">
+            <a href="docs.html">stowmark</a>
+            <a href="console.html" aria-current="page">stowmark-console</a>
+        </div>
+        <p class="eyebrow">CONTENTS</p>
+        <ol>
+            <li><a href="#overview">Overview</a></li>
+            <li><a href="#installation">Installation</a></li>
+            <li>
+                <a href="#usage">Usage</a>
+                <ol>
+                    <li><a href="#remote-repositories">Remote repositories</a></li>
+                    <li><a href="#several-repositories">Several repositories</a></li>
+                </ol>
+            </li>
+            <li><a href="#configuration">Configuration</a></li>
+            <li>
+                <a href="#keyboard">Keyboard controls</a>
+                <ol>
+                    <li><a href="#keys-snapshots">Snapshots</a></li>
+                    <li><a href="#keys-files">Files of a snapshot</a></li>
+                    <li><a href="#keys-preview">File preview</a></li>
+                    <li><a href="#command-line">Command line</a></li>
+                </ol>
+            </li>
+            <li><a href="#create-restore">Creating and restoring</a></li>
+        </ol>
+    </aside>
+
+    <div class="docs-content">
+        <div class="section-heading">
+            <p class="eyebrow">STOWMARK CONSOLE</p>
+            <h1 class="docs-title">Terminal interface</h1>
+            <p class="section-description">
+                A compact, keyboard-driven interface for browsing and managing Stowmark repositories: list snapshots,
+                browse and preview their files, create snapshots, verify them and restore them.
+            </p>
+        </div>
+
+        <section class="docs-section" id="overview">
+            <h2>Overview</h2>
+            <figure class="console-preview">
+                <img
+                        src="./assets/stowmark-console.png"
+                        alt="stowmark-console showing the repository contents, navigation menu and STOWMARK ASCII logo"
+                        width="1000"
+                        height="430"
+                        loading="lazy"
+                >
+            </figure>
+            <ul class="docs-list">
+                <li>List the snapshots of a repository, newest first.</li>
+                <li>Browse the files of a snapshot by directory, straight from its manifest.</li>
+                <li>Preview text, images and binary files stored in a snapshot.</li>
+                <li>Create snapshots from a source directory, verify their integrity and restore them after an explicit confirmation.</li>
+                <li>Switch between several configured repositories.</li>
+                <li>Cancel a running operation with <code>Esc</code>; navigate with the arrow keys or Vim-style bindings.</li>
+            </ul>
+            <p>
+                Every repository type supported by Stowmark works: local paths, SSH/SFTP, S3, SMB, WebDAV and Google
+                Cloud Storage. It runs on Linux in a terminal with color support.
+            </p>
+        </section>
+
+        <section class="docs-section" id="installation">
+            <h2>Installation</h2>
+            <p>
+                Download the Debian package for your architecture from the
+                <a href="index.html#console-downloads">downloads</a> or the
+                <a href="https://github.com/bruli-lab/stowmark-console/releases/latest" rel="noreferrer">latest release</a>
+                and install it. Use the <code>arm64</code> package when appropriate.
+            </p>
+            <div class="code-block">
+                <button type="button" class="copy-button" data-copy-target="console-install-deb">Copy</button>
+                <pre><code id="console-install-deb">sudo apt install ./stowmark_console_*_linux_amd64.deb</code></pre>
+            </div>
+            <p>To build it from source you need Go 1.27.4 or newer:</p>
+            <div class="code-block">
+                <button type="button" class="copy-button" data-copy-target="console-install-source">Copy</button>
+                <pre><code id="console-install-source">git clone https://github.com/bruli-lab/stowmark-console.git
+cd stowmark-console
+go build -o stowmark_console ./cmd/console
+sudo install -m 0755 stowmark_console /usr/local/bin/stowmark_console</code></pre>
+            </div>
+        </section>
+
+        <section class="docs-section" id="usage">
+            <h2>Usage</h2>
+            <p>Set <code>STOWMARK_REPOSITORY</code> to the Stowmark repository and start the console:</p>
+            <div class="code-block">
+                <button type="button" class="copy-button" data-copy-target="console-usage">Copy</button>
+                <pre><code id="console-usage">STOWMARK_REPOSITORY="$HOME/backups/stowmark" stowmark_console</code></pre>
+            </div>
+            <p>
+                If the path does not contain a repository yet, the console asks for confirmation before initializing
+                one there. Declining quits without touching the disk, or goes back to the repositories list when
+                several are configured. On start, the logo and the version are shown while the repositories load;
+                press any key to skip it.
+            </p>
+            <p>
+                Stowmark log output is written to a log file (see <a href="#configuration">configuration</a>) so it does
+                not corrupt the screen.
+            </p>
+
+            <h3 id="remote-repositories">Remote repositories</h3>
+            <p>
+                <code>STOWMARK_REPOSITORY</code> also accepts the remote <a href="docs.html#repositories">repository
+                URLs</a> of Stowmark, which reads the credentials from its own
+                <a href="docs.html#environment">environment variables</a>. Snapshot sources and restore destinations
+                are always local directories.
+            </p>
+            <table class="docs-options">
+                <thead><tr><th>Backend</th><th>Credentials</th></tr></thead>
+                <tbody>
+                <tr><td>SSH / SFTP</td><td><code>STOWMARK_SSH_PRIVATE_KEY</code>, <code>STOWMARK_SSH_KNOWN_HOSTS</code> or the SSH agent</td></tr>
+                <tr><td>S3</td><td><code>AWS_ACCESS_KEY_ID</code>, <code>AWS_SECRET_ACCESS_KEY</code>, <code>AWS_REGION</code> (and <code>STOWMARK_S3_ENDPOINT</code>, <code>STOWMARK_S3_PATH_STYLE</code> for S3-compatible services)</td></tr>
+                <tr><td>SMB</td><td><code>STOWMARK_SMB_PASSWORD</code></td></tr>
+                <tr><td>WebDAV</td><td><code>STOWMARK_WEBDAV_USERNAME</code>, <code>STOWMARK_WEBDAV_PASSWORD</code></td></tr>
+                <tr><td>Google Cloud Storage</td><td><code>GOOGLE_APPLICATION_CREDENTIALS</code> (and <code>STOWMARK_GCS_ENDPOINT</code> for emulators)</td></tr>
+                </tbody>
+            </table>
+
+            <h3 id="several-repositories">Several repositories</h3>
+            <p>
+                The console reads the repositories to choose from in a YAML file,
+                <code>~/.config/stowmark-console/repositories.yaml</code> by default. Each repository has its own
+                initialization options and credentials.
+            </p>
+            <pre class="docs-example"><code>repositories:
+  - name: laptop
+    url: ~/backups/stowmark
+    compression: zstd
+    compression_level: 3
+  - name: nas
+    url: smb://backup@nas:445/backups/stowmark
+    env:
+      STOWMARK_SMB_PASSWORD: secret
+  - name: cloud
+    url: s3://my-bucket/stowmark
+    private_key: ~/.config/stowmark/private.key
+    public_key: ~/.config/stowmark/public.key
+    env:
+      AWS_ACCESS_KEY_ID: AKIA...
+      AWS_SECRET_ACCESS_KEY: ...
+      AWS_REGION: eu-west-1</code></pre>
+            <table class="docs-options">
+                <thead><tr><th>Field</th><th>Description</th></tr></thead>
+                <tbody>
+                <tr><td><code>name</code></td><td>Required. Unique name shown in the repositories list.</td></tr>
+                <tr><td><code>url</code></td><td>Required. Path or URL of the repository; <code>~</code> is expanded for local paths.</td></tr>
+                <tr><td><code>private_key</code>, <code>public_key</code></td><td>Same as <code>STOWMARK_PRIVATE_KEY</code> and <code>STOWMARK_PUBLIC_KEY</code>.</td></tr>
+                <tr><td><code>compression</code>, <code>compression_level</code></td><td>Same as <code>STOWMARK_COMPRESSION</code> and <code>STOWMARK_COMPRESSION_LEVEL</code>.</td></tr>
+                <tr><td><code>env</code></td><td>Environment variables set while the repository is open, such as the credentials of a remote backend.</td></tr>
+                </tbody>
+            </table>
+            <p>
+                When <code>STOWMARK_REPOSITORY</code> is set, it is added first as the <code>default</code> repository.
+                With a single repository the console opens it on start; with several it starts on the repositories
+                list. <code>:repo</code> lists them again and opens the selected one, replacing the <code>env</code>
+                variables of the previous repository. Keep the file readable only by you (<code>chmod 600</code>) when
+                it holds credentials.
+            </p>
+        </section>
+
+        <section class="docs-section" id="configuration">
+            <h2>Configuration</h2>
+            <p>
+                The console is configured with environment variables. At least one repository must be configured,
+                with <code>STOWMARK_REPOSITORY</code> or in the repositories file.
+            </p>
+            <table class="docs-options">
+                <thead><tr><th>Variable</th><th>Description</th></tr></thead>
+                <tbody>
+                <tr><td><code>STOWMARK_REPOSITORY</code></td><td>Path or URL of the <code>default</code> repository.</td></tr>
+                <tr><td><code>STOWMARK_PRIVATE_KEY</code></td><td>Private key used to create, verify and restore snapshots of an encrypted repository.</td></tr>
+                <tr><td><code>STOWMARK_PUBLIC_KEY</code></td><td>Public key used to encrypt a repository when it is initialized.</td></tr>
+                <tr><td><code>STOWMARK_COMPRESSION</code></td><td>Compression of a new repository: <code>none</code> (default), <code>zstd</code>, <code>lz4</code>, <code>xz</code> or <code>gzip</code>.</td></tr>
+                <tr><td><code>STOWMARK_COMPRESSION_LEVEL</code></td><td>Compression level of a new repository.</td></tr>
+                <tr><td><code>STOWMARK_CONSOLE_LOG_FILE</code></td><td>File that receives Stowmark log output. Defaults to <code>~/.cache/stowmark-console/console.log</code>.</td></tr>
+                <tr><td><code>STOWMARK_CONSOLE_CONFIG</code></td><td>Repositories file. Defaults to <code>~/.config/stowmark-console/repositories.yaml</code>.</td></tr>
+                </tbody>
+            </table>
+            <p>
+                The initialization options only apply when the console creates a new repository, and they are shown in
+                the confirmation dialog. Variables read by Stowmark itself, such as <code>STOWMARK_LOG_LEVEL</code>,
+                are honored as well.
+            </p>
+        </section>
+
+        <section class="docs-section" id="keyboard">
+            <h2>Keyboard controls</h2>
+
+            <h3 id="keys-snapshots">Snapshots</h3>
+            <table class="docs-options">
+                <thead><tr><th>Key</th><th>Action</th></tr></thead>
+                <tbody>
+                <tr><td><code>↑</code> / <code>k</code>, <code>↓</code> / <code>j</code></td><td>Select the previous or next snapshot.</td></tr>
+                <tr><td><code>PgUp</code> / <code>b</code>, <code>PgDown</code> / <code>f</code>, <code>u</code> / <code>d</code></td><td>Move one page or half a page.</td></tr>
+                <tr><td><code>g</code> / <code>Home</code>, <code>G</code> / <code>End</code></td><td>Select the first or last snapshot.</td></tr>
+                <tr><td><code>Enter</code> / <code>→</code> / <code>l</code></td><td>Browse the files of the selected snapshot.</td></tr>
+                <tr><td><code>c</code></td><td>Create a snapshot.</td></tr>
+                <tr><td><code>v</code></td><td>Verify the selected snapshot.</td></tr>
+                <tr><td><code>x</code></td><td>Restore the selected snapshot.</td></tr>
+                <tr><td><code>r</code></td><td>Refresh the list.</td></tr>
+                <tr><td><code>:</code></td><td>Open the command line.</td></tr>
+                <tr><td><code>Ctrl+C</code></td><td>Exit.</td></tr>
+                </tbody>
+            </table>
+
+            <h3 id="keys-files">Files of a snapshot</h3>
+            <table class="docs-options">
+                <thead><tr><th>Key</th><th>Action</th></tr></thead>
+                <tbody>
+                <tr><td><code>↑</code> / <code>k</code>, <code>↓</code> / <code>j</code></td><td>Select the previous or next entry.</td></tr>
+                <tr><td><code>Enter</code> / <code>→</code> / <code>l</code></td><td>Open a directory or preview a file.</td></tr>
+                <tr><td><code>o</code></td><td>Open the selected file with the system application.</td></tr>
+                <tr><td><code>Esc</code> / <code>Backspace</code> / <code>←</code> / <code>h</code></td><td>Go to the parent directory, or back to the snapshots.</td></tr>
+                <tr><td><code>v</code> / <code>x</code></td><td>Verify or restore the snapshot being browsed.</td></tr>
+                <tr><td><code>c</code></td><td>Create a snapshot.</td></tr>
+                <tr><td><code>r</code></td><td>Reload the snapshot.</td></tr>
+                </tbody>
+            </table>
+
+            <h3 id="keys-preview">File preview</h3>
+            <table class="docs-options">
+                <thead><tr><th>Key</th><th>Action</th></tr></thead>
+                <tbody>
+                <tr><td><code>↑</code> / <code>k</code>, <code>↓</code> / <code>j</code></td><td>Scroll one line.</td></tr>
+                <tr><td><code>←</code> / <code>h</code>, <code>→</code> / <code>l</code></td><td>Scroll long lines horizontally.</td></tr>
+                <tr><td><code>PgUp</code> / <code>b</code>, <code>PgDown</code> / <code>f</code> / <code>Space</code></td><td>Scroll one page.</td></tr>
+                <tr><td><code>g</code> / <code>Home</code>, <code>G</code> / <code>End</code></td><td>Go to the top or the bottom.</td></tr>
+                <tr><td><code>o</code></td><td>Open the file with the system application.</td></tr>
+                <tr><td><code>Esc</code> / <code>q</code></td><td>Close the preview.</td></tr>
+                </tbody>
+            </table>
+            <p>The preview adapts to the content of the file:</p>
+            <table class="docs-options">
+                <thead><tr><th>Content</th><th>Preview</th></tr></thead>
+                <tbody>
+                <tr><td>Text</td><td>Shown with line numbers. At most the first 1 MiB is read.</td></tr>
+                <tr><td>Images</td><td>PNG, JPEG and GIF up to 32 MiB, drawn with half-block characters scaled to the panel. Needs a terminal with true color support.</td></tr>
+                <tr><td>Other binary files</td><td>Shown in hexadecimal, like <code>xxd</code>, with the offset, the bytes and their printable characters. At most the first 1 MiB is read.</td></tr>
+                </tbody>
+            </table>
+            <p>
+                <code>o</code> extracts the whole file from the snapshot to a temporary directory and opens it with
+                <code>xdg-open</code> (<code>open</code> on macOS), so it needs a graphical session. The temporary
+                directory is deleted when the console exits.
+            </p>
+
+            <h3 id="command-line">Command line</h3>
+            <p>Press <code>:</code> in any view, type a command and press <code>Enter</code>. <code>Esc</code> closes the command line.</p>
+            <table class="docs-options">
+                <thead><tr><th>Command</th><th>Action</th></tr></thead>
+                <tbody>
+                <tr><td><code>:q</code>, <code>:quit</code></td><td>Exit.</td></tr>
+                <tr><td><code>:snap</code>, <code>:snapshots</code>, <code>:s</code></td><td>Go back to the snapshots list.</td></tr>
+                <tr><td><code>:repo</code>, <code>:repos</code>, <code>:repositories</code></td><td>List the configured repositories and switch to another one.</td></tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="docs-section" id="create-restore">
+            <h2>Creating and restoring</h2>
+            <p>
+                Creating a snapshot opens a form for the origin directory, prefilled with the source of the selected
+                snapshot. While you type, it suggests the subdirectories of the path and the origins of earlier
+                snapshots: <code>Tab</code> accepts the highlighted suggestion and <code>↑</code> / <code>↓</code> move
+                between them. The form tells you whether the path is an existing directory and only accepts
+                directories.
+            </p>
+            <p>
+                Restoring asks for a destination directory first. It defaults to
+                <code>~/stowmark-restore/&lt;snapshot-id&gt;</code>, never to the original source. The confirmation
+                shows the destination and warns when it already contains files, which would be overwritten. Only
+                <code>y</code> confirms the restore.
+            </p>
+            <p>While an operation is running, <code>Esc</code> cancels it.</p>
+        </section>
+    </div>
+</main>
+
+<footer>
+    <div class="footer-brand">
+        <img src="assets/favicon.png" alt="" width="32" height="32">
+        <div>
+            <span>stowmark</span>
+            <p>Open source software.</p>
+        </div>
+    </div>
+
+    <div class="footer-projects">
+        <div class="footer-project">
+            <strong>stowmark</strong>
+            <div class="footer-links">
+                <a href="https://github.com/bruli-lab/stowmark">GitHub</a>
+                <a href="https://github.com/bruli-lab/stowmark/releases">Releases</a>
+                <a href="https://github.com/bruli-lab/stowmark/issues">Issues</a>
+            </div>
+        </div>
+
+        <div class="footer-project">
+            <strong>stowmark-console</strong>
+            <div class="footer-links">
+                <a href="https://github.com/bruli-lab/stowmark-console">GitHub</a>
+                <a href="https://github.com/bruli-lab/stowmark-console/releases">Releases</a>
+                <a href="https://github.com/bruli-lab/stowmark-console/issues">Issues</a>
+            </div>
+        </div>
+
+        <div class="footer-project">
+            <strong>stowmark-observability</strong>
+            <div class="footer-links">
+                <a href="https://github.com/bruli-lab/stowmark-observability">GitHub</a>
+                <a href="https://github.com/bruli-lab/stowmark-observability/releases">Releases</a>
+                <a href="https://github.com/bruli-lab/stowmark-observability/issues">Issues</a>
+            </div>
+        </div>
+    </div>
+</footer>
+</body>
+</html>
