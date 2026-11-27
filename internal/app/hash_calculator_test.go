@@ -64,6 +64,18 @@ func TestCreateSnapshot_Handle_HashCalculation(t *testing.T) {
 			expectedChunks: []snapshot.Chunk{*snapshot.NewChunk("hash", 0, smallFile)},
 		},
 		{
+			name:          "with format version two and an empty file, then it stores the whole file hash without chunks",
+			formatVersion: repository.FormatVersionTwo,
+			size:          0,
+			expectedHash:  "hash",
+		},
+		{
+			name:          "with format version three and an empty file, then it stores the whole file hash without chunks",
+			formatVersion: repository.FormatVersionThree,
+			size:          0,
+			expectedHash:  "hash",
+		},
+		{
 			name:               "with format version two and a big file and calculate chunks fails, then it returns same error",
 			formatVersion:      repository.FormatVersionTwo,
 			size:               bigFile,
