@@ -55,6 +55,9 @@ func chunkedHashCalculator(sourceRepo SourceRepository) hashCalculator {
 		if err != nil {
 			return snapshot.File{}, err
 		}
+		if file.Size() == 0 {
+			return file.WithHash(hash).WithChunks(nil), nil
+		}
 		return file.WithHash(hash).WithChunks([]snapshot.Chunk{*snapshot.NewChunk(hash, 0, file.Size())}), nil
 	}
 }
