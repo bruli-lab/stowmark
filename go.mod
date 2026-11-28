@@ -16,7 +16,7 @@ require (
 	github.com/klauspost/compress v1.20.5
 	github.com/moby/moby/api v1.55.0
 	github.com/pierrec/lz4/v4 v4.1.33
-	github.com/pkg/sftp v1.13.11
+	github.com/pkg/sftp v1.13.13
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.12.1
 	github.com/studio-b12/gowebdav v0.13.0
